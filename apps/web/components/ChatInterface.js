@@ -1,5 +1,40 @@
+'use client';
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Loader2, Zap, Clock } from "lucide-react";
+import { Send, Bot, User, Loader2, Zap, Clock, Wifi, WifiOff } from "lucide-react";
+
+const MessageBubble = ({ message, formatTime }) => {
+    const isUser = message.role === "user";
+    const isSystem = message.role === "system";
+
+    const bubbleStyles = isUser
+        ? "bg-blue-500 text-white neo-pressed-blue"
+        : isSystem
+        ? "bg-red-500/20 text-red-400 neo-surface"
+        : "neo-surface text-neo-fg";
+
+    const Icon = isUser ? User : Bot;
+
+    return (
+        <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
+            {!isUser && (
+                <div className="w-8 h-8 rounded-full neo-surface flex-shrink-0 flex items-center justify-center">
+                    <Icon className={`w-5 h-5 ${isSystem ? 'text-red-400' : 'text-blue-500'}`} />
+                </div>
+            )}
+            <div className={`max-w-md w-fit rounded-lg px-4 py-2.5 ${bubbleStyles}`}>
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <div className={`text-xs mt-1.5 ${isUser ? 'text-blue-200' : 'text-neo-muted'}`}>
+                    {formatTime(message.timestamp)}
+                </div>
+            </div>
+            {isUser && (
+                <div className="w-8 h-8 rounded-full neo-surface flex-shrink-0 flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-neo-fg" />
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState([]);
@@ -10,7 +45,6 @@ export default function ChatInterface() {
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
 
-  // WebSocket connection
   useEffect(() => {
     connectWebSocket();
     return () => {
@@ -22,13 +56,13 @@ export default function ChatInterface() {
 
   const connectWebSocket = () => {
     try {
-      // Użyj poprawnego adresu WebSocket (ENV lub domyślny)
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `ws://${window.location.host}/api/ws/chat`;
       const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
         setIsConnected(true);
-        console.log("WebSocket połączony");
+        console.log("WebSocket connected");
+        addSystemMessage("Connection established with the agent.", "success");
       };
 
       ws.onmessage = (event) => {
@@ -51,27 +85,38 @@ export default function ChatInterface() {
 
       ws.onclose = () => {
         setIsConnected(false);
-        console.log("WebSocket rozłączony");
-        // Próbuj ponownie po 5 sekundach
+        console.log("WebSocket disconnected");
+        addSystemMessage("Connection lost. Attempting to reconnect...", "error");
         setTimeout(connectWebSocket, 5000);
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket błąd:", error);
+        console.error("WebSocket error:", error);
         setIsConnected(false);
+        addSystemMessage("WebSocket connection error.", "error");
       };
 
       wsRef.current = ws;
     } catch (error) {
-      console.error("Błąd łączenia WebSocket:", error);
+      console.error("Error connecting to WebSocket:", error);
       setIsConnected(false);
+      addSystemMessage("Failed to initialize WebSocket connection.", "error");
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
+  const addSystemMessage = (content, level = "info") => {
+      setMessages(prev => [...prev, {
+          id: Date.now(),
+          role: "system",
+          content,
+          timestamp: new Date(),
+          level
+      }]);
+  };
 
-    // Dodaj wiadomość użytkownika
+  const sendMessage = async () => {
+    if (!inputMessage.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
     const userMessage = {
       id: Date.now(),
       role: "user",
@@ -84,51 +129,13 @@ export default function ChatInterface() {
     setIsTyping(true);
 
     try {
-      if (wsRef.current) {
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-          // Wyślij przez WebSocket
-          wsRef.current.send(JSON.stringify({
+        wsRef.current.send(JSON.stringify({
             type: "message",
             content: inputMessage
-          }));
-        } else if (wsRef.current.emit) {
-          // Użyj Socket.io
-          wsRef.current.emit("message", {
-            type: "message",
-            content: inputMessage
-          });
-        } else {
-          throw new Error("Brak aktywnego połączenia");
-        }
-      } else {
-        // Fallback na HTTP API
-        const response = await fetch("/api/chat/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: inputMessage })
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setMessages(prev => [...prev, {
-            id: Date.now() + 1,
-            role: "assistant",
-            content: data.reply,
-            timestamp: new Date()
-          }]);
-        } else {
-          throw new Error("Błąd odpowiedzi API");
-        }
-      }
+        }));
     } catch (error) {
-      console.error("Błąd wysyłania wiadomości:", error);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        role: "system",
-        content: "Przepraszam, wystąpił błąd podczas przetwarzania wiadomości.",
-        timestamp: new Date()
-      }]);
-    } finally {
+      console.error("Error sending message:", error);
+      addSystemMessage("Failed to send message. Please check your connection.", "error");
       setIsTyping(false);
     }
   };
@@ -140,7 +147,6 @@ export default function ChatInterface() {
     }
   };
 
-  // Przewiń do najnowszej wiadomości
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -150,87 +156,49 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex flex-col h-[600px] neo-card">
+    <div className="flex flex-col h-[70vh] neo-card bg-neo-bg-dark overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b neo-pressed">
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Bot className="h-8 w-8 text-blue-400" />
-            <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-              isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
-            }`}></div>
-          </div>
-          <div>
-            <h3 className="font-bold text-neo-fg text-lg">GAI Agent Chat</h3>
-            <div className="flex items-center space-x-2 text-sm text-neo-muted">
-              <span>{isConnected ? "Connected" : "Disconnected"}</span>
-              <span>•</span>
-              <span className="capitalize font-medium">{agentStatus}</span>
+      <header className="flex items-center justify-between p-4 border-b border-neo-surface flex-shrink-0">
+        <div className="flex items-center gap-3">
+            <div className="relative">
+                <Bot className="w-8 h-8 text-blue-500" />
+                <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-neo-bg-dark ${isConnected ? "bg-green-500" : "bg-red-500"}`}></div>
             </div>
-          </div>
+            <div>
+                <h3 className="font-bold text-neo-fg text-lg">GAI Agent</h3>
+                <p className="text-sm text-neo-muted capitalize">
+                    {agentStatus}
+                </p>
+            </div>
         </div>
-        <div className="flex items-center space-x-2">
-          {isConnected ? (
-            <Zap className="h-5 w-5 text-green-500 animate-pulse" />
-          ) : (
-            <Clock className="h-5 w-5 text-red-500" />
-          )}
+        <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full neo-surface ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+            {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+            <span>{isConnected ? "Connected" : "Disconnected"}</span>
         </div>
-      </div>
+      </header>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
-          <div className="text-center text-neo-muted py-8">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-            <p>Rozpocznij rozmowę z GAI Agent</p>
-            <p className="text-sm mt-2">Zapytaj o status, zadania lub poproś o pomoc.</p>
+          <div className="text-center text-neo-muted py-16 flex flex-col items-center">
+            <Bot className="h-16 w-16 mx-auto mb-4 text-neo-muted" />
+            <h2 className="text-xl font-semibold text-neo-fg">Start a Conversation</h2>
+            <p className="mt-2">Ask about task status, give commands, or get help.</p>
           </div>
         )}
 
         {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex space-x-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            {message.role !== "user" && (
-              <div className="flex-shrink-0">
-                {message.role === "assistant" ? (
-                  <Bot className="h-8 w-8 text-blue-600" />
-                ) : (
-                  <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-gray-600">SYS</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-              message.role === "user"
-                ? "neo-btn-primary"
-                : message.role === "assistant"
-                ? "neo-surface text-neo-fg"
-                : "neo-card text-red-400"
-            }`}>
-              <p className="text-sm">{message.content}</p>
-              <p className={`text-xs mt-1 ${
-                message.role === "user" ? "text-neo-muted" : "text-neo-muted"
-              }`}>
-                {formatTime(message.timestamp)}
-              </p>
-            </div>
-          </div>
+            <MessageBubble key={message.id} message={message} formatTime={formatTime} />
         ))}
 
         {isTyping && (
-          <div className="flex space-x-3">
-            <div className="flex-shrink-0">
-              <Bot className="h-8 w-8 text-blue-600" />
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full neo-surface flex-shrink-0 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-blue-500" />
             </div>
-            <div className="neo-surface text-neo-fg px-4 py-2 rounded-lg">
-              <div className="flex space-x-1">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">GAI Agent pisze...</span>
-              </div>
+            <div className="neo-surface text-neo-fg px-4 py-2.5 rounded-lg flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+              <span className="text-sm">Agent is typing...</span>
             </div>
           </div>
         )}
@@ -239,26 +207,27 @@ export default function ChatInterface() {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t neo-pressed">
-        <div className="flex space-x-2">
+      <footer className="p-4 border-t border-neo-surface flex-shrink-0">
+        <div className="relative">
           <textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Napisz wiadomość... (Enter aby wysłać, Shift+Enter dla nowej linii)"
-            className="neo-input flex-1 resize-none text-sm"
+            placeholder={isConnected ? "Send a message to the agent..." : "Waiting for connection..."}
+            className="neo-input w-full resize-none text-sm pr-12"
             rows={2}
-            disabled={!isConnected}
+            disabled={!isConnected || isTyping}
           />
           <button
             onClick={sendMessage}
             disabled={!inputMessage.trim() || isTyping || !isConnected}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 neo-btn neo-btn-primary p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Send Message"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-5 w-5" />
           </button>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

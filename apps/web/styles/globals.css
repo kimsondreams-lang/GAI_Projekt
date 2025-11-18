@@ -7,56 +7,31 @@
 
 :root {
   /* Dark neomorphic base palette */
-  --background: #121417; /* very dark gray */
+  --background: #1a1f25; /* A bit lighter dark gray */
   --foreground: #e5e7eb; /* light gray text */
   --primary: #63a4ff; /* blue accent */
   --primary-foreground: #0b0f14;
-  --secondary: #171a1f; /* darker surface */
+  --secondary: #22262c; /* darker surface */
   --secondary-foreground: #cbd5e1;
-  --muted: #1a1f25;
+  --muted: #2c313a;
   --muted-foreground: #9aa4b2;
-  --accent: #1d2229;
+  --accent: #2a2f36;
   --accent-foreground: #e5e7eb;
   --destructive: #ef4444;
-  --destructive-foreground: #0b0f14;
-  --border: #22262c;
-  --input: #22262c;
+  --destructive-foreground: #f8fafc;
+  --border: #2e343b;
+  --input: #2e343b;
   --ring: #63a4ff;
-  --radius: 0.75rem;
+  --radius: 0.8rem;
 
   /* Neomorphism shadows */
-  --neo-shadow-dark: #0a0c10; /* deeper shadow */
-  --neo-shadow-light: #1b2128; /* highlight shadow */
-  --neo-bg: #121417;
+  --neo-shadow-dark: rgba(0, 0, 0, 0.35);
+  --neo-shadow-light: rgba(255, 255, 255, 0.08);
+  --neo-bg: #1a1f25;
   --neo-fg: #e5e7eb;
   --neo-muted: #9aa4b2;
   --neo-accent: #63a4ff;
-  --neo-accent-soft: rgba(99, 164, 255, 0.18);
-}
-
-/* Keep dark-mode media query aligned with neo palette for consistency */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #121417;
-    --foreground: #e5e7eb;
-    --primary: #63a4ff;
-    --primary-foreground: #0b0f14;
-    --secondary: #171a1f;
-    --secondary-foreground: #cbd5e1;
-    --muted: #1a1f25;
-    --muted-foreground: #9aa4b2;
-    --accent: #1d2229;
-    --accent-foreground: #e5e7eb;
-    --destructive: #ef4444;
-    --destructive-foreground: #0b0f14;
-    --border: #22262c;
-    --input: #22262c;
-    --ring: #63a4ff;
-  }
-}
-
-* {
-  border-color: hsl(var(--border));
+  --neo-accent-soft: rgba(99, 164, 255, 0.1);
 }
 
 body {
@@ -76,162 +51,92 @@ body {
 }
 
 @layer components {
-  /* Neo theme utilities */
+  /* Consistent Neo theme utilities */
   .text-neo-fg { color: var(--neo-fg); }
   .text-neo-muted { color: var(--neo-muted); }
   .bg-neo { background-color: var(--neo-bg); }
 
   .neo-card {
-    background: linear-gradient(145deg, #121417, #15181d);
+    background: linear-gradient(145deg, #1c2128, #181d22);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 10px 10px 22px var(--neo-shadow-dark), -10px -10px 22px var(--neo-shadow-light);
+    box-shadow: 8px 8px 20px var(--neo-shadow-dark), -8px -8px 20px var(--neo-shadow-light);
   }
 
   .neo-surface {
-    background: linear-gradient(145deg, #1c2128, #20262e);
+    background: #1a1f25;
     border-radius: var(--radius);
-    box-shadow: 8px 8px 18px var(--neo-shadow-dark), -8px -8px 18px var(--neo-shadow-light);
+    box-shadow: 6px 6px 16px var(--neo-shadow-dark), -6px -6px 16px var(--neo-shadow-light);
   }
 
   .neo-pressed {
     background: var(--neo-bg);
     border-radius: var(--radius);
-    box-shadow: inset 8px 8px 16px var(--neo-shadow-dark), inset -8px -8px 16px var(--neo-shadow-light);
+    box-shadow: inset 7px 7px 14px var(--neo-shadow-dark), inset -7px -7px 14px var(--neo-shadow-light);
   }
 
   .neo-btn {
-    @apply inline-flex items-center justify-center font-medium transition-colors rounded-lg;
+    @apply inline-flex items-center justify-center font-medium transition-all duration-200 rounded-lg;
     color: var(--neo-fg);
-    background: var(--neo-bg);
+    background: linear-gradient(145deg, #1e242b, #171b20);
     border: 1px solid var(--border);
-    box-shadow: 6px 6px 12px var(--neo-shadow-dark), -6px -6px 12px var(--neo-shadow-light);
-    padding: 0.5rem 0.9rem;
+    box-shadow: 5px 5px 10px var(--neo-shadow-dark), -5px -5px 10px var(--neo-shadow-light);
+    padding: 0.6rem 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
-  .neo-btn:hover { background: var(--accent); }
-  .neo-btn:active { box-shadow: inset 6px 6px 12px var(--neo-shadow-dark), inset -6px -6px 12px var(--neo-shadow-light); }
-  .neo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .neo-btn:hover { 
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+  }
+  .neo-btn:active { 
+    transform: translateY(1px);
+    box-shadow: inset 5px 5px 10px var(--neo-shadow-dark), inset -5px -5px 10px var(--neo-shadow-light); 
+  }
+  .neo-btn:disabled { 
+    opacity: 0.5; 
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+  }
 
   .neo-btn-primary {
-    color: var(--primary-foreground);
-    background: var(--primary);
-    border: 1px solid transparent;
-    box-shadow: 6px 6px 12px rgba(0,0,0,.35), -6px -6px 12px var(--neo-accent-soft);
-  }
-  .neo-btn-primary:hover { filter: brightness(1.05); }
-  .neo-btn-primary:active { box-shadow: inset 6px 6px 12px rgba(0,0,0,.35), inset -6px -6px 12px var(--neo-accent-soft); }
-
-  .neo-btn-secondary {
-    color: var(--neo-fg);
-    background: linear-gradient(145deg, #1d2229, #20262e);
-    border: 1px solid var(--border);
-    box-shadow: 6px 6px 12px var(--neo-shadow-dark), -6px -6px 12px var(--neo-shadow-light);
-  }
-
-  .neo-btn-danger {
     color: #fff;
-    background: #ef4444;
-    border: 1px solid transparent;
-    box-shadow: 6px 6px 12px rgba(0,0,0,.35), -6px -6px 12px rgba(239,68,68,.25);
+    background: var(--primary);
+    border: none;
+    box-shadow: 4px 4px 12px rgba(0,0,0,.4), -4px -4px 12px var(--neo-accent-soft);
   }
+  .neo-btn-primary:hover { filter: brightness(1.1); }
+  .neo-btn-primary:active { box-shadow: inset 4px 4px 8px rgba(0,0,0,.4), inset -4px -4px 8px var(--neo-accent-soft); }
 
   .neo-input {
     color: var(--neo-fg);
-    background: linear-gradient(145deg, #121417, #14171b);
-    border: 1px solid var(--input);
+    background: var(--neo-bg);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0.5rem 0.75rem;
-    box-shadow: inset 6px 6px 12px var(--neo-shadow-dark), inset -6px -6px 12px var(--neo-shadow-light);
+    padding: 0.75rem 1rem;
+    box-shadow: inset 5px 5px 10px var(--neo-shadow-dark), inset -5px -5px 10px var(--neo-shadow-light);
   }
   .neo-input::placeholder { color: var(--neo-muted); }
   .neo-input:focus {
     outline: none;
     border-color: var(--ring);
-    box-shadow: 0 0 0 2px var(--ring), inset 6px 6px 12px var(--neo-shadow-dark), inset -6px -6px 12px var(--neo-shadow-light);
+    box-shadow: 0 0 0 2px var(--ring), inset 5px 5px 10px var(--neo-shadow-dark), inset -5px -5px 10px var(--neo-shadow-light);
   }
 
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
-  }
-  
-  .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-  }
-  
-  .btn-secondary {
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
-  }
-  
-  .btn-destructive {
-    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
-  }
-  
-  .card {
-    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
-  }
-  
-  .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-  
-  .textarea {
-    @apply flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-  
-  .badge {
-    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
-  }
-  
-  .badge-primary {
-    @apply border-transparent bg-primary text-primary-foreground hover:bg-primary/80;
-  }
-  
-  .badge-secondary {
-    @apply border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80;
-  }
-  
-  .badge-destructive {
-    @apply border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80;
-  }
-  
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-  
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: .5;
-    }
-  }
-  
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-}
   .neo-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.6rem;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
     border-radius: 9999px;
-    font-size: 0.75rem;
-    border: 1px solid var(--border);
-    background: linear-gradient(145deg, #1c2128, #20262e);
-    color: var(--neo-fg);
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
   }
-  .neo-badge-success { background: linear-gradient(145deg, #0a2d1c, #09301e); color: #a7f3d0; border-color: #0f3d29; }
-  .neo-badge-warning { background: linear-gradient(145deg, #2b2410, #302715); color: #fde68a; border-color: #3a2f17; }
-  .neo-badge-danger { background: linear-gradient(145deg, #341414, #3a1616); color: #fecaca; border-color: #4b1c1c; }
-  .neo-badge-info { background: linear-gradient(145deg, #0f1f35, #13243d); color: #bfdbfe; border-color: #1f3b63; }
+  .neo-badge-success { background: linear-gradient(145deg, #16a34a, #15803d); color: #dcfce7; border-color: #14532d; }
+  .neo-badge-warning { background: linear-gradient(145deg, #d97706, #b45309); color: #fef3c7; border-color: #78350f; }
+  .neo-badge-danger { background: linear-gradient(145deg, #dc2626, #b91c1c); color: #fee2e2; border-color: #7f1d1d; }
+  .neo-badge-info { background: linear-gradient(145deg, #2563eb, #1d4ed8); color: #dbeafe; border-color: #1e3a8a; }
+}

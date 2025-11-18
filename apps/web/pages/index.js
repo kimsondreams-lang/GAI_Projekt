@@ -19,7 +19,7 @@ export default function Home() {
     uptime: "0h 0m"
   });
 
-  // Pobierz status systemu co 5 sekund
+  // Fetch system status every 5 seconds
   useEffect(() => {
     const fetchSystemStatus = async () => {
       try {
@@ -34,7 +34,7 @@ export default function Home() {
           uptime: data.uptime || "0h 0m"
         });
       } catch (error) {
-        console.error("Błąd pobierania statusu systemu:", error);
+        console.error("Error fetching system status:", error);
       }
     };
 
@@ -56,13 +56,13 @@ export default function Home() {
     switch (activeTab) {
       case "dashboard":
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <AgentControl status={agentStatus} onStatusChange={setAgentStatus} />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard title="Total Tasks" value={systemStats.totalTasks} color="blue" />
-              <StatCard title="Active Tasks" value={systemStats.activeTasks} color="green" />
-              <StatCard title="Completed" value={systemStats.completedTasks} color="purple" />
-              <StatCard title="Total Cost" value={`$${systemStats.totalCost.toFixed(4)}`} color="orange" />
+              <StatCard title="Total Tasks" value={systemStats.totalTasks} />
+              <StatCard title="Active Tasks" value={systemStats.activeTasks} />
+              <StatCard title="Completed" value={systemStats.completedTasks} />
+              <StatCard title="Total Cost" value={`$${systemStats.totalCost.toFixed(4)}`} />
             </div>
             <TaskDashboard compact={true} />
           </div>
@@ -78,7 +78,7 @@ export default function Home() {
       case "settings":
         return <SettingsPanel />;
       default:
-        return <div>Wybierz zakładkę</div>;
+        return <div>Select a tab</div>;
     }
   };
 
@@ -91,68 +91,68 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-neo">
+      <div className="min-h-screen bg-neo text-neo-fg">
         {/* Header */}
-        <header className="neo-surface backdrop-blur-sm border-b sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
+        <header className="neo-surface backdrop-blur-lg border-b border-border sticky top-0 z-50">
+          <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-3">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Bot className="h-10 w-10" style={{ color: "var(--neo-accent)" }} />
-                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                <div className="relative p-2 rounded-full neo-pressed">
+                  <Bot className="h-8 w-8 text-neo-accent" />
+                  <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-background ${
                     agentStatus === "running" ? "bg-green-500 animate-pulse" : 
                     agentStatus === "starting" ? "bg-yellow-500 animate-pulse" : 
                     agentStatus === "error" ? "bg-red-500" : "bg-gray-400"
                   }`}></div>
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-neo-fg">
+                  <h1 className="text-2xl font-bold text-neo-fg">
                     GAI Agent
                   </h1>
-                  <p className="text-sm text-neo-muted">Autonomous AI Control Panel</p>
+                  <p className="text-xs text-neo-muted">Autonomous AI Control Panel</p>
                 </div>
               </div>
               <div className="flex items-center space-x-6">
                 <div className="hidden md:flex items-center space-x-4 text-sm">
                   <div className="flex items-center space-x-2">
                     <span className="text-neo-muted">Status:</span>
-                    <span className="font-medium capitalize text-neo-fg">{agentStatus}</span>
+                    <span className="font-semibold capitalize text-neo-fg">{agentStatus}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-neo-muted">Uptime:</span>
-                    <span className="font-medium text-neo-fg">{systemStats.uptime}</span>
+                    <span className="font-semibold text-neo-fg">{systemStats.uptime}</span>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    agentStatus === "running" ? "bg-green-500 animate-pulse" : 
-                    agentStatus === "starting" ? "bg-yellow-500 animate-pulse" : 
-                    agentStatus === "error" ? "bg-red-500" : "bg-gray-400"
+                <div className="flex items-center space-x-2 neo-badge">
+                  <div className={`w-2.5 h-2.5 rounded-full ${
+                    agentStatus === "running" ? "bg-green-400 animate-pulse" : 
+                    agentStatus === "starting" ? "bg-yellow-400 animate-pulse" : 
+                    agentStatus === "error" ? "bg-red-400" : "bg-gray-500"
                   }`}></div>
-                  <span className="text-sm font-medium text-neo-fg capitalize">{agentStatus}</span>
+                  <span className="text-sm font-semibold capitalize">{agentStatus}</span>
                 </div>
               </div>
             </div>
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Navigation Tabs */}
           <div className="mb-8">
-            <nav className="flex space-x-2 neo-card p-2">
+            <nav className="flex space-x-2 neo-card p-1.5 rounded-full">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={
+                    className={`flex-1 neo-btn rounded-full transition-all duration-300 ${
                       activeTab === tab.id
-                        ? "neo-btn neo-btn-primary"
-                        : "neo-btn"
-                    }
+                        ? "neo-btn-primary"
+                        : "hover:bg-accent"
+                    }`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-5 w-5 mr-2" />
                     <span>{tab.label}</span>
                   </button>
                 );
@@ -161,30 +161,21 @@ export default function Home() {
           </div>
 
           {/* Tab Content */}
-          <div className="neo-card">
-            <div className="p-6">
-              {renderTabContent()}
-            </div>
+          <div className="neo-card p-6">
+            {renderTabContent()}
           </div>
-        </div>
+        </main>
       </div>
     </>
   );
 }
 
-// Pomocniczy komponent dla statystyk
-function StatCard({ title, value, color }) {
-  const colorClasses = {
-    blue: "bg-blue-50 text-blue-600 border-blue-200",
-    green: "bg-green-50 text-green-600 border-green-200",
-    purple: "bg-purple-50 text-purple-600 border-purple-200",
-    orange: "bg-orange-50 text-orange-600 border-orange-200"
-  };
-
+// Helper component for stats
+function StatCard({ title, value }) {
   return (
-    <div className="neo-card p-6">
+    <div className="neo-surface p-5 rounded-lg">
       <div className="text-sm font-medium text-neo-muted">{title}</div>
-      <div className="text-2xl font-bold mt-1 text-neo-fg">{value}</div>
+      <div className="text-3xl font-bold mt-1 text-neo-fg">{value}</div>
     </div>
   );
 }
