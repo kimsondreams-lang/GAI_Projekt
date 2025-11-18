@@ -98,8 +98,8 @@ class TaskPlanner:
     Zaawansowany planer zadań dla agenta AI
     """
     
-    def __init__(self):
-        self.model_manager = ModelManager()
+    def __init__(self, model_manager: Optional[ModelManager] = None):
+        self.model_manager = model_manager or ModelManager()
         self.memory_store = None
         self.budget_manager = None
         self.task_templates = self._load_task_templates()

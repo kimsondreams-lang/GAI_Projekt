@@ -110,9 +110,4 @@ def fail_task_sync(tid: str, error: str):
     """Synchroniczna wersja oznaczania zadania jako nieudane"""
     asyncio.run(fail_task(tid, error))
 
-# Zachowaj kompatybilność wsteczną
-add_task = add_task_sync
-list_tasks = list_tasks_sync
-fetch_next_task = fetch_next_task_sync
-complete_task = complete_task_sync
-fail_task = fail_task_sync
+

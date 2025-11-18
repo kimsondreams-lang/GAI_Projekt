@@ -62,114 +62,33 @@ class GeneratedContent:
 class ContentGenerator:
     """Zaawansowany generator treści z AI i szablonami"""
     
-    def __init__(self):
-        self.model_manager = ModelManager()
-        self.templates = self._load_default_templates()
-        self.content_cache = {}
-        self.cache_timeout = timedelta(hours=24)
-        
-        logger.info("ContentGenerator zainicjalizowany")
-    
-    def _load_default_templates(self) -> Dict[str, ContentTemplate]:
-        """Załaduj domyślne szablony treści"""
-        templates = {
-            "product_review": ContentTemplate(
-                template_id="product_review",
-                name="Product Review",
-                category="review",
-                structure={
-                    "sections": [
-                        {"type": "intro", "min_words": 150, "max_words": 200},
-                        {"type": "overview", "min_words": 200, "max_words": 300},
-                        {"type": "features", "min_words": 400, "max_words": 600},
-                        {"type": "performance", "min_words": 300, "max_words": 400},
-                        {"type": "pros_cons", "min_words": 200, "max_words": 300},
-                        {"type": "comparison", "min_words": 300, "max_words": 500},
-                        {"type": "price_value", "min_words": 200, "max_words": 300},
-                        {"type": "conclusion", "min_words": 150, "max_words": 200},
-                        {"type": "faq", "min_words": 200, "max_words": 400}
-                    ]
-                },
-                target_length=2000,
-                tone="professional",
-                seo_requirements={
-                    "keyword_density": {"min": 1.0, "max": 3.0},
-                    "headings_required": ["h1", "h2", "h3"],
-                    "meta_description_length": {"min": 120, "max": 160},
-                    "internal_links": {"min": 2, "max": 5}
-                },
-                media_requirements={
-                    "images": {"min": 3, "max": 8, "types": ["product", "comparison", "infographic"]},
-                    "videos": {"min": 0, "max": 2},
-                    "charts": {"min": 1, "max": 3}
-                }
-            ),
-            
-            "buying_guide": ContentTemplate(
-                template_id="buying_guide",
-                name="Buying Guide",
-                category="guide",
-                structure={
-                    "sections": [
-                        {"type": "intro", "min_words": 100, "max_words": 150},
-                        {"type": "what_is", "min_words": 200, "max_words": 300},
-                        {"type": "key_features", "min_words": 400, "max_words": 600},
-                        {"type": "types", "min_words": 300, "max_words": 400},
-                        {"type": "how_to_choose", "min_words": 400, "max_words": 500},
-                        {"type": "top_products", "min_words": 600, "max_words": 800},
-                        {"type": "maintenance", "min_words": 200, "max_words": 300},
-                        {"type": "conclusion", "min_words": 100, "max_words": 150}
-                    ]
-                },
-                target_length=2500,
-                tone="educational",
-                seo_requirements={
-                    "keyword_density": {"min": 0.8, "max": 2.5},
-                    "headings_required": ["h1", "h2", "h3", "h4"],
-                    "faq_schema": True,
-                    "table_of_contents": True
-                },
-                media_requirements={
-                    "images": {"min": 5, "max": 12, "types": ["educational", "comparison", "step-by-step"]},
-                    "infographics": {"min": 1, "max": 3}
-                }
-            ),
-            
-            "comparison_article": ContentTemplate(
-                template_id="comparison_article",
-                name="Product Comparison",
-                category="comparison",
-                structure={
-                    "sections": [
-                        {"type": "intro", "min_words": 150, "max_words": 200},
-                        {"type": "criteria", "min_words": 200, "max_words": 300},
-                        {"type": "product_1", "min_words": 400, "max_words": 500},
-                        {"type": "product_2", "min_words": 400, "max_words": 500},
-                        {"type": "product_3", "min_words": 400, "max_words": 500},
-                        {"type": "comparison_table", "min_words": 100, "max_words": 200},
-                        {"type": "winner", "min_words": 200, "max_words": 300},
-                        {"type": "alternatives", "min_words": 200, "max_words": 300},
-                        {"type": "conclusion", "min_words": 150, "max_words": 200}
-                    ]
-                },
-                target_length=2500,
-                tone="objective",
-                seo_requirements={
-                    "keyword_density": {"min": 1.0, "max": 3.0},
-                    "comparison_schema": True,
-                    "product_schema": True,
-                    "review_schema": True
-                },
-                media_requirements={
-                    "images": {"min": 6, "max": 15, "types": ["product", "comparison", "feature"]},
-                    "comparison_tables": {"min": 2, "max": 4}
-                }
-            )
-        }
-        
+    def __init__(self, model_manager: Optional[ModelManager] = None):
+        self.model_manager = model_manager or ModelManager()
+        self.content_cache: Dict[str, Any] = {}
+        self.cache_timeout = timedelta(hours=1)
+        self.templates = self._load_templates()
+
+    def _load_templates(self) -> Dict[str, ContentTemplate]:
+        """Załaduj szablony treści z plików"""
+        templates_dir = Path(__file__).parent / "content_templates"
+        templates = {}
+        if not templates_dir.exists():
+            logger.warning(f"Directory with templates not found: {templates_dir}")
+            return {}
+
+        for file_path in templates_dir.glob("*.json"):
+            try:
+                with open(file_path, "r") as f:
+                    template_data = json.load(f)
+                    template = ContentTemplate(**template_data)
+                    templates[template.template_id] = template
+                    logger.info(f"Template loaded: {template.name}")
+            except Exception as e:
+                logger.error(f"Error loading template {file_path}: {e}")
         return templates
-    
-    async def generate_content(self, 
+
+    async def generate_article(
+                             self,
                              topic: str,
                              content_type: str = "product_review",
                              target_keywords: List[str] = None,
@@ -727,7 +646,7 @@ async def generate_content(topic: str,
                           include_media: bool = True) -> GeneratedContent:
     """Wygeneruj treść (funkcja pomocnicza)"""
     generator = get_content_generator()
-    return await generator.generate_content(
+    return await generator.generate_article(
         topic=topic,
         content_type=content_type,
         target_keywords=target_keywords,
@@ -737,7 +656,8 @@ async def generate_content(topic: str,
         include_media=include_media
     )
 
-async def optimize_content(content: GeneratedContent, optimization_target: str = "seo") -> GeneratedContent:
+async def optimize_content(content: GeneratedContent, 
+                           optimization_target: str = "seo") -> GeneratedContent:
     """Zoptymalizuj treść (funkcja pomocnicza)"""
     generator = get_content_generator()
     return await generator.optimize_content(content, optimization_target)

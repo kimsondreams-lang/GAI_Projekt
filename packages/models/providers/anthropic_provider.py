@@ -14,7 +14,7 @@ class AnthropicProvider:
     retry logic i szczegółowym monitoringiem
     """
     
-    def __init__(self, api_key: str, timeout: float = 30.0):
+    def __init__(self, api_key: str, timeout: float = 30.0, proxies: Optional[str] = None):
         """
         Inicjalizacja Anthropic Provider z sync client (dla kompatybilności)
         
@@ -24,7 +24,14 @@ class AnthropicProvider:
         """
         self.api_key = api_key
         self.timeout = timeout
-        self.client = Anthropic(api_key=api_key)
+        import httpx
+        proxies_dict = {"http://": proxies, "https://": proxies} if proxies else None
+        http_client = httpx.Client(proxies=proxies_dict) if proxies_dict else None
+        self.client = Anthropic(
+            api_key=api_key, 
+            timeout=timeout, 
+            http_client=http_client
+        )
         
         # Konfiguracja modeli z dokładnymi limitami
         self.model_configs = {

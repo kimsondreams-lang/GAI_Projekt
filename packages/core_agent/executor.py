@@ -13,6 +13,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import time
 import random
+from collections import defaultdict
 
 from packages.models.invoke import ModelManager
 from packages.memory import get_memory_store

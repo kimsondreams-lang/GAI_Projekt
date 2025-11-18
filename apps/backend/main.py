@@ -152,8 +152,5 @@ async def stop_autonomous_agent():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop agent: {str(e)}")
 
-app.include_router(chat.router, prefix="/chat", tags=["chat"], dependencies=[Depends(require_auth)])
-app.include_router(tasks.router, prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_auth)])
-app.include_router(publications.router, prefix="/publications", tags=["publications"], dependencies=[Depends(require_auth)])
-app.include_router(settings.router, prefix="/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"], dependencies=[Depends(require_auth)])
+app.include_router(chat.router, prefix="/ws", tags=["chat"])

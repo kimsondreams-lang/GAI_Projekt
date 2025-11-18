@@ -14,7 +14,7 @@ class DeepSeekProvider:
     retry logic i szczegółowym monitoringiem
     """
     
-    def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com", timeout: float = 30.0):
+    def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com", timeout: float = 30.0, proxies: Optional[str] = None):
         """
         Inicjalizacja DeepSeek Provider z async client
         
@@ -22,10 +22,12 @@ class DeepSeekProvider:
             api_key: Klucz API DeepSeek
             base_url: Bazowy URL API
             timeout: Timeout dla requestów w sekundach
+            proxies: Opcjonalny adres proxy
         """
         self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
+        self.proxies = proxies
         self.session = None
         
         # Konfiguracja modeli z dokładnymi limitami
@@ -81,7 +83,8 @@ class DeepSeekProvider:
                     "User-Agent": "GAI-DeepSeek-Provider/1.0"
                 },
                 timeout=timeout,
-                connector=connector
+                connector=connector,
+                proxy=self.proxies
             )
         return self.session
 

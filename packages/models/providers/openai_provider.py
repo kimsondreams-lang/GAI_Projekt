@@ -14,7 +14,7 @@ class OpenAIProvider:
     retry logic i szczegółowym monitoringiem
     """
     
-    def __init__(self, api_key: str, organization: Optional[str] = None, timeout: float = 30.0):
+    def __init__(self, api_key: str, organization: Optional[str] = None, timeout: float = 30.0, proxies: Optional[str] = None):
         """
         Inicjalizacja OpenAI Provider z async client
         
@@ -23,15 +23,21 @@ class OpenAIProvider:
             organization: Opcjonalny organization ID
             timeout: Timeout dla requestów w sekundach
         """
+        logger.info(f"Initializing OpenAIProvider with proxies: {proxies}")
         self.api_key = api_key
         self.organization = organization
         self.timeout = timeout
         
         # Użyj sync client dla kompatybilności z Python 3.14
+        import httpx
+        proxies_dict = {"http://": proxies, "https://": proxies} if proxies else None
+        http_client = httpx.Client(proxies=proxies_dict) if proxies_dict else None
+
         self.client = OpenAI(
             api_key=api_key,
             organization=organization,
-            timeout=timeout
+            timeout=timeout,
+            http_client=http_client
         )
         
         # Konfiguracja modeli z dokładnymi limitami

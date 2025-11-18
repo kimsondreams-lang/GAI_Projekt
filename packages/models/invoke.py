@@ -2,11 +2,12 @@ import os
 import asyncio
 import logging
 from typing import Dict, Optional, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import json
 from dataclasses import dataclass
 from enum import Enum
+from collections import defaultdict
 
 # Import providerów
 from .providers.openai_provider import OpenAIProvider
@@ -54,59 +55,65 @@ class ModelManager:
     Zaawansowany ModelManager z inteligentnym wyborem modeli,
     kontrolą budżetu i szczegółowym monitoringiem
     """
-    
-    def __init__(self):
+
+    def __init__(self, providers_config: Optional[Dict[str, Any]] = None):
         self.providers = {}
-        self.usage_stats = []
-        self.retry_config = {
-            "max_retries": int(os.getenv("MAX_RETRIES", "3")),
-            "retry_delay": float(os.getenv("RETRY_DELAY", "1.0")),
-            "exponential_backoff": True,
-            "max_delay": 60.0
-        }
-        self.cost_budget = float(os.getenv("COST_BUDGET_USD_PER_CYCLE", "5.0"))
-        self.current_cost = 0.0
-        self.max_cost_per_request = float(os.getenv("MAX_COST_PER_REQUEST", "1.0"))
-        self._initialize_providers()
-        
-        logger.info(f"ModelManager initialized with retry config: {self.retry_config}")
-        logger.info(f"Cost budget: ${self.cost_budget}, Max cost per request: ${self.max_cost_per_request}")
-    
-    def _initialize_providers(self):
-        """Inicjalizacja wszystkich dostępnych providerów"""
-        # OpenAI
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
+        self.provider_health = {}
+        self.last_health_check = {}
+        self.health_check_interval = timedelta(minutes=5)
+        self.usage_stats = defaultdict(lambda: ModelUsage())
+        self.lock = asyncio.Lock()
+
+        if providers_config is None:
+            providers_config = self._get_default_providers_config()
+
+        proxies_str = os.getenv("PROXIES")
+        proxies = None
+        if proxies_str:
             try:
-                self.providers["openai"] = OpenAIProvider(openai_key)
-                logger.info("OpenAI provider initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize OpenAI provider: {e}")
-        else:
-            logger.warning("OPENAI_API_KEY not found, OpenAI provider disabled")
-        
-        # Anthropic
-        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-        if anthropic_key:
-            try:
-                self.providers["anthropic"] = AnthropicProvider(anthropic_key)
-                logger.info("Anthropic provider initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Anthropic provider: {e}")
-        else:
-            logger.warning("ANTHROPIC_API_KEY not found, Anthropic provider disabled")
-        
-        # DeepSeek
-        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-        if deepseek_key:
-            try:
-                self.providers["deepseek"] = DeepSeekProvider(deepseek_key)
-                logger.info("DeepSeek provider initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize DeepSeek provider: {e}")
-        else:
-            logger.warning("DEEPSEEK_API_KEY not found, DeepSeek provider disabled")
-    
+                proxies_dict = json.loads(proxies_str)
+                if isinstance(proxies_dict, dict):
+                    proxies = proxies_dict.get("https") or proxies_dict.get("http")
+            except json.JSONDecodeError:
+                logger.warning(f"Could not parse PROXIES environment variable: {proxies_str}")
+                proxies = proxies_str
+
+        if providers_config.get("openai"):
+            config = providers_config["openai"]
+            config.pop('proxies', None)
+            if proxies:
+                config['proxies'] = proxies
+            self.add_provider("openai", OpenAIProvider(**config))
+
+        if providers_config.get("anthropic"):
+            config = providers_config["anthropic"]
+            config.pop('proxies', None)
+            if proxies:
+                config['proxies'] = proxies
+            self.add_provider("anthropic", AnthropicProvider(**config))
+
+        if providers_config.get("deepseek"):
+            config = providers_config["deepseek"]
+            config.pop('proxies', None)
+            if proxies:
+                config['proxies'] = proxies
+            self.add_provider("deepseek", DeepSeekProvider(**config))
+
+    def _get_default_providers_config(self) -> Dict[str, Any]:
+        config = {}
+        if os.getenv("OPENAI_API_KEY"):
+            config["openai"] = {"api_key": os.getenv("OPENAI_API_KEY")}
+        if os.getenv("ANTHROPIC_API_KEY"):
+            config["anthropic"] = {"api_key": os.getenv("ANTHROPIC_API_KEY")}
+        if os.getenv("DEEPSEEK_API_KEY"):
+            config["deepseek"] = {"api_key": os.getenv("DEEPSEEK_API_KEY")}
+        return config
+
+    def add_provider(self, name: str, provider: Any):
+        self.providers[name] = provider
+        self.provider_health[name] = ProviderStatus(provider=name, status="unknown")
+        logger.info(f"Added provider: {name}")
+
     async def model_infer(
         self, 
         task_label: str, 
@@ -172,8 +179,11 @@ class ModelManager:
                             "model": model_name,
                             "temperature": temperature or current_config.get("temperature", 0.7),
                             "max_tokens": max_tokens or current_config.get("max_tokens", 1200),
-                            **kwargs
                         }
+                        
+                        # Usuń 'proxies' z kwargs, aby uniknąć konfliktów
+                        kwargs.pop('proxies', None)
+                        params.update(kwargs)
                         
                         if system_prompt:
                             params["system_prompt"] = system_prompt
@@ -435,11 +445,11 @@ class ModelManager:
             except Exception as e:
                 logger.error(f"Failed to close provider {provider_name}: {e}")
 
-# Globalna instancja ModelManager
-model_manager = ModelManager()
+# Usunięcie globalnej instancji model_manager
 
 # Wrapper dla zaawansowanej inferencji
 async def amodel_infer_advanced(
+    model_manager: ModelManager,
     task_label: str, 
     prompt: str, 
     temperature: float = 0.5, 
@@ -461,6 +471,7 @@ async def amodel_infer_advanced(
 
 # Wrapper dla standardowej inferencji (backward compatibility)
 async def amodel_infer(
+    model_manager: ModelManager,
     task_label: str, 
     prompt: str, 
     temperature: float = 0.5, 
@@ -481,6 +492,7 @@ async def amodel_infer(
 
 # Synchroniczny wrapper dla standardowej inferencji
 def model_infer(
+    model_manager: ModelManager,
     task_label: str, 
     prompt: str, 
     temperature: float = 0.5, 

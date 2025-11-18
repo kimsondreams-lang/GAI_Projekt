@@ -156,16 +156,19 @@ class SEOAnalyzer:
         try:
             logger.info(f"Research słów kluczowych dla: {seed_keywords}")
             
-            keywords_data = []
-            
+            all_related_keywords = []
             for seed_keyword in seed_keywords:
-                # Symulacja danych - w prawdziwej implementacji użylibyśmy API
-                related_keywords = await self._generate_related_keywords(seed_keyword)
-                
-                for related_kw in related_keywords[:10]:  # Ogranicz do 10 słów kluczowych
-                    keyword_data = await self._get_keyword_metrics(related_kw, language, location)
-                    if keyword_data:
-                        keywords_data.append(keyword_data)
+                related = self._generate_related_keywords(seed_keyword)
+                all_related_keywords.extend(related)
+            
+            tasks = [
+                self._get_keyword_metrics(kw, language, location)
+                for kw in all_related_keywords[:20] # Ogranicz do 20, aby uniknąć zbyt wielu zapytań
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            keywords_data = [res for res in results if res is not None]
             
             # Sortuj według wolumenu wyszukiwania
             keywords_data.sort(key=lambda x: x.search_volume, reverse=True)
@@ -176,6 +179,9 @@ class SEOAnalyzer:
         except Exception as e:
             logger.error(f"Błąd researchu słów kluczowych: {e}")
             return []
+
+    async def generate_seo_suggestions(self, analysis: SEOAnalysis) -> List[str]:
+        """Wygeneruj sugestie SEO na podstawie analizy"""
     
     async def analyze_competitors(self, url: str, keywords: List[str]) -> List[CompetitorAnalysis]:
         """Przeanalizuj konkurencję dla danych słów kluczowych"""

@@ -1,0 +1,29 @@
+
+{
+    "template_id": "product_review",
+    "name": "Product Review",
+    "category": "review",
+    "structure": {
+        "sections": [
+            {
+                "type": "intro",
+                "min_words": 100,
+                "max_words": 200
+            },
+            {
+                "type": "main",
+                "min_words": 500,
+                "max_words": 1000
+            },
+            {
+                "type": "conclusion",
+                "min_words": 100,
+                "max_words": 200
+            }
+        ]
+    },
+    "target_length": 1500,
+    "tone": "professional",
+    "seo_requirements": {},
+    "media_requirements": {}
+}
