@@ -1,11 +1,13 @@
 # Railway Deployment Guide for GAI Agent
 
+Ten przewodnik zakłada natywną integrację Railway↔GitHub. Po pushu na `main` Railway automatycznie buduje i wdraża usługi. Dodatkowe GitHub Actions nie są wymagane.
+
 ## Krytyczna konfiguracja dla monorepo (fix dla błędu "COPY packages: not found")
 
 Aby wszystkie serwisy poprawnie zbudowały obraz z katalogiem `packages`, ustaw kontekst builda (Service Path) na root repo i wskaż właściwe Dockerfile dla każdego serwisu:
 
 ### Backend
-- Source: GitHub (gałąź `master`)
+- Source: GitHub (gałąź `main`)
 - Service Path: `/` (root repo)
 - Builder: `Dockerfile`
 - Dockerfile Path: `apps/backend/Dockerfile`
@@ -15,7 +17,7 @@ Aby wszystkie serwisy poprawnie zbudowały obraz z katalogiem `packages`, ustaw 
   - `REDIS_URL` (opcjonalnie)
 
 ### Worker
-- Source: GitHub (gałąź `master`)
+- Source: GitHub (gałąź `main`)
 - Service Path: `/` (root repo)
 - Builder: `Dockerfile`
 - Dockerfile Path: `apps/worker/Dockerfile`
@@ -24,7 +26,7 @@ Aby wszystkie serwisy poprawnie zbudowały obraz z katalogiem `packages`, ustaw 
   - `WAKE_CYCLE_MIN` (opcjonalnie)
 
 ### Web
-- Source: GitHub (gałąź `master`)
+- Source: GitHub (gałąź `main`)
 - Service Path: `/` (root repo)
 - Builder: `Dockerfile`
 - Dockerfile Path: `apps/web/Dockerfile`
@@ -63,7 +65,7 @@ Możesz użyć Python buildpack dla prostych aplikacji, ale w tym monorepo zalec
 1. Połącz projekt z repozytorium GitHub.
 2. Dla każdego serwisu ustaw `Service Path` na `/` (root repo) i właściwy `Dockerfile Path` (`apps/backend/Dockerfile`, `apps/worker/Dockerfile`, `apps/web/Dockerfile`).
 3. Ustaw zmienne środowiskowe zgodnie z sekcją poniżej.
-4. Włącz auto-deploy na push do gałęzi `master`.
+4. Włącz auto-deploy na push do gałęzi `main`.
 
 ## Pliki konfiguracyjne
 
@@ -112,23 +114,9 @@ Jeśli Railway nadal nie działa, rozważ:
 - **Fly.io** dla wszystkich serwisów
 - **DigitalOcean App Platform**
 - **AWS ECS** z Docker Compose
-## GitHub Actions: Auto-deploy na Railway po pushu
+## Autodeploy Railway
 
-Repozytorium zawiera workflow `.github/workflows/railway-deploy.yml`, który uruchamia deploy wszystkich usług (`backend`, `worker`, `web`) po każdym pushu na gałąź `main`.
-
-Warunek uruchomienia:
-- W repozytorium GitHub musi być ustawiony sekret `RAILWAY_TOKEN` (Project Token z Railway).
-
-Jak uzyskać i dodać `RAILWAY_TOKEN`:
-- W Railway: Project Settings -> Tokens -> wygeneruj Project Token.
-- W GitHub: Settings -> Secrets and variables -> Actions -> New repository secret -> `RAILWAY_TOKEN` i wklej token.
-
-Usługi i nazwy:
-- Workflow używa nazw usług: `gai-backend`, `gai-worker`, `gai-web` (zgodne ze skryptem `scripts/deploy-production.sh`).
-- Jeśli nazwy w Twoim projekcie różnią się, zaktualizuj macierz w pliku workflow.
-
-Fallback:
-- Workflow najpierw deployuje `railway up --service <name>`, a jeśli usługa o tej nazwie nie istnieje, wykona `railway up` z katalogu usługi.
-
-Uwaga:
-- Dotychczasowy auto-deploy (Railway GitHub link) działa niezależnie od GitHub Actions. Workflow zapewnia dodatkową, przewidywalną automatyzację bez konieczności wchodzenia do panelu Railway.
+Po podpięciu repo i ustawieniu gałęzi `main`, każdy push automatycznie uruchomi build i deploy w Railway dla skonfigurowanych usług. Jeśli deploy nie startuje, sprawdź w Railway dla każdej usługi:
+- czy repozytorium GitHub jest poprawnie podłączone,
+- czy `Service Path` wskazuje root `/` i `Dockerfile Path` jest właściwy (`apps/*/Dockerfile`),
+- czy `Autodeploy` jest włączony dla gałęzi `main`.
