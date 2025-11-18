@@ -1,0 +1,46 @@
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+.env.*
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.production
+.env.development
+
+# Docker
+*.pid
+
+# IDE
+.vscode/
+.DS_Store
+
+# Frontend specific
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/.env.local
+
+# Large files
+*.node
+*.so
+*.dll
+*.dylib

@@ -1,0 +1,13 @@
+{
+  "name": "gai-agent-worker",
+  "description": "GAI Agent Celery Worker",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "python -m celery -A celery_app.celery worker --loglevel=INFO --concurrency=2",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

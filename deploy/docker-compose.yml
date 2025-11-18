@@ -1,0 +1,128 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gai
+      POSTGRES_PASSWORD: gai
+      POSTGRES_DB: gai
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gai -d gai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: gai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../
+      dockerfile: deploy/Dockerfile.backend
+    container_name: gai-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://gai:gai@postgres:5432/gai
+      REDIS_URL: redis://redis:6379/0
+      GAI_PANEL_PASSWORD: devpass
+      PYTHONUNBUFFERED: 1
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../packages:/app/packages:ro
+      - ../scripts:/app/scripts:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  worker:
+    build:
+      context: ../
+      dockerfile: deploy/Dockerfile.worker
+    container_name: gai-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://gai:gai@postgres:5432/gai
+      REDIS_URL: redis://redis:6379/0
+      WAKE_CYCLE_MIN: "5"
+      COST_BUDGET_USD_PER_CYCLE: "5"
+      PYTHONUNBUFFERED: 1
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      CELERY_LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ../packages:/app/packages:ro
+      - ../scripts:/app/scripts:ro
+
+  web:
+    build:
+      context: ../
+      dockerfile: deploy/Dockerfile.web
+    container_name: gai-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_GAI_PANEL_PASSWORD: devpass
+      BACKEND_URL: http://backend:8000
+      WS_URL: ws://backend:8000
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: gai-network
+    driver: bridge
