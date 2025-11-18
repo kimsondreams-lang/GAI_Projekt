@@ -112,3 +112,23 @@ Jeśli Railway nadal nie działa, rozważ:
 - **Fly.io** dla wszystkich serwisów
 - **DigitalOcean App Platform**
 - **AWS ECS** z Docker Compose
+## GitHub Actions: Auto-deploy na Railway po pushu
+
+Repozytorium zawiera workflow `.github/workflows/railway-deploy.yml`, który uruchamia deploy wszystkich usług (`backend`, `worker`, `web`) po każdym pushu na gałąź `main`.
+
+Warunek uruchomienia:
+- W repozytorium GitHub musi być ustawiony sekret `RAILWAY_TOKEN` (Project Token z Railway).
+
+Jak uzyskać i dodać `RAILWAY_TOKEN`:
+- W Railway: Project Settings -> Tokens -> wygeneruj Project Token.
+- W GitHub: Settings -> Secrets and variables -> Actions -> New repository secret -> `RAILWAY_TOKEN` i wklej token.
+
+Usługi i nazwy:
+- Workflow używa nazw usług: `gai-backend`, `gai-worker`, `gai-web` (zgodne ze skryptem `scripts/deploy-production.sh`).
+- Jeśli nazwy w Twoim projekcie różnią się, zaktualizuj macierz w pliku workflow.
+
+Fallback:
+- Workflow najpierw deployuje `railway up --service <name>`, a jeśli usługa o tej nazwie nie istnieje, wykona `railway up` z katalogu usługi.
+
+Uwaga:
+- Dotychczasowy auto-deploy (Railway GitHub link) działa niezależnie od GitHub Actions. Workflow zapewnia dodatkową, przewidywalną automatyzację bez konieczności wchodzenia do panelu Railway.

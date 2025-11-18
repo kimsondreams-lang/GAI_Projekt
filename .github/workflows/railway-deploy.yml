@@ -11,11 +11,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - service: gai-agent-backend
+          - service: gai-backend
             path: apps/backend
-          - service: gai-agent-worker
+          - service: gai-worker
             path: apps/worker
-          - service: gai-agent-frontend
+          - service: gai-web
             path: apps/web
     steps:
       - name: Checkout repository
@@ -29,13 +29,13 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Deploy ${{ matrix.service }} to Railway
+      - name: Deploy ${{ matrix.service }} to Railway (with fallback)
         working-directory: ${{ matrix.path }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           echo "Deploying service: ${{ matrix.service }} from ${{ matrix.path }}"
-          railway up --service "${{ matrix.service }}" --yes
+          railway up --service "${{ matrix.service }}" --yes || railway up --yes
 
   no-token-warning:
     if: ${{ secrets.RAILWAY_TOKEN == '' }}
