@@ -1,0 +1,126 @@
+/* TechNova Design System v1.0.1 - 2026-03-09 */
+
+:root {
+    /* Colors - Deep, Modern Palette */
+    --bg-dark: #0f172a;
+    --bg-darker: #020617;
+    --bg-light: #1e293b;
+    --bg-lighter: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --accent-blue: #38bdf8;
+    --accent-blue-light: #7dd3fc;
+    --accent-blue-dark: #0ea5e9;
+    --accent-orange: #fb923c;
+    --accent-orange-light: #fdba74;
+    --accent-orange-dark: #f97316;
+    --accent-amazon: #ff9500;
+    --accent-amazon-dark: #ff6b00;
+    --border-color: rgba(255, 255, 255, 0.1);
+    
+    /* Typography - Fluid Scale */
+    --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: clamp(0.8rem, 0.17vw + 0.76rem, 0.89rem);
+    --font-size-md: clamp(1rem, 0.34vw + 0.91rem, 1.19rem);
+    --font-size-lg: clamp(1.25rem, 0.61vw + 1.1rem, 1.58rem);
+    --font-size-xl: clamp(1.56rem, 1vw + 1.31rem, 2.11rem);
+    --font-size-2xl: clamp(1.95rem, 1.56vw + 1.56rem, 2.81rem);
+    
+    /* Spacing - Fluid System with clamp() */
+    --spacing-xs: clamp(0.25rem, 0.2vw + 0.2rem, 0.375rem); 
+    --spacing-sm: clamp(0.5rem, 0.4vw + 0.4rem, 0.75rem);
+    --spacing-md: clamp(1rem, 0.8vw + 0.8rem, 1.5rem);
+    --spacing-lg: clamp(1.5rem, 1.2vw + 1.2rem, 2.25rem);
+    --spacing-xl: clamp(2rem, 1.6vw + 1.6rem, 3rem);
+    --spacing-2xl: clamp(3rem, 2.4vw + 2.4rem, 4.5rem);
+    --spacing-3xl: clamp(4rem, 3.2vw + 3.2rem, 6rem);
+    --container-max-width: 1280px;
+    
+    /* Borders & Depth */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 24px;
+    --radius-full: 9999px;
+    --glass-bg: rgba(30, 41, 59, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --badge-blur: 12px;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-premium: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+    
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --container-width: 1280px;
+    --article-max-width: 800px;
+}
+
+/* Base Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-main);
+    background-color: var(--bg-darker);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Utility Classes */
+.container { max-width: var(--container-width); margin: 0 auto; padding: 0 var(--spacing-md); }
+.article-container { max-width: var(--article-max-width); margin: 0 auto; }
+.mt-sm { margin-top: var(--spacing-sm); }
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+.mt-xl { margin-top: var(--spacing-xl); }
+.mb-sm { margin-bottom: var(--spacing-sm); }
+.mb-md { margin-bottom: var(--spacing-md); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+.mb-xl { margin-bottom: var(--spacing-xl); }
+
+.p-sm { padding: var(--spacing-sm); }
+.p-md { padding: var(--spacing-md); }
+.p-lg { padding: var(--spacing-lg); }
+.p-xl { padding: var(--spacing-xl); }
+
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.text-accent { color: var(--accent-blue); }
+
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--badge-blur));
+    -webkit-backdrop-filter: blur(var(--badge-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-premium);
+}
+
+/* Component: Article Detail */
+.article-detail { color: var(--text-secondary); }
+.article-header { margin-bottom: var(--spacing-xl); text-align: center; }
+.article-title { font-size: var(--font-size-2xl); color: var(--text-primary); margin-bottom: var(--spacing-sm); }
+.article-subtitle { font-size: var(--font-size-lg); color: var(--text-muted); margin-bottom: var(--spacing-lg); }
+.article-body { font-size: var(--font-size-md); line-height: 1.8; }
+.article-body p { margin-bottom: var(--spacing-md); }
+.article-body h2 { color: var(--text-primary); margin: var(--spacing-xl) 0 var(--spacing-md); }
+
+/* Component: Media */
+.article-image-wrapper { margin: var(--spacing-lg) 0; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--glass-border); }
+.article-image { width: 100%; height: auto; display: block; }
+.image-caption { padding: var(--spacing-sm); background: rgba(0,0,0,0.4); font-size: var(--font-size-sm); color: var(--text-muted); text-align: center; font-style: italic; }
+
+/* Component: Affiliate/CTA */
+.product-recommendation { background: rgba(56, 189, 248, 0.05); border: 1px dashed var(--accent-blue); border-radius: var(--radius-md); padding: var(--spacing-lg); margin: var(--spacing-xl) 0; }
+.amazon-btn { display: inline-block; background: var(--accent-amazon); color: white; padding: var(--spacing-sm) var(--spacing-xl); border-radius: var(--radius-full); font-weight: 700; text-decoration: none; transition: var(--transition-fast); }
+.amazon-btn:hover { background: var(--accent-amazon-dark); transform: translateY(-2px); }
+
+/* Navigation */
+.back-btn { background: transparent; border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: var(--spacing-xs) var(--spacing-md); border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition-fast); margin-bottom: var(--spacing-lg); }
+.back-btn:hover { background: var(--accent-blue); color: var(--bg-darker); }

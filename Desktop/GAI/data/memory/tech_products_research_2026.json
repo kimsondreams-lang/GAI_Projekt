@@ -1,0 +1,44 @@
+{
+  \"researchDate\": \"2026-02-25\",
+  \"categories\": [
+    {
+      \"name\": \"Premium Smartphones\",
+      \"products\": [
+        {\"name\": \"Samsung Galaxy S26 Ultra\", \"brand\": \"Samsung\", \"releaseDate\": \"February 2026\", \"price\": \"$1,299+\", \"amazonAvailable\": true, \"notes\": \"Pre-orders available, AI features\"}
+      ]
+    },
+    {
+      \"name\": \"Audio/Headphones\",
+      \"products\": [
+        {\"name\": \"Sony WH-1000XM6\", \"brand\": \"Sony\", \"releaseDate\": \"2026\", \"price\": \"$368-$459\", \"amazonAvailable\": true, \"asin\": \"B0G6J3SV7P\", \"notes\": \"Best NC headphones, Lightning deals\"}
+      ]
+    },
+    {
+      \"name\": \"Smart Speakers\",
+      \"products\": [
+        {\"name\": \"Echo Dot Max\", \"brand\": \"Amazon\", \"price\": \"$99.99\", \"amazonAvailable\": true},
+        {\"name\": \"Echo Studio 2025\", \"brand\": \"Amazon\", \"price\": \"$219.99\", \"amazonAvailable\": true}
+      ]
+    },
+    {
+      \"name\": \"E-readers\",
+      \"products\": [
+        {\"name\": \"Kindle Scribe ColorSoft\", \"brand\": \"Amazon\", \"price\": \"$629.99\", \"amazonAvailable\": true, \"notes\": \"Color e-ink display\"}
+      ]
+    },
+    {
+      \"name\": \"Gaming Laptops\",
+      \"products\": [
+        {\"name\": \"Razer Blade 16\", \"brand\": \"Razer\", \"price\": \"$1,899+\", \"amazonAvailable\": true},
+        {\"name\": \"ASUS ROG Zephyrus\", \"brand\": \"ASUS\", \"amazonAvailable\": true}
+      ]
+    }
+  ],
+  \"articleTopics\": [
+    \"Sony WH-1000XM6 Review - Best Noise Canceling Headphones 2026\",
+    \"Samsung Galaxy S26 Ultra vs iPhone 16 Pro Max Comparison\",
+    \"Best Gaming Laptops 2026 - Razer Blade vs ASUS ROG\",
+    \"Kindle Scribe ColorSoft Review - First Color E-ink\",
+    \"Echo Dot Max vs Echo Studio - Smart Speaker Comparison\"
+  ]
+}

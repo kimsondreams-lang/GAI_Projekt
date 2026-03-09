@@ -1,0 +1,498 @@
+[
+  {
+    "article": "3",
+    "image_path": "images/articles/article3-cover.jpg",
+    "source": "main_image",
+    "alt": "Amazon Prime Day 2025: Best Tech Deals Recap",
+    "exists": true,
+    "found_at": "public/images/articles/article3-cover.jpg"
+  },
+  {
+    "article": "3",
+    "image_path": "images/articles/airpods-pro-2.jpg",
+    "source": "content_html",
+    "alt": "AirPods",
+    "exists": true,
+    "found_at": "public/images/articles/airpods-pro-2.jpg"
+  },
+  {
+    "article": "3",
+    "image_path": "images/articles/sony-xm5.jpg",
+    "source": "content_html",
+    "alt": "Sony WH-1000XM5",
+    "exists": true,
+    "found_at": "public/images/articles/sony-xm5.jpg"
+  },
+  {
+    "article": "3",
+    "image_path": "images/articles/dji-mini-4-pro.jpg",
+    "source": "content_html",
+    "alt": "DJI Mini",
+    "exists": true,
+    "found_at": "public/images/articles/dji-mini-4-pro.jpg"
+  },
+  {
+    "article": "samsung-galaxy-s26-ultra-review",
+    "image_path": "images/articles/samsung-galaxy-s23-ultra.jpg",
+    "source": "main_image",
+    "alt": "Samsung Galaxy S26 Ultra Review: The Ultimate AI Phone?",
+    "exists": true,
+    "found_at": "public/images/articles/samsung-galaxy-s23-ultra.jpg"
+  },
+  {
+    "article": "best-4k-monitors-2025",
+    "image_path": "images/articles/cover_best-4k-monitors-2025_1772533752582.jpg",
+    "source": "main_image",
+    "alt": "Best 4K Monitors 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-4k-monitors-2025_1772533752582.jpg"
+  },
+  {
+    "article": "top-ai-gadgets-amazon-2025",
+    "image_path": "images/articles/cover_top-ai-gadgets-amazon-2025_1772534001676.jpg",
+    "source": "main_image",
+    "alt": "Top AI Gadgets Available on Amazon 2025: Smart Home Revolution",
+    "exists": true,
+    "found_at": "public/images/articles/cover_top-ai-gadgets-amazon-2025_1772534001676.jpg"
+  },
+  {
+    "article": "best-mechanical-keyboards-2025",
+    "image_path": "images/articles/article6-cover.jpg",
+    "source": "main_image",
+    "alt": "Best Mechanical Keyboards 2025: Premium Typing & Gaming Experience",
+    "exists": true,
+    "found_at": "public/images/articles/article6-cover.jpg"
+  },
+  {
+    "article": "2025-smart-home-essentials-guide",
+    "image_path": "images/articles/smart-home-gadgets-2025.jpg",
+    "source": "main_image",
+    "alt": "2025 Smart Home Essentials Guide: Best Gadgets for a Connected Life",
+    "exists": true,
+    "found_at": "public/images/articles/smart-home-gadgets-2025.jpg"
+  },
+  {
+    "article": "affiliate_links",
+    "image_path": "images/articles/ai-tech-products-2025.jpg",
+    "source": "main_image",
+    "alt": "Affiliate_Links",
+    "exists": true,
+    "found_at": "public/images/articles/ai-tech-products-2025.jpg"
+  },
+  {
+    "article": "top-wireless-earbuds-2025-comparison",
+    "image_path": "images/articles/cover_top-wireless-earbuds-2025-comparison_1772533866430.jpg",
+    "source": "main_image",
+    "alt": "Best Wireless Earbuds of 2025: Sony WF-1000XM5 vs. AirPods Pro 2 vs. Bose QC Ultra",
+    "exists": true,
+    "found_at": "public/images/articles/cover_top-wireless-earbuds-2025-comparison_1772533866430.jpg"
+  },
+  {
+    "article": "2025-wearable-tech-health-gadgets-guide",
+    "image_path": "images/articles/2026-flagship-guide-main.jpg",
+    "source": "main_image",
+    "alt": "2026 Wearable Tech & Health Gadgets Guide: The Future on Your Wrist",
+    "exists": true,
+    "found_at": "public/images/articles/2026-flagship-guide-main.jpg"
+  },
+  {
+    "article": "2025-wearable-tech-health-gadgets-guide",
+    "image_path": "images/articles/apple-watch-ultra-2.jpg",
+    "source": "content_html",
+    "alt": "Apple Watch Ultra 3 on a mountain",
+    "exists": true,
+    "found_at": "public/images/articles/apple-watch-ultra-2.jpg"
+  },
+  {
+    "article": "2025-flagship-smartphone-guide",
+    "image_path": "images/articles/2026-flagship-guide-main.jpg",
+    "source": "main_image",
+    "alt": "2025 Flagship Smartphone Guide: iPhone 16 Pro, Galaxy S25 Ultra, and Pixel 9 Pro",
+    "exists": true,
+    "found_at": "public/images/articles/2026-flagship-guide-main.jpg"
+  },
+  {
+    "article": "article9",
+    "image_path": "images/articles/polaroid-now.jpg",
+    "source": "main_image",
+    "alt": "Polaroid Flip: The Instant Camera Reinvented for the TikTok Era",
+    "exists": true,
+    "found_at": "public/images/articles/polaroid-now.jpg"
+  },
+  {
+    "article": "best-laptops-2025",
+    "image_path": "images/articles/best-laptops-2025.jpg",
+    "source": "main_image",
+    "alt": "Top 5 Laptops of 2025: From Framework to MacBook",
+    "exists": true,
+    "found_at": "public/images/articles/best-laptops-2025.jpg"
+  },
+  {
+    "article": "apple-watch-ultra-2-review",
+    "image_path": "images/articles/apple-watch-ultra-2.jpg",
+    "source": "main_image",
+    "alt": "Apple Watch Ultra 2 Review: The Ultimate Rugged Smartwatch",
+    "exists": true,
+    "found_at": "public/images/articles/apple-watch-ultra-2.jpg"
+  },
+  {
+    "article": "best-gaming-accessories-2025",
+    "image_path": "images/articles/best-gaming-accessories-2025-main.jpg",
+    "source": "main_image",
+    "alt": "Best Gaming Accessories 2025: Top Headsets, Keyboards, Mice & Controllers",
+    "exists": true,
+    "found_at": "public/images/articles/best-gaming-accessories-2025-main.jpg"
+  },
+  {
+    "article": "best-gaming-accessories-2025",
+    "image_path": "images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg",
+    "source": "content_html",
+    "alt": "SteelSeries Arctis Nova Pro Wireless Gaming Headset",
+    "exists": true,
+    "found_at": "public/images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg"
+  },
+  {
+    "article": "best-gaming-accessories-2025",
+    "image_path": "images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg",
+    "source": "content_html",
+    "alt": "SteelSeries Arctis Nova Pro Wireless Gaming Headset",
+    "exists": true,
+    "found_at": "public/images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg"
+  },
+  {
+    "article": "best-gaming-accessories-2025",
+    "image_path": "images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg",
+    "source": "content_html",
+    "alt": "SteelSeries Arctis Nova Pro Wireless Gaming Headset",
+    "exists": true,
+    "found_at": "public/images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg"
+  },
+  {
+    "article": "best-gaming-accessories-2025",
+    "image_path": "images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg",
+    "source": "content_html",
+    "alt": "SteelSeries Arctis Nova Pro Wireless Gaming Headset",
+    "exists": true,
+    "found_at": "public/images/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg"
+  },
+  {
+    "article": "samsung-galaxy-s25-ultra-review",
+    "image_path": "images/articles/s25-ultra-display.jpg",
+    "source": "main_image",
+    "alt": "Samsung Galaxy S25 Ultra Review: The New AI Powerhouse",
+    "exists": true,
+    "found_at": "public/images/articles/s25-ultra-display.jpg"
+  },
+  {
+    "article": "best-smart-home-devices-2025",
+    "image_path": "images/articles/cover_best-smart-home-devices-2025_1771430240012.jpg",
+    "source": "main_image",
+    "alt": "Best Smart Home Devices 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-smart-home-devices-2025_1771430240012.jpg"
+  },
+  {
+    "article": "best-portable-monitors-2025",
+    "image_path": "images/articles/cover_best-portable-monitors-2025_1772533939848.jpg",
+    "source": "main_image",
+    "alt": "Best Portable Monitors 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-portable-monitors-2025_1772533939848.jpg"
+  },
+  {
+    "article": "4",
+    "image_path": "images/articles/cover_article4_1771410899117.jpg",
+    "source": "main_image",
+    "alt": "Back to School Tech Essentials: Must-Have Gadgets for Students in 2024",
+    "exists": true,
+    "found_at": "public/images/articles/cover_article4_1771410899117.jpg"
+  },
+  {
+    "article": "4",
+    "image_path": "images/articles/content_article4_0_1771410901958.jpg",
+    "source": "content_html",
+    "alt": "Samsung",
+    "exists": true,
+    "found_at": "public/images/articles/content_article4_0_1771410901958.jpg"
+  },
+  {
+    "article": "4",
+    "image_path": "images/articles/content_article4_1_1771410905245.jpg",
+    "source": "content_html",
+    "alt": "Sony WH-1000XM5",
+    "exists": true,
+    "found_at": "public/images/articles/content_article4_1_1771410905245.jpg"
+  },
+  {
+    "article": "4",
+    "image_path": "images/articles/content_article4_2_1771410907842.jpg",
+    "source": "content_html",
+    "alt": "Logitech",
+    "exists": true,
+    "found_at": "public/images/articles/content_article4_2_1771410907842.jpg"
+  },
+  {
+    "article": "best-eco-friendly-products-amazon-2025",
+    "image_path": "images/articles/cover_best-eco-friendly-products-amazon-2025_1772533925055.jpg",
+    "source": "main_image",
+    "alt": "Best Eco Friendly Products Amazon 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-eco-friendly-products-amazon-2025_1772533925055.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-review",
+    "image_path": "images/articles/iphone-16-pro-max.jpg",
+    "source": "main_image",
+    "alt": "iPhone 16 Pro Max Review: Apple's Most Powerful Smartphone Yet",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max.jpg"
+  },
+  {
+    "article": "meta-quest-3s-review",
+    "image_path": "images/articles/tech-gadgets-2025-main.jpg",
+    "source": "main_image",
+    "alt": "Meta Quest 3S Review: The New King of Budget VR?",
+    "exists": true,
+    "found_at": "public/images/articles/tech-gadgets-2025-main.jpg"
+  },
+  {
+    "article": "meta-quest-3s-review",
+    "image_path": "images/articles/cover_best-gaming-headsets-2025_1772533935657.jpg",
+    "source": "content_html",
+    "alt": "VR Gaming Headset Experience",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-gaming-headsets-2025_1772533935657.jpg"
+  },
+  {
+    "article": "best-gaming-headsets-2025",
+    "image_path": "images/articles/cover_best-gaming-headsets-2025_1772533935657.jpg",
+    "source": "main_image",
+    "alt": "Best Gaming Headsets 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-gaming-headsets-2025_1772533935657.jpg"
+  },
+  {
+    "article": "sony-wh-1000xm5-review",
+    "image_path": "images/articles/sony-wh-1000xm5-main.jpg",
+    "source": "main_image",
+    "alt": "Sony WH-1000XM5 Review: The Best Noise-Canceling Headphones of 2025",
+    "exists": true,
+    "found_at": "public/images/articles/sony-wh-1000xm5-main.jpg"
+  },
+  {
+    "article": "sony-wh-1000xm5-review",
+    "image_path": "images/articles/content_sony-wh-1000xm5-review_0_1772533839095.jpg",
+    "source": "content_html",
+    "alt": "Sony WH-1000XM5 Black Edition",
+    "exists": true,
+    "found_at": "public/images/articles/content_sony-wh-1000xm5-review_0_1772533839095.jpg"
+  },
+  {
+    "article": "best-amazon-gadgets-march-2025",
+    "image_path": "images/articles/cover_best-amazon-gadgets-march-2025_1772533913623.jpg",
+    "source": "main_image",
+    "alt": "Best Amazon Gadgets March 2025: Top Tech Picks Reviewed",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-amazon-gadgets-march-2025_1772533913623.jpg"
+  },
+  {
+    "article": "2026-high-performance-laptop-guide",
+    "image_path": "images/articles/2026-flagship-guide-main.jpg",
+    "source": "main_image",
+    "alt": "2026 High-Performance Laptop Guide: AI-Powered Powerhouses",
+    "exists": true,
+    "found_at": "public/images/articles/2026-flagship-guide-main.jpg"
+  },
+  {
+    "article": "2026-high-performance-laptop-guide",
+    "image_path": "images/articles/macbook-m5.jpg",
+    "source": "content_html",
+    "alt": "MacBook Pro M4 Max",
+    "exists": true,
+    "found_at": "public/images/articles/macbook-m5.jpg"
+  },
+  {
+    "article": "summer-2025-laptop-buying-guide",
+    "image_path": "images/articles/cover_summer-2025-laptop-buying-guide_1772533844234.jpg",
+    "source": "main_image",
+    "alt": "Summer 2025 Laptop Buying Guide",
+    "exists": true,
+    "found_at": "public/images/articles/cover_summer-2025-laptop-buying-guide_1772533844234.jpg"
+  },
+  {
+    "article": "2025-flagship-smartphone-guide",
+    "image_path": "images/articles/2026-flagship-guide-main.jpg",
+    "source": "main_image",
+    "alt": "2026 Flagship Smartphone Guide: iPhone 18 Pro, Galaxy S26 Ultra, and Pixel 11",
+    "exists": true,
+    "found_at": "public/images/articles/2026-flagship-guide-main.jpg"
+  },
+  {
+    "article": "2025-flagship-smartphone-guide",
+    "image_path": "images/articles/iphone-18-pro-leak.jpg",
+    "source": "content_html",
+    "alt": "iPhone 18 Pro Concept",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-18-pro-leak.jpg"
+  },
+  {
+    "article": "best-tech-gadgets-amazon-2025",
+    "image_path": "images/articles/tech-gadgets-2025-main.jpg",
+    "source": "main_image",
+    "alt": "Best Tech Gadgets on Amazon 2025: Ultimate Buyer Guide",
+    "exists": true,
+    "found_at": "public/images/articles/tech-gadgets-2025-main.jpg"
+  },
+  {
+    "article": "iphone-17-vs-samsung-s25",
+    "image_path": "images/articles/iphone17-vs-s25.jpg",
+    "source": "main_image",
+    "alt": "iPhone 17 vs Samsung Galaxy S25: The Ultimate Flagship Battle",
+    "exists": true,
+    "found_at": "public/images/articles/iphone17-vs-s25.jpg"
+  },
+  {
+    "article": "iphone-17-vs-samsung-s25",
+    "image_path": "images/articles/s25-ultra-display.jpg",
+    "source": "content_html",
+    "alt": "Samsung Galaxy S25 Ultra Display",
+    "exists": true,
+    "found_at": "public/images/articles/s25-ultra-display.jpg"
+  },
+  {
+    "article": "iphone-17-vs-samsung-s25",
+    "image_path": "images/articles/iphone17-camera.jpg",
+    "source": "content_html",
+    "alt": "iPhone 17 Pro Camera System",
+    "exists": true,
+    "found_at": "public/images/articles/iphone17-camera.jpg"
+  },
+  {
+    "article": "best-budget-tech-gadgets-2024",
+    "image_path": "images/articles/cover_best-budget-tech-gadgets-2024_1772533764568.jpg",
+    "source": "main_image",
+    "alt": "Best Budget Tech Gadgets 2024",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-budget-tech-gadgets-2024_1772533764568.jpg"
+  },
+  {
+    "article": "dji-mini-4-pro-review",
+    "image_path": "images/articles/dji-mini-4-pro.jpg",
+    "source": "main_image",
+    "alt": "Dji Mini 4 Pro Review",
+    "exists": true,
+    "found_at": "public/images/articles/dji-mini-4-pro.jpg"
+  },
+  {
+    "article": "top-5-flagship-gadgets-2025",
+    "image_path": "images/articles/s24-ultra-display.jpg",
+    "source": "main_image",
+    "alt": "Top 5 Flagship Tech Gadgets of 2025: The Ultimate Comparison",
+    "exists": true,
+    "found_at": "public/images/articles/s24-ultra-display.jpg"
+  },
+  {
+    "article": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison",
+    "image_path": "images/articles/sony-wh-1000xm5-main.jpg",
+    "source": "main_image",
+    "alt": "Sony WH-1000XM5 vs Bose QuietComfort Ultra: The Ultimate ANC Showdown (2025)",
+    "exists": true,
+    "found_at": "public/images/articles/sony-wh-1000xm5-main.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-review",
+    "image_path": "images/articles/iphone-16-pro-max.jpg",
+    "source": "main_image",
+    "alt": "iPhone 16 Pro Max Review: Apple's Most Powerful Smartphone Yet",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-review",
+    "image_path": "images/articles/iphone-16-pro-max-colors.jpg",
+    "source": "content_html",
+    "alt": "iPhone 16 Pro Max Color Options",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max-colors.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-review",
+    "image_path": "images/articles/iphone-16-pro-max-performance.jpg",
+    "source": "content_html",
+    "alt": "iPhone 16 Pro Max Performance Chart",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max-performance.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-review",
+    "image_path": "images/articles/iphone-16-pro-max-camera.jpg",
+    "source": "content_html",
+    "alt": "iPhone 16 Pro Max Camera Sample",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max-camera.jpg"
+  },
+  {
+    "article": "razer-v4-pro-vs-logitech-g915x-comparison",
+    "image_path": "images/articles/razer-v4-pro-vs-logitech-g915x-comparison-main.jpg",
+    "source": "main_image",
+    "alt": "Razer BlackWidow V4 Pro vs. Logitech G915 X: The Ultimate Mechanical Keyboard Showdown",
+    "exists": true,
+    "found_at": "public/images/articles/razer-v4-pro-vs-logitech-g915x-comparison-main.jpg"
+  },
+  {
+    "article": "razer-v4-pro-vs-logitech-g915x-comparison",
+    "image_path": "images/articles/razer-v4-pro-vs-logitech-g915x-comparison-main.jpg",
+    "source": "content_html",
+    "alt": "Razer BlackWidow V4 Pro and Logitech G915 X Comparison",
+    "exists": true,
+    "found_at": "public/images/articles/razer-v4-pro-vs-logitech-g915x-comparison-main.jpg"
+  },
+  {
+    "article": "best-tech-gadgets-comparison-2025",
+    "image_path": "images/articles/cover_best-tech-gadgets-comparison-2025_1772533948164.jpg",
+    "source": "main_image",
+    "alt": "Best Tech Gadgets Comparison 2025: Top Picks Across Categories",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-tech-gadgets-comparison-2025_1772533948164.jpg"
+  },
+  {
+    "article": "iphone-16-pro-max-vs-samsung-s24-ultra",
+    "image_path": "images/articles/iphone-16-pro-max.jpg",
+    "source": "main_image",
+    "alt": "iPhone 16 Pro Max vs. Samsung Galaxy S24 Ultra: 2025 Flagship Battle",
+    "exists": true,
+    "found_at": "public/images/articles/iphone-16-pro-max.jpg"
+  },
+  {
+    "article": "top-10-smart-home-gadgets-amazon-2025",
+    "image_path": "images/articles/cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.jpg",
+    "source": "main_image",
+    "alt": "Top 10 Smart Home Gadgets Amazon 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.jpg"
+  },
+  {
+    "article": "revolutionary-ai-tech-products-amazon-2025",
+    "image_path": "images/articles/cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.jpg",
+    "source": "main_image",
+    "alt": "Revolutionary AI Tech Products Amazon 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.jpg"
+  },
+  {
+    "article": "ai-assistants-comparison-2025",
+    "image_path": "images/articles/cover_ai-assistants-comparison-2025_1772533716868.jpg",
+    "source": "main_image",
+    "alt": "AI Assistants Comparison 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_ai-assistants-comparison-2025_1772533716868.jpg"
+  },
+  {
+    "article": "best-wireless-earbuds-2025",
+    "image_path": "images/articles/cover_best-wireless-earbuds-2025_1771429901077.jpg",
+    "source": "main_image",
+    "alt": "Best Wireless Earbuds 2025",
+    "exists": true,
+    "found_at": "public/images/articles/cover_best-wireless-earbuds-2025_1771429901077.jpg"
+  }
+]

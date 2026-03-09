@@ -1,0 +1,179 @@
+/* Atrakcyjne przyciski CTA dla linków Amazon */
+.amazon-cta-button {
+    margin: 20px 0;
+    text-align: center;
+    animation: subtle-pulse 3s ease-in-out infinite;
+    border: none !important;
+    background-color: transparent !important;
+    padding: 10px !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.amazon-cta-button a {
+    display: inline-block;
+    background: linear-gradient(135deg, #ff9500 0%, #ff6b00 100%);
+    color: white;
+    text-decoration: none;
+    padding: 15px 30px;
+    border-radius: 25px;
+    font-weight: bold;
+    font-size: 16px;
+    box-shadow: 0 4px 15px rgba(255, 149, 0, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid transparent;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+
+.amazon-cta-button a:hover {
+    background: linear-gradient(135deg, #ff6b00 0%, #ff4500 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 149, 0, 0.4);
+    border-color: #ff9500;
+}
+
+.amazon-cta-button a:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(255, 149, 0, 0.3);
+}
+
+/* Efekt shimmer */
+.amazon-cta-button a::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.amazon-cta-button a:hover::before {
+    left: 100%;
+}
+
+/* Animacja pulsowania */
+@keyframes subtle-pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+/* Wariant dla małych ekranów */
+@media (max-width: 768px) {
+    .amazon-cta-button a {
+        padding: 12px 25px;
+        font-size: 14px;
+        border-radius: 20px;
+    }
+}
+
+/* Wariant dla produktów premium */
+.amazon-cta-button.premium a {
+    background: linear-gradient(135deg, #232f3e 0%, #131921 100%);
+    border: 2px solid #ff9500;
+    color: #ff9500;
+}
+
+.amazon-cta-button.premium a:hover {
+    background: linear-gradient(135deg, #ff9500 0%, #ff6b00 100%);
+    color: white;
+    border-color: #ff6b00;
+}
+
+/* Ikony w przyciskach */
+.amazon-cta-button a::after {
+    content: ' →';
+    margin-left: 8px;
+    transition: margin-left 0.3s ease;
+}
+
+.amazon-cta-button a:hover::after {
+    margin-left: 12px;
+}
+
+/* Dodatkowe style dla różnych typów produktów */
+.amazon-cta-button.tech a {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.amazon-cta-button.tech a:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.amazon-cta-button.camera a {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
+}
+
+.amazon-cta-button.camera a:hover {
+    background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+    box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
+}
+
+/* Efekt loading dla przycisków */
+.amazon-cta-button.loading a {
+    pointer-events: none;
+    opacity: 0.7;
+    position: relative;
+}
+
+.amazon-cta-button.loading a::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin: auto;
+    border: 2px solid transparent;
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Responsywność */
+@media (max-width: 480px) {
+    .amazon-cta-button {
+        margin: 15px 0;
+    }
+    
+    .amazon-cta-button a {
+        padding: 10px 20px;
+        font-size: 13px;
+        border-radius: 18px;
+    }
+}
+
+/* Accessibility */
+.amazon-cta-button a:focus {
+    outline: 3px solid #ff9500;
+    outline-offset: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .amazon-cta-button a {
+        box-shadow: 0 4px 15px rgba(255, 149, 0, 0.4);
+    }
+    
+    .amazon-cta-button a:hover {
+        box-shadow: 0 6px 20px rgba(255, 149, 0, 0.5);
+    }
+}

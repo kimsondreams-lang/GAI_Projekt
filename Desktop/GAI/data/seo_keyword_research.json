@@ -1,0 +1,93 @@
+{
+  "target_date": "2025-03-05",
+  "focus_area": "Trending Tech & Smart Home Security 2025",
+  "keywords": [
+    {
+      "keyword": "best foldable phones 2025",
+      "volume_estimate": "High",
+      "intent": "Commercial",
+      "related_products": ["Samsung Tri Fold", "Motorola Razr Ultra 2025", "Honor Magic 8 Pro"]
+    },
+    {
+      "keyword": "samsung tri fold review",
+      "volume_estimate": "Very High",
+      "intent": "Informational",
+      "related_products": ["Samsung Tri Fold"]
+    },
+    {
+      "keyword": "dji mavic 4 pro vs mavic 3",
+      "volume_estimate": "High",
+      "intent": "Commercial",
+      "related_products": ["DJI Mavic 4 Pro"]
+    },
+    {
+      "keyword": "smart rings with blood pressure tracking",
+      "volume_estimate": "Medium",
+      "intent": "Transactional",
+      "related_products": ["RingConn Gen 3", "Pebble Index O1"]
+    },
+    {
+      "keyword": "lego smart bricks starter set",
+      "volume_estimate": "High",
+      "intent": "Transactional",
+      "related_products": ["LEGO Smart Play System"]
+    },
+    {
+      "keyword": "rollable laptop lenovo thinkbook",
+      "volume_estimate": "Medium",
+      "intent": "Informational",
+      "related_products": ["ThinkBook Plus Gen 6 Rollable"]
+    },
+    {
+      "keyword": "best wallpaper tv 2025",
+      "volume_estimate": "Medium",
+      "intent": "Commercial",
+      "related_products": ["LG evo W6"]
+    },
+    {
+      "keyword": "canon eos r6 mark iii specs",
+      "volume_estimate": "High",
+      "intent": "Informational",
+      "related_products": ["Canon EOS R6 Mark III"]
+    },
+    {
+      "keyword": "ai toothbrushes 2025",
+      "volume_estimate": "Low",
+      "intent": "Informational",
+      "related_products": ["Baracoda AI toothbrush"]
+    },
+    {
+      "keyword": "wireless earbuds with heart rate monitor",
+      "volume_estimate": "High",
+      "intent": "Transactional",
+      "related_products": ["Apple AirPods Pro 3"]
+    },
+    {
+      "keyword": "subscription free security cameras 2025",
+      "volume_estimate": "High",
+      "intent": "Commercial",
+      "related_products": ["Eufy Cam S3 Pro", "Reolink Altas PT Ultra"]
+    },
+    {
+      "keyword": "Matter 1.4 smart home security",
+      "volume_estimate": "Medium",
+      "intent": "Informational",
+      "related_products": ["Aqara G5 Pro", "Nanoleaf Matter Sensors"]
+    },
+    {
+      "keyword": "palm vein smart lock 2025",
+      "volume_estimate": "Medium",
+      "intent": "Transactional",
+      "related_products": ["Philips Palm Recognition Lock", "Lockly Visage"]
+    }
+  ],
+  "content_ideas": [
+    "Samsung Tri Fold vs Motorola Razr Ultra: The Battle of 2025 Foldables",
+    "Is the DJI Mavic 4 Pro Worth the Upgrade?",
+    "LEGO Smart Bricks: The Future of Play or Just a Gimmick?",
+    "Top 10 AI Gadgets That Actually Help (Not Just Hype)",
+    "Best Subscription-Free AI Security Cameras 2025: Top Picks for Privacy",
+    "Matter 1.4 Smart Home Security: The Future of Interoperability in 2025",
+    "Palm Vein vs. Fingerprint: The Next Generation of Biometric Smart Locks in 2025"
+  ]
+}

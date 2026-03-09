@@ -1,0 +1,25 @@
+{
+  "reference_article": "best-gaming-accessories-2025.json",
+  "required_html_classes": {
+    "image_container": "article-image-wrapper",
+    "image_element": "article-image",
+    "image_caption": "image-caption",
+    "recommendation_box": "product-recommendation",
+    "comparison_table": "comparison-table"
+  },
+  "metadata_requirements": {
+    "primary_filter_tag": "Tech",
+    "id_format": "slug-style-id",
+    "date_format": "YYYY-MM-DD (No future dates)"
+  },
+  "affiliate_standard": "?tag=kimsondreams-21",
+  "content_structure": [
+    "Introduction",
+    "Comparison Table (for listicles/comparisons)",
+    "Section Headers (h2)",
+    "Inline Images with Wrappers",
+    "Key Features (ul/li)",
+    "Where to Buy section",
+    "Conclusion"
+  ]
+}

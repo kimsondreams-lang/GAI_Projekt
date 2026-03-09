@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "id": "date_validation",
+      "description": "Prevent researching past dates as future/current",
+      "logic": "current_year = 2026; if task_year < current_year and category == \"research\": mark as stale"
+    }
+  ]
+}

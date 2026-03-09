@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# GAI OS Service Manager
+# Supports Native App (Electron) and Web Server mode
+
+if [[ -n "${SUDO_USER:-}" && -z "${GAIOS_SUDO_BYPASS:-}" ]]; then
+  if command -v su >/dev/null 2>&1; then
+    export GAIOS_SUDO_BYPASS=1
+    escaped_args=""
+    for arg in "$@"; do
+      escaped_args+=" $(printf '%q' "$arg")"
+    done
+    exec su - "$SUDO_USER" -c "$(printf '%q' "$0")${escaped_args}"
+  fi
+fi
+
+resolve_path() {
+  local target="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$target"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+    return
+  fi
+  if command -v perl >/dev/null 2>&1; then
+    perl -MCwd=realpath -e 'print realpath($ARGV[0])' "$target"
+    return
+  fi
+  echo "$target"
+}
+
+SCRIPT_PATH="$(resolve_path "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+STATE_DIR="$ROOT_DIR/.gaios"
+mkdir -p "$STATE_DIR"
+
+frontend_pid="$STATE_DIR/frontend.pid"
+backend_pid="$STATE_DIR/backend.pid"
+electron_pid="$STATE_DIR/electron.pid"
+ollama_pid="$STATE_DIR/ollama.pid"
+watchdog_pid="$STATE_DIR/watchdog.pid"
+
+run_bg() {
+  local cmd="$1"
+  local logfile="$2"
+  local pidfile="$3"
+  nohup env -u NODE_OPTIONS bash -c "$cmd" > "$logfile" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$pidfile"
+  echo "$pid"
+}
+
+is_pid_alive() {
+  local pid="$1"
+  kill -0 "$pid" 2>/dev/null
+}
+
+stop_pidfile() {
+  local pidfile="$1"
+  if [[ -f "$pidfile" ]]; then
+    local pid
+    pid="$(cat "$pidfile" || true)"
+    if [[ -n "${pid:-}" ]] && is_pid_alive "$pid"; then
+      kill "$pid" || true
+      for _ in 1 2 3 4 5; do
+        if ! is_pid_alive "$pid"; then
+          break
+        fi
+        sleep 0.5
+      done
+      if is_pid_alive "$pid"; then
+        kill -9 "$pid" || true
+      fi
+    fi
+    rm -f "$pidfile"
+  fi
+}
+
+stop_system_ollama() {
+  echo "GAIOS: sprawdzam systemową Ollamę..."
+  if command -v brew >/dev/null 2>&1; then
+    brew services stop ollama >/dev/null 2>&1 || true
+  fi
+  if [[ -f ~/Library/LaunchAgents/homebrew.mxcl.ollama.plist ]]; then
+    launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.ollama.plist >/dev/null 2>&1 || true
+  fi
+  
+  # Kill any running ollama processes
+  pkill -f "ollama serve" >/dev/null 2>&1 || true
+  pkill -f "Ollama" >/dev/null 2>&1 || true # Ollama.app
+  
+  # Wait for port 11434 to free up
+  for _ in {1..10}; do
+    if ! lsof -i:11434 -t >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.5
+  done
+  
+  if lsof -i:11434 -t >/dev/null 2>&1; then
+    echo "GAIOS: nie udało się zwolnić portu 11434 (Ollama). Próbuję kill -9..."
+    kill -9 $(lsof -t -i:11434) 2>/dev/null || true
+  fi
+}
+
+start_managed_ollama() {
+  echo "GAIOS: uruchamiam własną instancję Ollama..."
+  if ! command -v ollama >/dev/null 2>&1; then
+    echo "GAIOS: nie znaleziono polecenia 'ollama'. Upewnij się, że jest zainstalowane."
+    return 1
+  fi
+  
+  local opid
+  opid="$(run_bg "ollama serve" "$STATE_DIR/ollama.log" "$ollama_pid")"
+  
+  # Wait for health check
+  echo "GAIOS: oczekiwanie na start Ollamy..."
+  for _ in {1..20}; do
+    if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+      echo "GAIOS: Ollama wystartowała (PID: $opid)."
+      return 0
+    fi
+    sleep 1
+  done
+  echo "GAIOS: Ollama nie wystartowała w ciągu 20s. Sprawdź $STATE_DIR/ollama.log"
+  return 1
+}
+
+start_gaios() {
+  local mode="${1:-app}" # 'app' or 'web'
+  cd "$ROOT_DIR"
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "GAIOS: npm nie jest dostępne w PATH"
+    exit 1
+  fi
+  
+  if [[ -f "$backend_pid" ]] && is_pid_alive "$(cat "$backend_pid")"; then
+    echo "GAIOS: serwer już działa (PID: $(cat "$backend_pid"))"
+    return 1
+  fi
+  if [[ -f "$electron_pid" ]] && is_pid_alive "$(cat "$electron_pid")"; then
+    echo "GAIOS: aplikacja już działa (PID: $(cat "$electron_pid"))"
+    return 1
+  fi
+
+  stop_pidfile "$watchdog_pid"
+
+  if lsof -i:1234 -t >/dev/null 2>&1; then
+     echo "GAIOS: Port 1234 jest zajęty przez inny proces. Próbuję go zwolnić..."
+     kill -9 $(lsof -t -i:1234) 2>/dev/null || true
+     sleep 1
+  fi
+
+  # Manage Ollama
+  stop_system_ollama
+  if ! start_managed_ollama; then
+    echo "GAIOS: Nie udało się uruchomić Ollamy. Kontynuuję (może działa zewnętrznie)..."
+  fi
+
+  export GAIOS_ROOT_DIR="$ROOT_DIR"
+  export GAIOS_STATE_DIR="$STATE_DIR"
+  : "${GAIOS_PRESTART_ENABLED:=1}"
+  : "${GAIOS_OLLAMA_WARMUP:=1}"
+  : "${GAIOS_OLLAMA_KEEPALIVE:=5m}"
+  : "${GAIOS_OLLAMA_WARMUP_MAX_B:=8}"
+  : "${GAIOS_OLLAMA_WARMUP_INCLUDE_LATEST:=1}"
+  : "${GAIOS_MEMORY_PURGE:=1}"
+  : "${GAIOS_MEMORY_PURGE_SUDO:=1}"
+  if [[ "$GAIOS_OLLAMA_WARMUP_MAX_B" =~ ^[0-9]+$ ]] && (( GAIOS_OLLAMA_WARMUP_MAX_B > 8 )); then
+    GAIOS_OLLAMA_WARMUP_MAX_B=8
+  fi
+  export GAIOS_PRESTART_ENABLED GAIOS_OLLAMA_WARMUP GAIOS_OLLAMA_KEEPALIVE GAIOS_OLLAMA_WARMUP_MAX_B GAIOS_OLLAMA_WARMUP_INCLUDE_LATEST GAIOS_MEMORY_PURGE GAIOS_MEMORY_PURGE_SUDO
+  if [[ "${GAIOS_PRESTART_ENABLED:-1}" != "0" ]] && [[ -f "$ROOT_DIR/scripts/prestart_memory.sh" ]]; then
+    echo "GAIOS: prestart (optymalizacja pamięci i Ollamy)..."
+    bash "$ROOT_DIR/scripts/prestart_memory.sh" || true
+  fi
+  
+  if [ ! -d "dist" ]; then
+    echo "GAIOS: buduję frontend..."
+    npm run build
+    if [ $? -ne 0 ]; then
+      echo "GAIOS: błąd podczas budowania frontendu"
+      return 1
+    fi
+  fi
+  
+  if [[ "$mode" == "web" ]]; then
+      echo "GAIOS: uruchamiam backend w trybie WEB (port 1234)..."
+      local bpid
+      bpid="$(run_bg "PORT=1234 NODE_OPTIONS='--max-old-space-size=8192' npm start" "$STATE_DIR/backend.log" "$backend_pid")"
+      
+      sleep 3
+      if is_pid_alive "$bpid"; then
+        echo "GAIOS: backend PID $bpid (log: $STATE_DIR/backend.log)"
+        echo "GAIOS: serwer dostępny na http://localhost:1234"
+        echo "GAIOS: health check: curl http://localhost:1234/api/health"
+        local watchdog_cmd
+        watchdog_cmd="node scripts/backendWatchdog.mjs --url=http://localhost:1234/api/health --interval=5000 --timeout=4000 --failures=3 --restartDelay=1000 --cmd=\"PORT=1234 NODE_OPTIONS='--max-old-space-size=8192' npm start\" --cwd=\"$ROOT_DIR\" --pidfile=\"$backend_pid\""
+        local wpid
+        wpid="$(run_bg "$watchdog_cmd" "$STATE_DIR/watchdog.log" "$watchdog_pid")"
+        if is_pid_alive "$wpid"; then
+          echo "GAIOS: watchdog PID $wpid (log: $STATE_DIR/watchdog.log)"
+        fi
+      else
+        echo "GAIOS: backend nie wystartował (log: $STATE_DIR/backend.log)"
+        return 1
+      fi
+  else
+      echo "GAIOS: uruchamiam aplikację natywną (Electron)..."
+      local epid
+      # Use npm exec electron to use the locally installed electron
+      epid="$(run_bg "npm exec electron ." "$STATE_DIR/electron.log" "$electron_pid")"
+      
+      echo "GAIOS: Aplikacja uruchomiona (PID: $epid). Logi: $STATE_DIR/electron.log"
+      echo "GAIOS: Backend jest uruchamiany automatycznie przez aplikację."
+  fi
+}
+
+stop_gaios() {
+  echo "GAIOS: zatrzymuję..."
+  stop_pidfile "$electron_pid"
+  stop_pidfile "$backend_pid"
+  stop_pidfile "$frontend_pid"
+  stop_pidfile "$ollama_pid"
+  stop_pidfile "$watchdog_pid"
+
+  kill_pid() {
+    local pid="$1"
+    if [[ -z "${pid:-}" ]]; then return 0; fi
+    if ! is_pid_alive "$pid"; then return 0; fi
+    kill "$pid" >/dev/null 2>&1 || true
+    for _ in 1 2 3 4 5; do
+      if ! is_pid_alive "$pid"; then return 0; fi
+      sleep 0.2
+    done
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  }
+
+  kill_port() {
+    local port="$1"
+    if ! command -v lsof >/dev/null 2>&1; then return 0; fi
+    local pids
+    pids="$(lsof -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+    if [[ -z "${pids:-}" ]]; then return 0; fi
+    echo "GAIOS: zamykam procesy słuchające na porcie ${port}: ${pids}" 
+    for pid in $pids; do
+      kill_pid "$pid"
+    done
+  }
+
+  kill_by_pattern() {
+    local pattern="$1"
+    if ! command -v pgrep >/dev/null 2>&1; then return 0; fi
+    local pids
+    pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
+    if [[ -z "${pids:-}" ]]; then return 0; fi
+    echo "GAIOS: zamykam procesy pasujące do '${pattern}': ${pids}" 
+    for pid in $pids; do
+      kill_pid "$pid"
+    done
+  }
+
+  # Kill anything still bound to the only allowed port
+  kill_port 1234
+
+  # Kill any stray processes from this repo that could keep GAI running
+  kill_by_pattern "${ROOT_DIR}/server\\.js"
+  kill_by_pattern "${ROOT_DIR}/scripts/backendWatchdog\\.mjs"
+  kill_by_pattern "PORT=1234.*npm start"
+
+  # Force kill any remaining Electron processes
+  pkill -f "Electron" >/dev/null 2>&1 || true
+}
+
+status_gaios() {
+  if [[ -f "$electron_pid" ]] && is_pid_alive "$(cat "$electron_pid")"; then
+    echo "GAIOS: Aplikacja (Electron) działa (PID: $(cat "$electron_pid"))"
+  fi
+  if [[ -f "$backend_pid" ]] && is_pid_alive "$(cat "$backend_pid")"; then
+    echo "GAIOS: Backend (Web) działa (PID: $(cat "$backend_pid"))"
+  fi
+  if [[ -f "$watchdog_pid" ]] && is_pid_alive "$(cat "$watchdog_pid")"; then
+    echo "GAIOS: Watchdog działa (PID: $(cat "$watchdog_pid"))"
+  fi
+  if [[ -f "$ollama_pid" ]] && is_pid_alive "$(cat "$ollama_pid")"; then
+    echo "GAIOS: Ollama działa (PID: $(cat "$ollama_pid"))"
+  fi
+  
+  if [[ ! -f "$electron_pid" && ! -f "$backend_pid" ]]; then
+      echo "GAIOS: System zatrzymany."
+  fi
+}
+
+logs_gaios() {
+  echo "=== BACKEND LOG ==="
+  tail -n 50 "$STATE_DIR/backend.log" 2>/dev/null || true
+  echo ""
+  echo "=== ELECTRON LOG ==="
+  tail -n 50 "$STATE_DIR/electron.log" 2>/dev/null || true
+  echo ""
+  echo "=== WATCHDOG LOG ==="
+  tail -n 20 "$STATE_DIR/watchdog.log" 2>/dev/null || true
+}
+
+# Parse command and flags
+CMD="${1:-}"
+MODE="app" # default mode
+
+# Shift command
+if [[ $# -gt 0 ]]; then
+    shift
+fi
+
+# Parse flags
+for arg in "$@"; do
+    case $arg in
+        --web)
+        MODE="web"
+        shift
+        ;;
+        *)
+        # unknown option
+        ;;
+    esac
+done
+
+case "${CMD}" in
+  start)
+    start_gaios "$MODE"
+    ;;
+  stop)
+    stop_gaios
+    ;;
+  restart)
+    stop_gaios
+    start_gaios "$MODE"
+    ;;
+  status)
+    status_gaios
+    ;;
+  logs)
+    logs_gaios
+    ;;
+  *)
+    echo "GAIOS: usage:"
+    echo "  gaios start [--web]"
+    echo "  gaios stop"
+    echo "  gaios restart [--web]"
+    echo "  gaios status"
+    echo "  gaios logs"
+    exit 1
+    ;;
+esac

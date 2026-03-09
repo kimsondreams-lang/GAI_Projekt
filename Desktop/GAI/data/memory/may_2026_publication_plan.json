@@ -1,0 +1,29 @@
+{
+  "article_id": "may-2026-tech-gift-guide-mothers-day-graduation",
+  "publication_schedule": {
+    "draft_completion": "2026-04-15",
+    "seo_review": "2026-04-18",
+    "final_publish_date": "2026-04-25",
+    "promotion_start": "2026-04-26"
+  },
+  "distribution_channels": [
+    "Blog Home (Featured)",
+    "Newsletter (May Tech Essentials)",
+    "Social Media (Pinterest Gift Boards, Twitter Tech Rumors)"
+  ],
+  "internal_linking_strategy": {
+    "incoming_links_from": [
+      "macbook-neo-review",
+      "pixel-10a-vs-iphone-se-4-comparison"
+    ],
+    "outgoing_links_to": [
+      "best-smartwatches-2026",
+      "student-productivity-guide-2026"
+    ]
+  },
+  "success_metrics": {
+    "target_ctr": "4.5%",
+    "expected_affiliate_conversion": "2.0%",
+    "primary_keyword_ranking_goal": "Top 5 for 'tech gifts graduation 2026'"
+  }
+}

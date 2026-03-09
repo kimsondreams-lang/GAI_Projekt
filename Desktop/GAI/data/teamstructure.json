@@ -1,0 +1,32 @@
+{
+  "teams": [
+    {
+      "id": "SYSTEM_CORE",
+      "name": "System Core Team",
+      "description": "Responsible for the fundamental architecture, agent orchestration, and core system stability.",
+      "agents": ["AgentArchitect", "AgentRegistry"]
+    },
+    {
+      "id": "DEVOPS",
+      "name": "DevOps & Infrastructure",
+      "description": "Manages deployment, synchronization, and server-side operations.",
+      "agents": ["DeployAgent", "SyncAgent"]
+    },
+    {
+      "id": "CONTENT_STRATEGY",
+      "name": "Content & SEO Strategy",
+      "description": "Focuses on article creation, SEO optimization, and product research.",
+      "agents": ["ContentCreator", "SEOExpert", "ProductResearcher"]
+    },
+    {
+      "id": "QUALITY_ASSURANCE",
+      "name": "Quality Assurance & Audit",
+      "description": "Performs visual audits, link integrity checks, and functional testing.",
+      "agents": ["AuditAgent", "LinkChecker", "VisionAnalyzer"]
+    }
+  ],
+  "global_config": {
+    "affiliate_tag": "kimsondreams-21",
+    "last_updated": "2026-03-08"
+  }
+}

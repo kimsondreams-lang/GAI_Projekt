@@ -1,0 +1,1622 @@
+{
+  "generatedAt": "2026-03-06T15:28:17.733Z",
+  "period": "weekly",
+  "summary": {
+    "totalChecked": 146,
+    "healthy": 0,
+    "broken": 146,
+    "missingTag": 3,
+    "wrongTag": 11,
+    "redirects": 0
+  },
+  "details": {
+    "healthy": [],
+    "broken": [
+      {
+        "url": "https://www.amazon.com/s?k=iphone+16+pro&tag=kimsondreams-21",
+        "articleId": "2025-flagship-smartphone-guide",
+        "articleFile": "2025-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.050Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DR5S6R9C?tag=kimsondreams-21",
+        "articleId": "2025-flagship-smartphone-guide",
+        "articleFile": "2025-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.050Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=pixel+9+pro&tag=kimsondreams-21",
+        "articleId": "2025-flagship-smartphone-guide",
+        "articleFile": "2025-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.050Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0BLS3Y632?tag=kimsondreams-21",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.050Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0BW34LCB8?tag=kimsondreams-21",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.050Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B07351P1JK?tag=kimsondreams-21",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B1N5KKQL?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0C6J8JQ6K?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B08TB9W2KV?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+16+pro+max&tag=kimsondreams-21",
+        "articleId": "2026-flagship-smartphone-guide",
+        "articleFile": "2026-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=galaxy+s25+ultra&tag=kimsondreams-21",
+        "articleId": "2026-flagship-smartphone-guide",
+        "articleFile": "2026-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=pixel+10+pro&tag=kimsondreams-21",
+        "articleId": "2026-flagship-smartphone-guide",
+        "articleFile": "2026-flagship-smartphone-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DLHJZRF6?tag=kimsondreams-21",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=ASUS+Zenbook+S+16+UM5606&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Dell+XPS+13+9345+Snapdragon+X+Elite&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=HP+OmniBook+Ultra+14+Ryzen+AI&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D9WV1TPJ?tag=kimsondreams-21",
+        "articleId": "2026-march-wearable-health-guide",
+        "articleFile": "2026-march-wearable-health-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D3JFH94Z?tag=kimsondreams-21",
+        "articleId": "2026-march-wearable-health-guide",
+        "articleFile": "2026-march-wearable-health-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DGHQ2QH6?tag=kimsondreams-21",
+        "articleId": "2026-march-wearable-health-guide",
+        "articleFile": "2026-march-wearable-health-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=apple+watch+ultra+3&tag=kimsondreams-21",
+        "articleId": "2025-wearable-tech-health-gadgets-guide",
+        "articleFile": "2026-wearable-tech-health-gadgets-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21",
+        "articleId": "2025-wearable-tech-health-gadgets-guide",
+        "articleFile": "2026-wearable-tech-health-gadgets-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:49.762Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=garmin+fenix+8&tag=kimsondreams-21",
+        "articleId": "2025-wearable-tech-health-gadgets-guide",
+        "articleFile": "2026-wearable-tech-health-gadgets-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:49.762Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+ring+2&tag=kimsondreams-21",
+        "articleId": "2025-wearable-tech-health-gadgets-guide",
+        "articleFile": "2026-wearable-tech-health-gadgets-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:49.762Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+18+pro&tag=kimsondreams-21",
+        "articleId": "amazon-prime-big-deal-days-2026-tech-guide",
+        "articleFile": "amazon-prime-big-deal-days-2026-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:49.762Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+pro+m5&tag=kimsondreams-21",
+        "articleId": "amazon-prime-big-deal-days-2026-tech-guide",
+        "articleFile": "amazon-prime-big-deal-days-2026-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:49.762Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=nintendo+switch+2&tag=kimsondreams-21",
+        "articleId": "amazon-prime-big-deal-days-2026-tech-guide",
+        "articleFile": "amazon-prime-big-deal-days-2026-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:50.756Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=echo+show+15+2nd+gen&tag=kimsondreams-21",
+        "articleId": "amazon-prime-big-deal-days-2026-tech-guide",
+        "articleFile": "amazon-prime-big-deal-days-2026-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:50.756Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=sony+wh-1000xm6&tag=kimsondreams-21",
+        "articleId": "amazon-prime-big-deal-days-2026-tech-guide",
+        "articleFile": "amazon-prime-big-deal-days-2026-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:50.756Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CHX3TW6T?tag=kimsondreams-21",
+        "articleId": "apple-watch-ultra-2-review",
+        "articleFile": "apple-watch-ultra-2-review.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:50.756Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iPhone+16+Pro+Max&tag=kimsondreams-21",
+        "articleId": "iphone-16-pro-max-review-legacy",
+        "articleFile": "article1.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:50.756Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Apple+AirPods+Pro+2&tag=kimsondreams-21",
+        "articleId": "3",
+        "articleFile": "article3.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Sony+WH-1000XM5&tag=kimsondreams-21",
+        "articleId": "3",
+        "articleFile": "article3.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=DJI+Mini+4+Pro&tag=kimsondreams-21",
+        "articleId": "3",
+        "articleFile": "article3.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+air+m4&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+tab+s9&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B6ZJZJ1P?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=anker+powercore&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09HM94VDS?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B08KTZ8249?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B08XYRDKDM?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0874XN4D8?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:55.632Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B071Y3MSRK?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:55.632Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B00N1YPXW2?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:55.632Z"
+      },
+      {
+        "url": "https://www.amazon.com/backtoschool?tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:55.632Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Polaroid+Instant+Camera&tag=kimsondreams-21",
+        "articleId": "article9",
+        "articleFile": "article9.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:55.632Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Snapdragon+X+Elite+2+laptop&tag=kimsondreams-21",
+        "articleId": "back-to-school-2026-ai-laptop-guide",
+        "articleFile": "back-to-school-2026-ai-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:56.627Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Intel+Core+Ultra+300+laptop&tag=kimsondreams-21",
+        "articleId": "back-to-school-2026-ai-laptop-guide",
+        "articleFile": "back-to-school-2026-ai-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:56.627Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=AI+tablet+2026&tag=kimsondreams-21",
+        "articleId": "back-to-school-2026-ai-laptop-guide",
+        "articleFile": "back-to-school-2026-ai-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:56.627Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CHX3TW6T?tag=kimsondreams-21",
+        "articleId": "best-amazon-gadgets-march-2025",
+        "articleFile": "best-amazon-gadgets-march-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:56.627Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CQ55Z8TY?tag=kimsondreams-21",
+        "articleId": "best-amazon-gadgets-march-2025",
+        "articleFile": "best-amazon-gadgets-march-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:56.627Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0C7GTXN8K?tag=kimsondreams-21",
+        "articleId": "best-amazon-gadgets-march-2025",
+        "articleFile": "best-amazon-gadgets-march-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:57.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09ZWCYQTX?tag=kimsondreams-21",
+        "articleId": "best-gaming-accessories-2025",
+        "articleFile": "best-gaming-accessories-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:57.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CSLH4LSK?tag=kimsondreams-21",
+        "articleId": "best-gaming-accessories-2025",
+        "articleFile": "best-gaming-accessories-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:57.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DY2LPN7N?tag=kimsondreams-21",
+        "articleId": "best-gaming-accessories-2025",
+        "articleFile": "best-gaming-accessories-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:57.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B789CGGQ?tag=kimsondreams-21",
+        "articleId": "best-gaming-accessories-2025",
+        "articleFile": "best-gaming-accessories-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:57.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CQ55Z8TY?tag=kimsondreams-21",
+        "articleId": "best-mechanical-keyboards-2025",
+        "articleFile": "best-mechanical-keyboards-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:58.930Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0C9S7W9B7?tag=kimsondreams-21",
+        "articleId": "best-mechanical-keyboards-2025",
+        "articleFile": "best-mechanical-keyboards-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:58.930Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CFX7G789?tag=kimsondreams-21",
+        "articleId": "best-mechanical-keyboards-2025",
+        "articleFile": "best-mechanical-keyboards-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:58.930Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B8627S2N?tag=kimsondreams-21",
+        "articleId": "best-mechanical-keyboards-2025",
+        "articleFile": "best-mechanical-keyboards-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:58.930Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DHJ896RY?tag=kimsondreams-21",
+        "articleId": "best-tech-gadgets-comparison-2025",
+        "articleFile": "best-tech-gadgets-comparison-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:58.930Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09XS7JWHH?tag=kimsondreams-21",
+        "articleId": "best-tech-gadgets-comparison-2025",
+        "articleFile": "best-tech-gadgets-comparison-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CX23GFMJ?tag=kimsondreams-21",
+        "articleId": "best-tech-gadgets-comparison-2025",
+        "articleFile": "best-tech-gadgets-comparison-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B08MQLDG8H?tag=kimsondreams-21",
+        "articleId": "best-tech-gadgets-comparison-2025",
+        "articleFile": "best-tech-gadgets-comparison-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=rtx+5090&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=AI+gaming+laptop+rtx+50&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+pro+m5&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+18+pro+max&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=nintendo+switch+2&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Oura+Ring+Gen+3&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Samsung+Galaxy+Ring&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Meta+Ray-Ban+Wayfarer&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:01.537Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iPad+Pro+M4+13-inch&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:01.537Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=MacBook+Pro+M4&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:01.537Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=ASUS+ROG+Zephyrus+G16+RTX+5090&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:01.537Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Philips+Hue+Bridge+Matter&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:01.537Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=LG+8K+OLED+TV&tag=kimsondreams-21",
+        "articleId": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+        "articleFile": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:02.473Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=google+pixel+9+pro&tag=kimsondreams-21",
+        "articleId": "google-io-2026-agentic-android-preview",
+        "articleFile": "google-io-2026-agentic-android-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:02.473Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=google+pixel+watch+3&tag=kimsondreams-21",
+        "articleId": "google-io-2026-agentic-android-preview",
+        "articleFile": "google-io-2026-agentic-android-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:02.473Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=google+nest+hub+max&tag=kimsondreams-21",
+        "articleId": "google-io-2026-agentic-android-preview",
+        "articleFile": "google-io-2026-agentic-android-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:02.473Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0BCR39S5F?tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:02.473Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09XS7JWHH?tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:03.344Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09HMKMM93?tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:03.344Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+18+pro&tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:03.344Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=sony+wh-1000xm6&tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:03.344Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=logitech+mx+master+4&tag=kimsondreams-21",
+        "articleId": "ifa-2026-iphone-18-pro-preview",
+        "articleFile": "ifa-2026-iphone-18-pro-preview.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:03.344Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DHJ896RY?tag=kimsondreams-21",
+        "articleId": "iphone-16-pro-max-vs-samsung-s24-ultra",
+        "articleFile": "iphone-16-pro-max-vs-samsung-s24-ultra.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:04.193Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CMDL9S8B?tag=kimsondreams-21",
+        "articleId": "iphone-16-pro-max-vs-samsung-s24-ultra",
+        "articleFile": "iphone-16-pro-max-vs-samsung-s24-ultra.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:04.193Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+se+4&tag=kimsondreams-21",
+        "articleId": "iphone-se-4-vs-pixel-10a-comparison",
+        "articleFile": "iphone-se-4-vs-pixel-10a-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:04.193Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=pixel+10a&tag=kimsondreams-21",
+        "articleId": "iphone-se-4-vs-pixel-10a-comparison",
+        "articleFile": "iphone-se-4-vs-pixel-10a-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:04.193Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=snapdragon+x+elite+2+laptop&tag=kimsondreams-21",
+        "articleId": "july-2026-tech-buying-guide",
+        "articleFile": "july-2026-tech-buying-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:04.193Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=intel+lunar+lake+2+laptop&tag=kimsondreams-21",
+        "articleId": "july-2026-tech-buying-guide",
+        "articleFile": "july-2026-tech-buying-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.044Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+z+fold+8&tag=kimsondreams-21",
+        "articleId": "july-2026-tech-buying-guide",
+        "articleFile": "july-2026-tech-buying-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.044Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=ai+gadgets+under+200&tag=kimsondreams-21",
+        "articleId": "july-2026-tech-buying-guide",
+        "articleFile": "july-2026-tech-buying-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.044Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DGBC6S7P?tag=kimsondreams-21",
+        "articleId": "june-2026-tech-guide-wwdc-rumors",
+        "articleFile": "june-2026-tech-guide-wwdc-rumors.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.044Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D8T9S3S6?tag=kimsondreams-21",
+        "articleId": "june-2026-tech-guide-wwdc-rumors",
+        "articleFile": "june-2026-tech-guide-wwdc-rumors.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.044Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CPY2X2Y7?tag=kimsondreams-21",
+        "articleId": "june-2026-tech-guide-wwdc-rumors",
+        "articleFile": "june-2026-tech-guide-wwdc-rumors.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.903Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CX226G8S?tag=kimsondreams-21",
+        "articleId": "macbook-neo-review-2026",
+        "articleFile": "macbook-neo-review-2026.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.903Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+neo&tag=kimsondreams-21",
+        "articleId": "macbook-neo-review-2026",
+        "articleFile": "macbook-neo-review-2026.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.903Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=apple+watch+ultra+3&tag=kimsondreams-21",
+        "articleId": "may-2025-tech-gift-guide",
+        "articleFile": "may-2025-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.903Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+neo+12+inch&tag=kimsondreams-21",
+        "articleId": "may-2025-tech-gift-guide",
+        "articleFile": "may-2025-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:05.903Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+se+4+2025&tag=kimsondreams-21",
+        "articleId": "may-2025-tech-gift-guide",
+        "articleFile": "may-2025-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:06.824Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=sony+wh-1000xm6&tag=kimsondreams-21",
+        "articleId": "may-2025-tech-gift-guide",
+        "articleFile": "may-2025-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:06.824Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=oura+ring+gen+4&tag=kimsondreams-21",
+        "articleId": "may-2025-tech-gift-guide",
+        "articleFile": "may-2025-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:06.824Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=apple+watch+ultra+3&tag=kimsondreams-21",
+        "articleId": "may-2026-tech-gift-guide",
+        "articleFile": "may-2026-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:06.824Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+neo+12+inch&tag=kimsondreams-21",
+        "articleId": "may-2026-tech-gift-guide",
+        "articleFile": "may-2026-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:06.824Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+se+4+2026&tag=kimsondreams-21",
+        "articleId": "may-2026-tech-gift-guide",
+        "articleFile": "may-2026-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:07.712Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=sony+wh-1000xm6&tag=kimsondreams-21",
+        "articleId": "may-2026-tech-gift-guide",
+        "articleFile": "may-2026-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:07.712Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=oura+ring+gen+4&tag=kimsondreams-21",
+        "articleId": "may-2026-tech-gift-guide",
+        "articleFile": "may-2026-tech-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:07.712Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D9S4X4C9?tag=kimsondreams-21",
+        "articleId": "meta-quest-3s-review",
+        "articleFile": "meta-quest-3s-review.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:07.712Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+se+4&tag=kimsondreams-21",
+        "articleId": "pixel-10a-vs-iphone-se-4-comparison",
+        "articleFile": "pixel-10a-vs-iphone-se-4-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:07.712Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=pixel+10a&tag=kimsondreams-21",
+        "articleId": "pixel-10a-vs-iphone-se-4-comparison",
+        "articleFile": "pixel-10a-vs-iphone-se-4-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:08.634Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=prime+day+deals+2026&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:08.634Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=snapdragon+x+elite+2+laptop&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:08.634Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=intel+lunar+lake+2+laptop&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:08.634Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+z+fold+8&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:08.634Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=galaxy+watch+9&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:10.993Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=ai+gadgets+under+200&tag=kimsondreams-21",
+        "articleId": "prime-day-2026-back-to-school-ai-tech-guide",
+        "articleFile": "prime-day-2026-back-to-school-ai-tech-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:10.993Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D9C7X8Z1?tag=kimsondreams-21",
+        "articleId": "razer-v4-pro-vs-logitech-g915x-comparison",
+        "articleFile": "razer-v4-pro-vs-logitech-g915x-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:10.993Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0BWSN4D96?tag=kimsondreams-21",
+        "articleId": "razer-v4-pro-vs-logitech-g915x-comparison",
+        "articleFile": "razer-v4-pro-vs-logitech-g915x-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:10.993Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0DR5S6R9C?tag=kimsondreams-21",
+        "articleId": "samsung-galaxy-s25-ultra-review",
+        "articleFile": "samsung-galaxy-s25-ultra-review.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:10.993Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0GGTVNKGP?tag=kimsondreams-21",
+        "articleId": "samsung-galaxy-s26-ultra-review",
+        "articleFile": "samsung-galaxy-s26-ultra-review.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:12.147Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09XS7JWHH?tag=kimsondreams-21",
+        "articleId": "sony-wh-1000xm5-review",
+        "articleFile": "sony-wh-1000xm5-review.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:12.147Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09XS7JWHH?tag=kimsondreams-21",
+        "articleId": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison",
+        "articleFile": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:12.147Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CCZ1L489?tag=kimsondreams-21",
+        "articleId": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison",
+        "articleFile": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:12.147Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21",
+        "articleId": "spring-2026-wearable-ai-guide",
+        "articleFile": "spring-2026-wearable-ai-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:12.148Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+ring&tag=kimsondreams-21",
+        "articleId": "spring-2026-wearable-ai-guide",
+        "articleFile": "spring-2026-wearable-ai-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:13.295Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=apple+watch+series+10&tag=kimsondreams-21",
+        "articleId": "spring-2026-wearable-ai-guide",
+        "articleFile": "spring-2026-wearable-ai-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:13.295Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CMDL9S8B?tag=kimsondreams-21",
+        "articleId": "top-5-flagship-gadgets-2025",
+        "articleFile": "top-5-flagship-gadgets-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:13.295Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CX226PB7?tag=kimsondreams-21",
+        "articleId": "top-5-flagship-gadgets-2025",
+        "articleFile": "top-5-flagship-gadgets-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:13.295Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CCZ26B5V?tag=kimsondreams-21",
+        "articleId": "top-5-flagship-gadgets-2025",
+        "articleFile": "top-5-flagship-gadgets-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:13.295Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0D9M6N8L2?tag=kimsondreams-21",
+        "articleId": "top-5-flagship-gadgets-2025",
+        "articleFile": "top-5-flagship-gadgets-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:14.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09TMN58KL?tag=kimsondreams-21",
+        "articleId": "top-5-flagship-gadgets-2025",
+        "articleFile": "top-5-flagship-gadgets-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:14.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B09M2B6DQ7?tag=kimsondreams-21",
+        "articleId": "top-ai-gadgets-amazon-2025",
+        "articleFile": "top-ai-gadgets-amazon-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:14.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B96H6S6N?tag=kimsondreams-21",
+        "articleId": "top-ai-gadgets-amazon-2025",
+        "articleFile": "top-ai-gadgets-amazon-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:14.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B07S5H9W98?tag=kimsondreams-21",
+        "articleId": "top-ai-gadgets-amazon-2025",
+        "articleFile": "top-ai-gadgets-amazon-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:14.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0B1N5HW22?tag=kimsondreams-21",
+        "articleId": "top-ai-gadgets-amazon-2025",
+        "articleFile": "top-ai-gadgets-amazon-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:15.978Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0FMH9ZD85?tag=kimsondreams-21",
+        "articleId": "top-ai-gadgets-amazon-2025",
+        "articleFile": "top-ai-gadgets-amazon-2025.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:15.978Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0C33XXS56?tag=kimsondreams-21",
+        "articleId": "top-wireless-earbuds-2025-comparison",
+        "articleFile": "top-wireless-earbuds-2025-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:15.978Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CHXNFQD6?tag=kimsondreams-21",
+        "articleId": "top-wireless-earbuds-2025-comparison",
+        "articleFile": "top-wireless-earbuds-2025-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:15.978Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0CFZLRF28?tag=kimsondreams-21",
+        "articleId": "top-wireless-earbuds-2025-comparison",
+        "articleFile": "top-wireless-earbuds-2025-comparison.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:15.978Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=NVIDIA+RTX+5090&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:16.834Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Nintendo+Switch+2+Console&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:16.834Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iPhone+18+Pro+Max&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:16.834Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Galaxy+S26+Ultra&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:16.834Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=M6+MacBook+Pro&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:16.834Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=RTX+5090+Blackwell&tag=kimsondreams-21",
+        "articleId": "ultimate-december-2026-ai-gift-guide",
+        "articleFile": "ultimate-december-2026-ai-gift-guide.json",
+        "status": 405,
+        "hasCorrectTag": true,
+        "actualTag": "kimsondreams-21",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:17.732Z"
+      }
+    ],
+    "missingTag": [
+      {
+        "url": "https://www.amazon.com/s?k=macbook+air+m4&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=samsung+galaxy+tab+s9&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:51.805Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=anker+powercore&amp;tag=kimsondreams-21",
+        "articleId": "4",
+        "articleFile": "article4.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": null,
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:54.097Z"
+      }
+    ],
+    "wrongTag": [
+      {
+        "url": "https://www.amazon.com/dp/B0B1N5KKQL?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B0C6J8JQ6K?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/dp/B08TB9W2KV?tag=kimsondreams-21'",
+        "articleId": "2025-smart-home-essentials-guide",
+        "articleFile": "2025-smart-home-essentials-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:46.968Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=ASUS+Zenbook+S+16+UM5606&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=Dell+XPS+13+9345+Snapdragon+X+Elite&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:47.945Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=HP+OmniBook+Ultra+14+Ryzen+AI&tag=kimsondreams-21'",
+        "articleId": "2026-high-performance-laptop-guide",
+        "articleFile": "2026-high-performance-laptop-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:48.858Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=rtx+5090&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=AI+gaming+laptop+rtx+50&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:27:59.771Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=macbook+pro+m5&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=iphone+18+pro+max&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      },
+      {
+        "url": "https://www.amazon.com/s?k=nintendo+switch+2&tag=kimsondreams-21'",
+        "articleId": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide",
+        "articleFile": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+        "status": 405,
+        "hasCorrectTag": false,
+        "actualTag": "kimsondreams-21'",
+        "error": null,
+        "checkedAt": "2026-03-06T15:28:00.637Z"
+      }
+    ],
+    "redirects": []
+  }
+}

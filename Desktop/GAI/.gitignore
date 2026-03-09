@@ -1,0 +1,15 @@
+node_modules/
+.next/
+__pycache__/
+*.ndjson
+*.mp4
+*.bak
+*.backup*
+*.lock
+data/snapshots/
+data/logs/
+temp_*/
+public/assets/backgrounds/*.mp4
+dist/assets/backgrounds/*.mp4
+.DS_Store
+.env*

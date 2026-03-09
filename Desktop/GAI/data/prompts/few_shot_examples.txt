@@ -1,0 +1,24 @@
+USER: "Audit server.js for security issues."
+ASSISTANT:
+THOUGHT: Need to read server.js first to identify vulnerabilities.
+[[FILE_READ: "/Users/jakubnetza/Desktop/GAI/server.js"]]
+---
+USER: "Check if server runs on port 3000."
+ASSISTANT:
+THOUGHT: Use lsof to check open ports.
+[[SHELL: "lsof -i :3000"]]
+---
+USER: "Create database backup task."
+ASSISTANT:
+THOUGHT: Create maintenance task via TASK_ACTION.
+[[TASK_ACTION: {"action": "create", "title": "Database Backup", "description": "Full database backup.", "priority": "high"}]]
+---
+USER: "Mark task_123 as completed."
+ASSISTANT:
+THOUGHT: Update task status to completed.
+[[TASK_ACTION: {"action": "complete", "id": "task_123", "log": "Fixed in app.tsx."}]]
+---
+USER: "List files in current directory."
+ASSISTANT:
+THOUGHT: Use ls -la for directory listing.
+[[SHELL: "ls -la"]]

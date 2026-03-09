@@ -1,0 +1,34 @@
+{
+  "high_potential_categories_2026": [
+    {
+      "name": "Foldable Ecosystems",
+      "description": "The transition of foldables from niche to mainstream with Apple's entry (iPhone Fold) and Samsung's wide-screen innovations.",
+      "key_products": ["iPhone Fold", "Galaxy Z Fold 8", "Wide-screen Foldable (Samsung)"],
+      "market_impact": "High - Redefining mobile productivity and media consumption."
+    },
+    {
+      "name": "Agentic Home Hubs",
+      "description": "Smart home devices evolving into autonomous reasoning centers using Physical AI to manage households.",
+      "key_products": ["Apple Home Hub (J490/J491)", "Next-gen Nest Hub with Gemini"],
+      "market_impact": "Medium-High - Shift from voice assistants to proactive home managers."
+    },
+    {
+      "name": "2nm Mobile Computing",
+      "description": "The jump to 2nm process technology (TSMC) enabling massive AI performance gains and battery efficiency.",
+      "key_products": ["iPhone 18 Pro (A20)", "Pixel 11 (Tensor G6)"],
+      "market_impact": "Critical - Enabling on-device 'Agentic AI' without cloud dependency."
+    },
+    {
+      "name": "Next-Gen Handheld Gaming",
+      "description": "The maturation of the Switch 2 ecosystem and rumors of Sony's return to handhelds.",
+      "key_products": ["Nintendo Switch 2 (Major Titles)", "Sony Handheld Rumors"],
+      "market_impact": "High - Dominance of portable high-fidelity gaming."
+    },
+    {
+      "name": "Physical AI & Consumer Robotics",
+      "description": "AI stepping off screens into physical forms, including improved AirTags and early-stage humanoid assistants.",
+      "key_products": ["AirTag 2", "Home Hub Robotics", "Humanoid Prototypes"],
+      "market_impact": "Emerging - Laying the foundation for the 2027-2030 robotics boom."
+    }
+  ]
+}

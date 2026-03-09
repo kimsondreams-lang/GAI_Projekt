@@ -1,0 +1,47 @@
+{
+  "article_id": "macbook-neo-review-2026",
+  "title": "MacBook Neo Review: Apple's $599 Disruptor Tested",
+  "sections": [
+    {
+      "heading": "Introduction",
+      "content": "The arrival of the MacBook Neo in March 2026 marks Apple's most aggressive move into the budget laptop market. At $599, it's designed to kill the high-end Chromebook and dominate the student market."
+    },
+    {
+      "heading": "Design and Portability",
+      "content": "Analysis of the ultra-portable 12-inch form factor, the return of the fanless design, and the choice of materials (recycled aluminum). Comparison to the MacBook Air M3 size."
+    },
+    {
+      "heading": "Performance: The M3 Legacy",
+      "content": "How the M3 chip performs in 2026 for everyday tasks, browsing, and light creative work. Benchmarks against the latest Chromebook Plus models."
+    },
+    {
+      "heading": "Display and Battery Life",
+      "content": "Review of the 12.5-inch Liquid Retina display (500 nits) and the impressive 16-hour real-world battery life that outlasts almost everything in its price bracket."
+    },
+    {
+      "heading": "The Compromises",
+      "content": "Honest look at what you lose for $599: 8GB base RAM, limited port selection (2x USB-C), and the 720p webcam."
+    },
+    {
+      "heading": "Value vs. Competition",
+      "content": "Comparison table: MacBook Neo vs. Samsung Galaxy Book 4 Go vs. Premium Chromebooks."
+    },
+    {
+      "heading": "Where to Buy",
+      "content": "Affiliate section with links to Amazon for the Neo and the MacBook Air M3 as a step-up alternative."
+    },
+    {
+      "heading": "Verdict",
+      "content": "Final score and recommendation: Who should buy this and who should save for the Air."
+    }
+  ],
+  "seo_strategy": {
+    "primary_keyword": "MacBook Neo review",
+    "secondary_keywords": ["budget MacBook 2026", "Apple $599 laptop", "best laptop for students 2026"],
+    "internal_links": ["best-laptops-2025", "2026-high-performance-laptop-guide"]
+  },
+  "affiliate_plan": [
+    { "asin": "B0CX226G8S", "label": "MacBook Air M3 (The Pro Alternative)" },
+    { "query": "macbook neo", "label": "Check MacBook Neo Availability" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "target_month": "October 2026",
+  "selected_topic": "Amazon Prime Big Deal Days 2026: The Ultimate Tech Buyer's Guide",
+  "seo_keywords": [
+    "Amazon Prime Big Deal Days 2026",
+    "October Prime Day tech deals",
+    "iPhone 18 Pro discounts",
+    "Apple M5 MacBook Pro deals",
+    "best AI smart home gadgets 2026",
+    "Nintendo Switch 2 Amazon deals",
+    "PS5 Pro October sale"
+  ],
+  "key_products": [
+    { "name": "iPhone 18 Pro", "category": "Smartphones", "status": "New Release (Sept 2026)" },
+    { "name": "MacBook Pro M5", "category": "Laptops", "status": "Released March 2026, first major discount" },
+    { "name": "iPad Pro M5", "category": "Tablets", "status": "Expected Oct 2026 launch" },
+    { "name": "Sony WH-1000XM6", "category": "Audio", "status": "Trending" },
+    { "name": "Kindle Colorsoft", "category": "E-readers", "status": "Amazon Device" },
+    { "name": "Echo Show 15 (2nd Gen)", "category": "Smart Home", "status": "Amazon Device" }
+  ],
+  "event_dates": "Predicted October 13-14, 2026",
+  "competition_analysis": "High volume for 'Prime Day' terms, moderate for specific 'M5' and 'iPhone 18' deal combinations."
+}

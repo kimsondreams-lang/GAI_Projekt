@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# GAI Auto-Repeat Engine
+SCHEMA=\"$PWD/data/repetitive_actions_schema.json\"
+LOG=\"$PWD/data/logs/repeat.log\"
+mkdir -p \"$(dirname \"$LOG\")\"
+
+echo \"[$(date)] Auto-repeat engine started\" >> \"$LOG\"
+
+if [[ ! -f \"$SCHEMA\

@@ -1,0 +1,36 @@
+{
+  "clicks": {
+    "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+    "link_id": "INTEGER",
+    "timestamp": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+    "ip_address": "TEXT",
+    "user_agent": "TEXT",
+    "referrer": "TEXT",
+    "country": "TEXT",
+    "city": "TEXT",
+    "device_type": "TEXT",
+    "browser": "TEXT",
+    "os": "TEXT",
+    "is_bot": "BOOLEAN DEFAULT 0",
+    "session_id": "TEXT"
+  },
+  "links": {
+    "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+    "url": "TEXT NOT NULL",
+    "product_id": "TEXT",
+    "product_name": "TEXT",
+    "category": "TEXT",
+    "article_id": "TEXT",
+    "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+    "click_count": "INTEGER DEFAULT 0",
+    "last_clicked": "DATETIME"
+  },
+  "campaigns": {
+    "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+    "name": "TEXT NOT NULL",
+    "description": "TEXT",
+    "start_date": "DATETIME",
+    "end_date": "DATETIME",
+    "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+  }
+}

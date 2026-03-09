@@ -1,0 +1,20 @@
+{
+  "lessons": [
+    {
+      "ts": 1772509831759,
+      "content": "Task 'Autonomia: Samorozwój (loop_breaker)' failed due to stall. Check if prompt is too complex or tools are missing."
+    },
+    {
+      "ts": 1772518209300,
+      "content": "System instability detected: loop_breaker. Check logs."
+    },
+    {
+      "ts": 1772518306148,
+      "content": "Potential system issue detected (loop_breaker), but deferred for business priorities."
+    },
+    {
+      "ts": 1772835111976,
+      "content": "Task 'Comprehensive Image-to-Product Mapping Audit' failed due to stall. Check if prompt is too complex or tools are missing."
+    }
+  ]
+}

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#212529" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>GAI OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700&family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              ubuntu: ['Ubuntu', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+              win: ['Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'sans-serif'],
+            },
+            colors: {
+              neu: {
+                base: 'var(--bg-base)',
+                light: 'var(--bg-light)', 
+                dark: 'var(--bg-dark)',  
+                accent: 'var(--accent)',
+                text: 'var(--text-main)',
+                muted: 'var(--text-muted)',
+                border: 'var(--border-color)'
+              }
+            },
+            boxShadow: {
+              'neu-flat': 'var(--shadow-flat)',
+              'neu-pressed': 'var(--shadow-pressed)',
+              'neu-icon': 'var(--shadow-icon)',
+              'neu-icon-pressed': 'var(--shadow-icon-pressed)',
+            },
+            borderRadius: {
+                'theme': 'var(--radius)',
+            },
+            borderWidth: {
+                'theme': 'var(--border-width)',
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* --- THEME ENGINE --- */
+      :root {
+        --bg-base: #212529;
+        --bg-light: #2c3238;
+        --bg-dark: #16191c;
+        --accent: #3b82f6;
+        --text-main: #e9ecef;
+        --text-muted: #adb5bd;
+        --border-color: rgba(255,255,255,0.03); 
+        --radius: 0.75rem;
+        --border-width: 1px;
+        --shadow-flat: 4px 4px 10px #16191c, -4px -4px 10px #2c3238;
+        --shadow-pressed: inset 4px 4px 8px #16191c, inset -4px -4px 8px #2c3238;
+        --shadow-icon: 3px 3px 6px #16191c, -3px -3px 6px #2c3238;
+        --shadow-icon-pressed: inset 2px 2px 5px #16191c, inset -2px -2px 5px #2c3238;
+      }
+
+      *, *::before, *::after { min-width: 0; }
+      body, #root { overflow-wrap: anywhere; word-break: break-word; }
+      pre, code, .gai-no-wrap { overflow-wrap: normal; word-break: normal; }
+
+      body.theme-glass {
+        --bg-base: rgba(30, 30, 35, 0.65);
+        --bg-light: rgba(255, 255, 255, 0.1);
+        --bg-dark: rgba(0, 0, 0, 0.3);
+        --accent: #00f0ff;
+        --text-main: #ffffff;
+        --text-muted: rgba(255, 255, 255, 0.6);
+        --border-color: rgba(255, 255, 255, 0.02);
+        --radius: 1rem;
+        --border-width: 1px;
+        --shadow-flat: 0 6px 24px 0 rgba(0, 0, 0, 0.32); 
+        --shadow-pressed: inset 0 0 8px rgba(0,0,0,0.45);
+        --shadow-icon: 0 3px 6px rgba(0,0,0,0.2);
+        --shadow-icon-pressed: inset 0 2px 3px rgba(0,0,0,0.3);
+      }
+
+      body.theme-classic {
+        font-family: 'Ubuntu', sans-serif;
+        --bg-base: #2c2c2c;
+        --bg-light: #3E3E3E;
+        --bg-dark: #1e1e1e;
+        --accent: #E95420;
+        --text-main: #ffffff;
+        --text-muted: #AEA79F;
+        --border-color: #181818;
+        --radius: 6px;
+        --border-width: 1px;
+        --shadow-flat: 0 3px 5px rgba(0, 0, 0, 0.28);
+        --shadow-pressed: inset 0 2px 3px rgba(0, 0, 0, 0.35);
+        --shadow-icon: 0 2px 3px rgba(0,0,0,0.28);
+        --shadow-icon-pressed: inset 0 1px 2px rgba(0,0,0,0.45);
+      }
+      
+      /* WINDOWS 10 THEME - SUBTLE & SOPHISTICATED */
+      body.theme-windows10 {
+        font-family: 'Segoe UI', 'win', sans-serif !important;
+        --bg-base: #1f1f1f; 
+        --bg-light: #2b2b2b;
+        --bg-dark: #121212;
+        --accent: #1a73e8; 
+        --text-main: #ffffff;
+        --text-muted: #b0b0b0;
+        --border-color: rgba(255,255,255,0.08);
+        --radius: 2px; 
+        --border-width: 1px;
+        --shadow-flat: 0 6px 16px rgba(0,0,0,0.35);
+        --shadow-pressed: inset 0 0 0 rgba(0,0,0,0);
+        --shadow-icon: 0 2px 6px rgba(0,0,0,0.25);
+        --shadow-icon-pressed: inset 0 1px 2px rgba(0,0,0,0.3);
+      }
+
+      body.theme-windows10 input, 
+      body.theme-windows10 textarea, 
+      body.theme-windows10 select {
+        background-color: #1b1b1b !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        color: #ffffff !important;
+        outline: none !important;
+        transition: border-color 0.15s ease;
+      }
+
+      body.theme-windows10 input:hover, 
+      body.theme-windows10 textarea:hover {
+        border-color: rgba(255,255,255,0.3) !important;
+      }
+
+      body.theme-windows10 input:focus, 
+      body.theme-windows10 textarea:focus, 
+      body.theme-windows10 select:focus {
+        border-color: var(--accent) !important;
+        background-color: #1f1f1f !important;
+      }
+
+      body.theme-windows10 button:not(.bg-blue-600) {
+        background-color: #2a2a2a !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        color: #ffffff !important;
+      }
+      
+      body.theme-windows10 button:not(.bg-blue-600):hover {
+        background-color: #323232 !important;
+        border-color: rgba(255,255,255,0.18) !important;
+      }
+
+      body.theme-windows10 .window-frame-header {
+        background: #141414;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        color: #fff;
+        height: 30px;
+      }
+
+      body.theme-neu .window-frame-header,
+      body.theme-glass .window-frame-header,
+      body.theme-classic .window-frame-header,
+      body.theme-windows10 .window-frame-header,
+      body.theme-frost .window-frame-header,
+      body.theme-oceanic .window-frame-header,
+      body.theme-glacier .window-frame-header {
+        height: 30px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+      }
+
+      body.theme-neu .win-btn-min,
+      body.theme-neu .win-btn-max,
+      body.theme-neu .win-btn-close,
+      body.theme-glass .win-btn-min,
+      body.theme-glass .win-btn-max,
+      body.theme-glass .win-btn-close,
+      body.theme-classic .win-btn-min,
+      body.theme-classic .win-btn-max,
+      body.theme-classic .win-btn-close,
+      body.theme-windows10 .win-btn-min,
+      body.theme-windows10 .win-btn-max,
+      body.theme-windows10 .win-btn-close,
+      body.theme-frost .win-btn-min,
+      body.theme-frost .win-btn-max,
+      body.theme-frost .win-btn-close,
+      body.theme-oceanic .win-btn-min,
+      body.theme-oceanic .win-btn-max,
+      body.theme-oceanic .win-btn-close,
+      body.theme-glacier .win-btn-min,
+      body.theme-glacier .win-btn-max,
+      body.theme-glacier .win-btn-close {
+        width: 24px !important;
+        height: 24px !important;
+        border-radius: 6px !important;
+      }
+
+      body.theme-windows10 .win-btn-min,
+      body.theme-windows10 .win-btn-max,
+      body.theme-windows10 .win-btn-close {
+        border-radius: 2px !important;
+      }
+
+      body.theme-neu button,
+      body.theme-glass button,
+      body.theme-classic button,
+      body.theme-windows10 button,
+      body.theme-frost button,
+      body.theme-oceanic button,
+      body.theme-glacier button {
+        font-size: 12px !important;
+      }
+
+      body.theme-neu input,
+      body.theme-neu textarea,
+      body.theme-neu select,
+      body.theme-glass input,
+      body.theme-glass textarea,
+      body.theme-glass select,
+      body.theme-classic input,
+      body.theme-classic textarea,
+      body.theme-classic select,
+      body.theme-windows10 input,
+      body.theme-windows10 textarea,
+      body.theme-windows10 select,
+      body.theme-frost input,
+      body.theme-frost textarea,
+      body.theme-frost select,
+      body.theme-oceanic input,
+      body.theme-oceanic textarea,
+      body.theme-oceanic select,
+      body.theme-glacier input,
+      body.theme-glacier textarea,
+      body.theme-glacier select {
+        font-size: 12px !important;
+      }
+
+      body.theme-cyberpunk {
+        --bg-base: #020202;
+        --bg-light: #0a0a0a;
+        --bg-dark: #000000;
+        --accent: #fcee0a; /* Cyber Yellow */
+        --text-main: #f0f0f0;
+        --text-muted: #888888;
+        --border-color: #fcee0a;
+        --radius: 0px;
+        --border-width: 2px;
+        --shadow-flat: 4px 4px 0px rgba(252, 238, 10, 0.3);
+        --shadow-pressed: inset 0 0 0 rgba(0,0,0,0);
+        --shadow-icon: 2px 2px 0px rgba(252, 238, 10, 0.5);
+        --shadow-icon-pressed: inset 2px 2px 0px #000;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      body.theme-cyberpunk .window-frame-header {
+        background: #fcee0a;
+        color: #000;
+        font-weight: bold;
+        border-bottom: 2px solid #000;
+        text-transform: uppercase;
+      }
+      body.theme-cyberpunk button {
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      body.theme-monochrome {
+        --bg-base: #111111;
+        --bg-light: #222222;
+        --bg-dark: #000000;
+        --accent: #ffffff;
+        --text-main: #ffffff;
+        --text-muted: #666666;
+        --border-color: #333333;
+        --radius: 12px;
+        --border-width: 1px;
+        --shadow-flat: 0 4px 12px rgba(0,0,0,0.5);
+        --shadow-pressed: inset 0 2px 4px rgba(0,0,0,0.8);
+        --shadow-icon: 0 4px 12px rgba(0,0,0,0.5);
+        --shadow-icon-pressed: inset 0 2px 4px rgba(0,0,0,0.8);
+      }
+      body.theme-monochrome .window-frame-header {
+        background: #000;
+        border-bottom: 1px solid #222;
+      }
+
+      /* Global Resets */
+      body { margin: 0; overflow: hidden; background-color: #000; color: var(--text-main); transition: all 0.3s ease; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--bg-light); border-radius: var(--radius); }
+      ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+      .neu-text-shadow { text-shadow: 1px 1px 2px var(--bg-dark); }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .glass-blur { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+      .mask-gradient { -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); }
+      /* Icon Themes */
+      body.icon-theme-thin svg.lucide {
+        stroke-width: 1px !important;
+      }
+      body.icon-theme-solid svg.lucide {
+        stroke-width: 2.5px !important;
+      }
+      body.icon-theme-neon svg.lucide {
+        filter: drop-shadow(0 0 4px currentColor);
+        stroke-width: 2px !important;
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="theme-neu">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2025-02-25",
+  "articles": [
+    {
+      "id": "best-wireless-earbuds-2025",
+      "title": "Best Wireless Earbuds 2025",
+      "category": "COMPARISONS",
+      "tags": ["Audio", "Tech", "Accessories"],
+      "relatedArticles": [
+        {"id": "sony-wh-1000xm5-review", "reason": "Both about audio/headphones", "linkText": "Check out our Sony WH-1000XM5 Review for premium over-ear alternatives"},
+        {"id": "best-gaming-headsets-2025", "reason": "Audio category overlap", "linkText": "Gamers should also see our Best Gaming Headsets 2025 guide"}
+      ]
+    },
+    {
+      "id": "sony-wh-1000xm5-review",
+      "title": "Sony WH-1000XM5 Review",
+      "category": "REVIEWS",
+      "tags": ["Sony", "Headphones", "Audio"],
+      "relatedArticles": [
+        {"id": "best-wireless-earbuds-2025", "reason": "Audio alternatives", "linkText": "Looking for earbuds? See our Best Wireless Earbuds 2025 comparison"},
+        {"id": "best-gaming-headsets-2025", "reason": "Gaming audio options", "linkText": "For gaming, check our Best Gaming Headsets 2025 guide"}
+      ]
+    },
+    {
+      "id": "best-gaming-headsets-2025",
+      "title": "Best Gaming Headsets 2025",
+      "category": "COMPARISONS",
+      "tags": ["Gaming", "Audio", "Hardware"],
+      "relatedArticles": [
+        {"id": "best-mechanical-keyboards-2025", "reason": "Gaming setup", "linkText": "Complete your gaming setup with our Best Mechanical Keyboards 2025 guide"},
+        {"id": "best-4k-monitors-2025", "reason": "Gaming display", "linkText": "Pair with our Best 4K Monitors 2025 for the ultimate gaming experience"}
+      ]
+    },
+    {
+      "id": "best-mechanical-keyboards-2025",
+      "title": "Best Mechanical Keyboards 2025",
+      "category": "COMPARISONS",
+      "tags": ["Gaming", "Hardware", "Productivity"],
+      "relatedArticles": [
+        {"id": "best-gaming-headsets-2025", "reason": "Gaming peripherals", "linkText": "Pair your keyboard with our Best Gaming Headsets 2025 picks"},
+        {"id": "best-4k-monitors-2025", "reason": "Productivity setup", "linkText": "See Best 4K Monitors 2025 for your desk setup"}
+      ]
+    },
+    {
+      "id": "best-4k-monitors-2025",
+      "title": "Best 4K Monitors 2025",
+      "category": "COMPARISONS",
+      "tags": ["Tech", "Hardware", "Productivity", "Gaming"],
+      "relatedArticles": [
+        {"id": "best-mechanical-keyboards-2025", "reason": "Desk setup", "linkText": "Complete your setup with Best Mechanical Keyboards 2025"},
+        {"id": "best-laptops-2025", "reason": "Display for laptops", "linkText": "Need a laptop? See our Best Laptops 2025 guide"}
+      ]
+    },
+    {
+      "id": "ai-assistants-comparison-2025",
+      "title": "Best AI Assistants 2025",
+      "category": "COMPARISONS",
+      "tags": ["AI", "Tech", "Productivity"],
+      "relatedArticles": [
+        {"id": "best-mechanical-keyboards-2025", "reason": "Productivity tools", "linkText": "Enhance your workflow with Best Mechanical Keyboards 2025"}
+      ]
+    },
+    {
+      "id": "best-smart-home-devices-2025",
+      "title": "Best Smart Home Devices 2025",
+      "category": "COMPARISONS",
+      "tags": ["Smart Home", "Tech", "Hardware"],
+      "relatedArticles": [
+        {"id": "best-tech-gadgets-amazon-2025", "reason": "Tech gadgets", "linkText": "Explore more in our Best Tech Gadgets on Amazon 2025 guide"}
+      ]
+    },
+    {
+      "id": "best-tech-gadgets-amazon-2025",
+      "title": "Best Tech Gadgets on Amazon 2025",
+      "category": "REVIEWS",
+      "tags": ["Tech", "Gadgets", "Amazon"],
+      "relatedArticles": [
+        {"id": "best-smart-home-devices-2025", "reason": "Smart home", "linkText": "For home automation, see Best Smart Home Devices 2025"},
+        {"id": "best-wireless-earbuds-2025", "reason": "Audio gadgets", "linkText": "For audio, check Best Wireless Earbuds 2025"}
+      ]
+    }
+  ],
+  "summary": {
+    "totalArticles": 8,
+    "totalLinks": 14,
+    "categories": {"AUDIO": 3, "GAMING": 2, "PRODUCTIVITY": 3, "SMART_HOME": 2, "HARDWARE": 3}
+  }
+}

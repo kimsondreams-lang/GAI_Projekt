@@ -1,0 +1,22 @@
+{
+  "month": "June 2026",
+  "selected_topic": "The Ultimate June 2026 Tech Guide: Father's Day AI Gifts & WWDC Wearables",
+  "target_audience": "Tech-savvy gift buyers, Apple enthusiasts, and early adopters looking for summer fitness/cooling solutions.",
+  "value_proposition": "A comprehensive guide that bridges the gap between major June tech announcements (WWDC/Computex) and practical gifting for Father's Day, focusing on AI-enhanced productivity and health.",
+  "key_events": [
+    {"event": "Computex 2026", "dates": "June 2-5, 2026", "focus": "NVIDIA Rubin GPUs, RTX 50-series Mobile, AI PCs"},
+    {"event": "WWDC 2026", "dates": "June 8-12, 2026 (Expected)", "focus": "iOS 20, Apple Intelligence 2.0, Apple Watch Series 12 (Blood Pressure Sensor)"},
+    {"event": "Father's Day", "date": "June 21, 2026", "focus": "Gifting, Smart Home, Wearables"}
+  ],
+  "seo_strategy": {
+    "primary_keywords": ["best tech gifts for Father's Day 2026", "Apple Watch Series 12 rumors", "WWDC 2026 AI features"],
+    "secondary_keywords": ["summer fitness tech 2026", "portable cooling gadgets", "AI laptops for dads"],
+    "internal_linking": ["2026-wearable-tech-health-gadgets-guide", "best-tech-gadgets-amazon-2025"]
+  },
+  "product_categories": [
+    "AI Wearables (Apple Watch 12, Smart Rings)",
+    "Outdoor Tech (Smart Grills, UV Sunglasses)",
+    "Cooling Gadgets (Neck Fans, Smart AC Controllers)",
+    "Productivity (M5 MacBooks, AI-enhanced Laptops)"
+  ]
+}

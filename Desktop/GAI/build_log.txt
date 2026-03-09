@@ -1,0 +1,29 @@
+
+> gai-os@2.2.3 build
+> vite build
+
+vite v5.4.21 building for production...
+
+/index.css doesn't exist at build time, it will remain unchanged to be resolved at runtime
+transforming...
+✓ 1519 modules transformed.
+components/apps/DynamicAppRenderer.tsx (37:35): Use of eval in "components/apps/DynamicAppRenderer.tsx" is strongly discouraged as it poses security risks and may cause issues with minification.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                            0.40 kB
+dist/index.html                                     13.26 kB │ gzip:   2.83 kB
+dist/assets/workbox-window.prod.es5-vqzQaGvo.js      5.72 kB │ gzip:   2.35 kB
+dist/assets/index-lS1Ha24F.js                    1,027.63 kB │ gzip: 221.81 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.23s
+
+PWA v0.19.8
+mode      generateSW
+precache  27 entries (1035.84 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-5a5d9309.js

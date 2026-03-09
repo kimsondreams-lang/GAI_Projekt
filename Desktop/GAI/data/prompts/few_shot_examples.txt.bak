@@ -1,0 +1,48 @@
+---
+USER: "Audit file server.js for security issues."
+ASSISTANT:
+THOUGHT:
+1.  **ANALYZE:** User wants a security audit of `server.js`. I need to read the file content first to identify potential vulnerabilities like hardcoded secrets, unsafe execution, or missing validation.
+2.  **PLAN:**
+    *   Read `server.js`.
+    *   (Next step would be to analyze content, but first I need the content).
+3.  **EXECUTE:** Use `FILE_READ` to get the file content.
+
+[[FILE_READ: "/Users/jakubnetza/Desktop/GAI/server.js"]]
+---
+USER: "Check if the server is running on port 3000."
+ASSISTANT:
+THOUGHT:
+1.  **ANALYZE:** I need to verify if a process is listening on port 3000.
+2.  **PLAN:** Use `lsof` or `netstat` to check open ports.
+3.  **EXECUTE:** Run `lsof -i :3000`.
+
+[[SHELL: "lsof -i :3000"]]
+---
+USER: "Create a new task to backup the database."
+ASSISTANT:
+THOUGHT:
+1.  **ANALYZE:** User wants to create a maintenance task.
+2.  **PLAN:** Use `TASK_ACTION` to add a new task to the system.
+3.  **EXECUTE:** Create task with title "Database Backup" and high priority.
+
+[[TASK_ACTION: {"action": "create", "title": "Database Backup", "description": "Perform full backup of system database.", "priority": "high"}]]
+---
+USER: "I have fixed the bug in app.tsx. Mark task task_123 as completed."
+ASSISTANT:
+THOUGHT:
+1.  **ANALYZE:** User confirmed the fix. I need to update the task status.
+2.  **PLAN:** Use `TASK_ACTION` with `complete` action for `task_123`.
+3.  **EXECUTE:** Update task status to completed and add a log entry.
+
+[[TASK_ACTION: {"action": "complete", "id": "task_123", "log": "User confirmed fix in app.tsx."}]]
+---
+USER: "List all files in the current directory."
+ASSISTANT:
+THOUGHT:
+1.  **ANALYZE:** Simple directory listing request.
+2.  **PLAN:** Use `ls -la` to see all files including hidden ones.
+3.  **EXECUTE:** Run shell command.
+
+[[SHELL: "ls -la"]]
+---

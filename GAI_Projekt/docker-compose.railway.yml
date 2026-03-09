@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gai_agent
+      POSTGRES_USER: gai_user
+      POSTGRES_PASSWORD: gai_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gai_user -d gai_agent"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: gai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: ../../deploy/Dockerfile.backend
+    container_name: gai-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://gai_user:gai_password@postgres:5432/gai_agent
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/backend:/app
+      - ./packages:/app/packages
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: ./apps/worker
+      dockerfile: ../../deploy/Dockerfile.worker
+    container_name: gai-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://gai_user:gai_password@postgres:5432/gai_agent
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/worker:/app
+      - ./packages:/app/packages
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: ../../deploy/Dockerfile.web
+    container_name: gai-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BACKEND_URL: http://backend:8000
+      WS_URL: ws://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:

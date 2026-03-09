@@ -1,0 +1,29 @@
+{
+  \"analysisDate\": \"2025-02-25\",
+  \"competitors\": [
+    {\"name\": \"CNET\", \"uniqueVisitors\": \"64.5M\"},
+    {\"name\": \"Tom's Hardware\", \"uniqueVisitors\": \"34.2M\"},
+    {\"name\": \"The Verge\", \"uniqueVisitors\": \"29.4M\"},
+    {\"name\": \"GSMArena\", \"uniqueVisitors\": \"16.8M\"},
+    {\"name\": \"PCMag\", \"uniqueVisitors\": \"15.4M\"},
+    {\"name\": \"Engadget\", \"uniqueVisitors\": \"12.2M\"},
+    {\"name\": \"Digital Trends\", \"uniqueVisitors\": \"12M\"}
+  ],
+  \"trendingKeywords\": [\"AI tools\", \"VR/AR\", \"Cloud Computing\", \"Smart Devices/IoT\", \"Cybersecurity\", \"Blockchain/Web3\"],
+  \"currentCoverage\": {\"AI\": 3, \"Smart Home\": 2, \"Audio\": 2, \"Hardware\": 5, \"Smartphones\": 2, \"Drones\": 1},
+  \"contentGaps\": [
+    {\"category\": \"VR/AR\", \"currentArticles\": 0, \"opportunity\": \"high\", \"suggestedTopics\": [\"Best VR Headsets 2025: Meta Quest 3 vs Apple Vision Pro\", \"VR Gaming Guide: Top Games and Accessories\", \"AR Smart Glasses Comparison 2025\"]},
+    {\"category\": \"Cybersecurity\", \"currentArticles\": 0, \"opportunity\": \"high\", \"suggestedTopics\": [\"Best VPN Services 2025: Complete Comparison\", \"Home Network Security Guide for 2025\", \"Password Managers Compared: 1Password vs Bitwarden\"]},
+    {\"category\": \"Cloud Computing\", \"currentArticles\": 0, \"opportunity\": \"medium\", \"suggestedTopics\": [\"Best Cloud Storage Services 2025\", \"Cloud Backup Solutions for Personal Use\", \"NAS vs Cloud Storage: Which is Right for You\"]},
+    {\"category\": \"Gaming PCs\", \"currentArticles\": 0, \"opportunity\": \"high\", \"suggestedTopics\": [\"Best Gaming PCs 2025: Pre-built vs Custom\", \"Budget Gaming PC Build Guide 2025\", \"Best Gaming Monitors 2025: 4K vs 1440p\"]},
+    {\"category\": \"Wearables\", \"currentArticles\": 0, \"opportunity\": \"high\", \"suggestedTopics\": [\"Best Smartwatches 2025: Apple Watch vs Samsung Galaxy Watch\", \"Fitness Trackers Comparison 2025\", \"Best Smart Rings 2025: Oura vs Samsung\"]},
+    {\"category\": \"Blockchain/Web3\", \"currentArticles\": 0, \"opportunity\": \"medium\", \"suggestedTopics\": [\"Best Crypto Hardware Wallets 2025\", \"Web3 Browser Comparison\", \"NFT Creation Tools Guide\"]}
+  ],
+  \"priorityTopics\": [
+    {\"title\": \"Best VR Headsets 2025: Meta Quest 3 vs Apple Vision Pro\", \"category\": \"VR/AR\", \"priority\": 1, \"reason\": \"High search volume, trending topic, Apple Vision Pro launch\"},
+    {\"title\": \"Best Gaming PCs 2025: Pre-built vs Custom\", \"category\": \"Gaming PCs\", \"priority\": 2, \"reason\": \"High affiliate potential, evergreen content\"},
+    {\"title\": \"Best Smartwatches 2025: Apple Watch vs Samsung Galaxy Watch\", \"category\": \"Wearables\", \"priority\": 3, \"reason\": \"High search volume, strong affiliate potential\"},
+    {\"title\": \"Best VPN Services 2025: Complete Comparison\", \"category\": \"Cybersecurity\", \"priority\": 4, \"reason\": \"High affiliate commissions, growing demand\"},
+    {\"title\": \"Best Cloud Storage Services 2025\", \"category\": \"Cloud Computing\", \"priority\": 5, \"reason\": \"Recurring affiliate revenue, practical topic\"}
+  ]
+}

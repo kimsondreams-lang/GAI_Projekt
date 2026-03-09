@@ -1,0 +1,22 @@
+{
+  "target_month": "May 2026",
+  "primary_events": [
+    { "event": "Mother's Day", "date": "2026-05-10", "focus": "Health, Wellness, AI Wearables, Tablets" },
+    { "event": "Graduation Season", "date": "May-June 2026", "focus": "Laptops, Smartphones, Productivity, Audio" },
+    { "event": "Google I/O 2026", "date": "Mid-May 2026 (Expected)", "focus": "Pixel 10a, Android 17, AI Features" }
+  ],
+  "hero_products": [
+    { "name": "iPhone SE 4", "status": "Recently Released/Rumored", "selling_point": "A18 chip, OLED, Apple Intelligence at budget price" },
+    { "name": "MacBook Neo", "status": "Rumored Disruptor", "selling_point": "$599 entry-level Apple Silicon laptop for students" },
+    { "name": "Pixel 10a", "status": "Expected Launch", "selling_point": "Tensor G5, best-in-class mid-range camera" },
+    { "name": "Apple Watch Ultra 3", "status": "Premium Gift", "selling_point": "Advanced health tracking, micro-LED display rumors" }
+  ],
+  "seo_keywords": [
+    "best tech gifts for graduation 2026",
+    "Mother's Day tech gift guide 2026",
+    "iPhone SE 4 vs Pixel 10a comparison",
+    "MacBook Neo student review",
+    "AI gadgets for moms 2026"
+  ],
+  "affiliate_strategy": "Focus on high-margin electronics (Laptops, Smartwatches) and high-volume accessories (Earbuds, Smart Rings)."
+}

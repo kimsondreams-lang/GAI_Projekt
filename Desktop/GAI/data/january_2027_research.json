@@ -1,0 +1,36 @@
+{
+  "ces_2027": {
+    "estimated_dates": "January 5-8, 2027",
+    "location": "Las Vegas",
+    "expected_themes": ["AI Agents", "Spatial Computing", "Humanoid Robotics", "Software-Defined Vehicles", "Sustainable Tech"]
+  },
+  "general_trends_2027": [
+    "Generative AI integration in 80% of consumer devices",
+    "Advanced health monitoring in smart rings and wearables",
+    "Foldable and rollable display maturity",
+    "Personalized AI productivity assistants"
+  ],
+  "selected_topic": {
+    "title": "New Year, New Intelligence: The Ultimate 2027 AI-Powered Productivity & Health Guide",
+    "rationale": "Combines high-intent New Year resolution traffic with CES 2027 hype around AI Agents and Smart Rings.",
+    "target_audience": "Tech-savvy professionals and fitness enthusiasts looking to optimize their lifestyle with the latest AI hardware.",
+    "seo_keywords": ["best AI gadgets 2027", "CES 2027 highlights", "smart rings 2027 reviews", "AI productivity tools 2027", "tech resolutions 2027"]
+  },
+  "projected_affiliate_products": [
+    {
+      "category": "Smart Rings",
+      "products": ["Oura Ring Gen 5 (Projected)", "Samsung Galaxy Ring 3 (Projected)", "RingConn Gen 4 (Projected)"],
+      "amazon_search_query": "https://www.amazon.com/s?k=smart+ring+health+tracker&tag=kimsondreams-21"
+    },
+    {
+      "category": "AI Productivity",
+      "products": ["Rabbit R2 / AI Agent Hubs", "Humane AI Pin 2", "Next-Gen AI Voice Assistants"],
+      "amazon_search_query": "https://www.amazon.com/s?k=AI+productivity+gadgets&tag=kimsondreams-21"
+    },
+    {
+      "category": "Wearables",
+      "products": ["Apple Watch Series 12 (Projected)", "Garmin Fenix 9 (Projected)"],
+      "amazon_search_query": "https://www.amazon.com/s?k=flagship+smartwatch+2027&tag=kimsondreams-21"
+    }
+  ]
+}

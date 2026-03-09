@@ -1,0 +1,35 @@
+{
+  "name": "gai-agent",
+  "version": "1.0.0",
+  "description": "Generative Autonomous Intelligence - Complete AI Agent System",
+  "main": "start.sh",
+  "scripts": {
+    "start": "bash start.sh",
+    "build": "bash build.sh",
+    "dev": "bash scripts/dev-local.sh",
+    "deploy": "bash scripts/deploy-production.sh",
+    "test": "bash scripts/test-system.sh"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai",
+    "automation",
+    "content",
+    "analytics",
+    "publishing",
+    "fastapi",
+    "nextjs",
+    "celery",
+    "postgresql",
+    "redis"
+  ],
+  "author": "GAI Agent Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kimsondreams-lang/GAI_Projekt.git"
+  },
+  
+}

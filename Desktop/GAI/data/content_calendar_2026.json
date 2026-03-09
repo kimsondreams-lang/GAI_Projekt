@@ -1,0 +1,24 @@
+{
+  "year": 2026,
+  "calendar": [
+    {
+      "month": "April",
+      "topic": "The Best Budget Flagships of 2026: iPhone SE 4 vs Pixel 10a",
+      "status": "planned",
+      "keywords": ["iPhone SE 4", "Pixel 10a", "budget flagship 2026"]
+    },
+    {
+      "month": "May",
+      "topic": "The Ultimate May 2026 Tech Gift Guide: Mother's Day & Graduation Essentials",
+      "status": "published",
+      "keywords": ["Mother's Day tech", "Graduation gifts 2026", "Apple Intelligence"]
+    },
+    {
+      "month": "June",
+      "topic": "The Ultimate Father's Day 2026 Tech Gift Guide: AI-Powered Gadgets & WWDC Predictions",
+      "status": "selected",
+      "slug": "fathers-day-2026-tech-gift-guide-wwdc-predictions",
+      "keywords": ["Father's Day 2026", "WWDC 2026 predictions", "AI gadgets", "M5 MacBook Pro"]
+    }
+  ]
+}

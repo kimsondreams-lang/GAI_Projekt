@@ -1,0 +1,14971 @@
+const OLLAMA_TRACE = [];
+const OLLAMA_TRACE_MAX = 200;
+import 'dotenv/config';
+
+import express from 'express';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import zlib from 'zlib';
+import * as Diff from 'diff';
+import { exec, spawn, execSync } from 'child_process';
+import { promisify } from 'util';
+import crypto from 'crypto';
+import ftp from 'basic-ftp';
+import readline from 'readline';
+import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
+import { BlogHealer } from './services/blogHealer.js';
+import { gaiMemory, initializeGAIMemory } from './services/gaiMemoryService.js';
+import { gaiExternalAI, initializeExternalAI } from './services/externalAIService.js';
+import { gaiAgentRouter, initializeAgentRouter } from './services/agentRouter.js'; // NEW: Agent Router
+import { gaiSafety, createSafeOperation, checkOperationSafety } from './services/safetyService.js';
+import { gaiUncensor, initializeUncensorSystem } from './services/uncensorService.js';
+import { safeWriteFile, restoreBackup, BACKUP_DIR } from './services/backupService.js';
+import { mockOllama, initializeMockOllama } from './services/mockOllamaService.js';
+import { telegramService } from './services/telegramService.js';
+import articleRouter from './routes/articles.js';
+import { generateToken } from './services/authService.js';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+
+
+
+
+const pushOllamaTrace = (entry) => {
+    try {
+        OLLAMA_TRACE.push({ ...entry, ts: Date.now() });
+        while (OLLAMA_TRACE.length > OLLAMA_TRACE_MAX) OLLAMA_TRACE.shift();
+    } catch {
+    }
+};
+
+// Global cleanup tracking
+const activeIntervals = new Set();
+const activeTimeouts = new Set();
+const app = express();
+// Article Router mounted above
+app.use('/api/v1/articles', articleRouter);
+const planningModel = gaiExternalAI;
+
+// Safe wrapper functions for intervals and timeouts
+const safeSetInterval = (fn, delay, ...args) => {
+    const id = setInterval(fn, delay, ...args);
+    activeIntervals.add(id);
+    return id;
+};
+
+const safeSetTimeout = (fn, delay, ...args) => {
+    const id = setTimeout((...args) => {
+        activeTimeouts.delete(id);
+        fn(...args);
+    }, delay, ...args);
+    activeTimeouts.add(id);
+    return id;
+};
+
+const safeClearInterval = (id) => {
+    clearInterval(id);
+    activeIntervals.delete(id);
+};
+
+const safeClearTimeout = (id) => {
+    clearTimeout(id);
+    activeTimeouts.delete(id);
+};
+
+const attachStreamErrorHandler = (stream) => {
+    if (!stream || typeof stream.on !== 'function') return;
+    stream.on('error', (err) => {
+        if (err?.code === 'EPIPE') return;
+        try {
+            fs.appendFileSync('.gaios/backend.log', `[${new Date().toISOString()}] [${new Date().toISOString()}] [CRITICAL] Stream error: ${err?.stack || err}\n`);
+        } catch {}
+    });
+};
+
+app.get('/api/system/backups', (req, res) => {
+    try {
+        if (!fs.existsSync(BACKUP_DIR)) return res.json([]);
+        const files = fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.endsWith('.meta.json'))
+            .map(f => {
+                try { return JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, f), 'utf8')); }
+                catch (e) { return null; }
+            })
+            .filter(Boolean);
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/system/rollback', async (req, res) => {
+    try {
+        const { backupPath, targetPath } = req.body;
+        if (!backupPath || !targetPath) return res.status(400).json({ error: 'Missing paths' });
+        const result = await restoreBackup(backupPath, targetPath);
+        if (result.success) {
+            res.json({ status: 'restored' });
+        } else {
+            res.status(500).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+attachStreamErrorHandler(process.stdout);
+attachStreamErrorHandler(process.stderr);
+
+process.on('uncaughtException', (err) => {
+    console.error('[CRITICAL] Uncaught Exception:', err);
+    try {
+        fs.appendFileSync('.gaios/backend.log', `[${new Date().toISOString()}] [CRITICAL] Uncaught Exception: ${err.stack}\n`);
+    } catch (e) {}
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+    try {
+        fs.appendFileSync('.gaios/backend.log', `[${new Date().toISOString()}] [CRITICAL] Unhandled Rejection: ${reason}\n`);
+    } catch (e) {}
+    
+    // FORCE RESTART ON CRITICAL ERROR to allow watchdog to recover
+    console.error('Exiting process to trigger watchdog restart...');
+    process.exit(1);
+});
+
+// === ENVIRONMENT VALIDATION ===
+const validateEnvironment = () => {
+    const requiredEnvVars = [
+        { key: 'SESSION_SECRET', minLength: 32, default: 'default-super-secure-session-secret-key-min-32-chars' },
+        { key: 'PORT', type: 'number', default: 1234 },
+        { key: 'NODE_ENV', default: 'development' },
+        { key: 'DEBUG_MODE', type: 'boolean', default: false },
+        { key: 'VERBOSE_LOGGING', type: 'boolean', default: false }
+    ];
+    
+    const optionalEnvVars = [
+        { key: 'OLLAMA_BASE_URL', default: 'http://localhost:11434' },
+        { key: 'OLLAMA_TIMEOUT_MS', type: 'number', default: 300000 }, // 5 minut (było 30m)
+        { key: 'AUTONOMY_STEP_TIMEOUT_MS', type: 'number', default: 900000 },
+        { key: 'USER_COMMAND_TIMEOUT_MS', type: 'number', default: 900000 },
+        { key: 'RATE_LIMIT_WINDOW_MS', type: 'number', default: 900000 },
+        { key: 'RATE_LIMIT_MAX_REQUESTS', type: 'number', default: 1000 },
+        { key: 'RATE_LIMIT_STRICT_MAX', type: 'number', default: 100 }
+    ];
+    
+    const validateVar = (config) => {
+        const { key, type, minLength, required, default: defaultValue } = config;
+        let value = process.env[key];
+        
+        // Use default if not provided
+        if (value === undefined) {
+            if (required) {
+                throw new Error(`Required environment variable ${key} is missing`);
+            }
+            value = defaultValue;
+            process.env[key] = String(value);
+        }
+        
+        // Type validation
+        if (type === 'number') {
+            const numValue = Number(value);
+            if (isNaN(numValue) || numValue <= 0) {
+                throw new Error(`Environment variable ${key} must be a positive number, got: ${value}`);
+            }
+            process.env[key] = String(numValue);
+        }
+        
+        if (type === 'boolean') {
+            const boolValue = value === 'true' || value === '1';
+            process.env[key] = String(boolValue);
+        }
+        
+        // Length validation
+        if (minLength && String(value).length < minLength) {
+            throw new Error(`Environment variable ${key} must be at least ${minLength} characters long`);
+        }
+        
+        // Security validation
+        if (key.includes('SECRET') && String(value).length < 16) {
+            console.warn(`⚠️  WARNING: ${key} should be at least 16 characters for security`);
+        }
+        
+        return true;
+    };
+    
+    // Validate all variables
+    [...requiredEnvVars, ...optionalEnvVars].forEach(validateVar);
+    
+    console.log('✅ Environment variables validated successfully');
+    return true;
+};
+
+// Validate environment on startup
+try {
+    validateEnvironment();
+} catch (error) {
+    console.error('❌ Environment validation failed:', error.message);
+    process.exit(1);
+}
+
+// === INPUT VALIDATION UTILITIES ===
+const validatePath = (inputPath) => {
+    if (typeof inputPath !== 'string') return false;
+    if (inputPath.length === 0 || inputPath.length > 1000) return false;
+    if (inputPath.includes('..') || inputPath.includes('~')) return false;
+    if (inputPath.includes('\0')) return false; // null bytes
+    // Allow more characters including spaces, dots, and common special chars
+    // if (!/^[a-zA-Z0-9_\-/.]+$/.test(inputPath)) return false; 
+    return true;
+};
+
+// === SSE BROADCAST SYSTEM ===
+const sseClients = new Set();
+
+const broadcastSSE = (event, data) => {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    sseClients.forEach(client => {
+        try {
+            client.write(payload);
+            if (client.flush) client.flush();
+        } catch (e) {
+            console.error('SSE Broadcast error:', e);
+            sseClients.delete(client);
+        }
+    });
+};
+
+const sanitizeFilename = (filename) => {
+    if (typeof filename !== 'string') return '';
+    return filename.replace(/[^a-zA-Z0-9._-]/g, '').substring(0, 255);
+};
+
+const validateFileContent = (content) => {
+    if (typeof content !== 'string' && !Buffer.isBuffer(content)) return false;
+    const maxSize = 50 * 1024 * 1024; // 50MB limit
+    const size = Buffer.isBuffer(content) ? content.length : Buffer.byteLength(content, 'utf8');
+    return size <= maxSize;
+};
+
+const validateCommand = (command) => {
+    if (typeof command !== 'string') return false;
+    if (command.length === 0 || command.length > 10000) return false;
+    
+    // In Developer Mode, we trust the AI completely.
+    // The "God Mode" switch is the ultimate authority.
+    if (SYSTEM_DB?.settings?.developerMode === true) {
+        return true;
+    }
+    
+    // Explicitly allow process management tools requested by user
+    // GAI has permission to manage its own processes and environment
+    if (/^\s*(pkill|ps|kill|killall|pgrep)\b/.test(command)) {
+        return true; 
+    }
+    
+    // Block dangerous shell commands only in restricted mode
+    const dangerousPatterns = [
+        /rm\s+-rf\s+\//i, // Only block root wipe
+        /:(){ :|:& };:/i, // Fork bomb
+        /> \/dev\/sd/i,   // Disk wipe
+        /mkfs/i           // Format
+    ];
+    
+    return !dangerousPatterns.some(pattern => pattern.test(command));
+};
+
+const validateModelName = (modelName) => {
+    if (typeof modelName !== 'string') return false;
+    if (modelName.length === 0 || modelName.length > 100) return false;
+    return /^[a-zA-Z0-9._-]+$/.test(modelName);
+};
+
+const validateApiKey = (apiKey) => {
+    if (typeof apiKey !== 'string') return false;
+    if (apiKey.length > 500) return false; // Reasonable max length
+    return true;
+};
+// Prompts loaded from files
+// import { AUTONOMOUS_AGENT_PROMPT, INITIAL_SYSTEM_PROMPT } from './constants.js';
+
+const execAsync = promisify(exec);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Security Headers
+app.use(helmet({
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            'script-src': ["'self'", "'unsafe-inline'", 'https://cdn.tailwindcss.com'],
+            'script-src-elem': ["'self'", "'unsafe-inline'", 'https://cdn.tailwindcss.com'],
+            'style-src': ["'self'", 'https:', "'unsafe-inline'"],
+            'font-src': ["'self'", 'https:', 'data:'],
+            'img-src': ["'self'", 'data:', 'https:'],
+            'connect-src': ["'self'", 'http:', 'https:', 'ws:', 'wss:'],
+            'frame-ancestors': ["'self'"]
+        }
+    }
+}));
+
+// Rate Limiting
+const limiter = rateLimit({
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' },
+    skip: (req) => {
+        const p = String(req.path || '');
+        return (
+            p.startsWith('/autonomy/telemetry') ||
+            p.startsWith('/ollama/trace') ||
+            p.startsWith('/system/logs') ||
+            p === '/db' ||
+            p === '/telegram/status' ||
+            p === '/telegram/poll'
+        );
+    }
+});
+app.use('/api/', limiter);
+
+// Swagger Configuration
+
+
+// Swagger Documentation Setup
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'GAI OS Articles API',
+            version: '1.0.0',
+            description: 'API for managing blog articles in GAI OS',
+        },
+        servers: [{ url: 'http://localhost:1236' }],
+    },
+    apis: ['./routes/*.js'],
+};
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+app.post('/api/login', express.json(), (req, res) => {
+    const { username, password } = req.body || {};
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'gaios-admin-2025';
+    const acceptedUsername = typeof username === 'string' ? username : adminUsername;
+    const isUsernameValid = acceptedUsername === adminUsername;
+    const isPasswordValid = password === adminPassword;
+    if (isUsernameValid && isPasswordValid) {
+        const token = generateToken({ username: acceptedUsername, role: 'admin' });
+        return res.json({ token, sessionId: token, tokenType: 'Bearer' });
+    }
+    res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.use('/api/articles', articleRouter);
+
+// Initialize Telegram polling
+if (process.env.ELECTRON_RUN !== 'true') {
+    telegramService.startPolling();
+}
+
+const PORT = process.env.PORT || 1234;
+const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
+const VERBOSE_LOGGING = process.env.VERBOSE_LOGGING === 'true';
+
+// Enhanced error logging function
+const logError = (context, error, additionalData = {}) => {
+    const timestamp = new Date().toISOString();
+    const errorData = {
+        timestamp,
+        context,
+        message: error.message,
+        stack: error.stack,
+        type: error.name,
+        ...additionalData
+    };
+    
+    console.error(`[ERROR] ${timestamp} - ${context}:`, {
+        message: error.message,
+        stack: DEBUG_MODE ? error.stack : undefined,
+        ...additionalData
+    });
+    
+    // Log to system if available
+    try {
+        if (typeof logToSystem === 'function') {
+            logToSystem('error', `${context}: ${error.message}${DEBUG_MODE ? '\n' + error.stack : ''}`);
+        }
+    } catch (e) {
+        // Ignore logging errors
+    }
+};
+
+// Enhanced warning logging function
+const logWarn = (context, message, additionalData = {}) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[WARN] ${timestamp} - ${context}:`, message, additionalData);
+    
+    try {
+        if (typeof logToSystem === 'function') {
+            logToSystem('warn', `${context}: ${message}`);
+        }
+    } catch (e) {
+        // Ignore logging errors
+    }
+};
+
+// Debug logging function
+const logDebug = (context, message, additionalData = {}) => {
+    if (!DEBUG_MODE && !VERBOSE_LOGGING) return;
+    
+    const timestamp = new Date().toISOString();
+    console.debug(`[DEBUG] ${timestamp} - ${context}:`, message, additionalData);
+};
+
+// Info logging function
+const logInfo = (context, message, additionalData = {}) => {
+    const timestamp = new Date().toISOString();
+    console.info(`[INFO] ${timestamp} - ${context}:`, message, additionalData);
+    
+    try {
+        if (typeof logToSystem === 'function') {
+            logToSystem('info', `${context}: ${message}`);
+        }
+    } catch (e) {
+        // Ignore logging errors
+    }
+};
+
+const resolveSupportTarget = (requestedProvider, supportModel) => {
+    const rawProvider = String(requestedProvider || SYSTEM_DB?.settings?.aiProvider || 'ollama').toLowerCase();
+    const active = String(SYSTEM_DB?.settings?.activeModel || '').trim();
+    let model = String(supportModel || '').trim();
+    if (!model) model = active || 'qwen3:latest';
+    
+    const provider = rawProvider !== 'ollama' ? 'external' : rawProvider;
+    
+    return { provider, model };
+};
+
+const getModelStatsMap = () => {
+    const stats = SYSTEM_DB?.agentState?.modelStats;
+    return stats && typeof stats === 'object' ? stats : {};
+};
+
+const getModelStatsSeries = () => {
+    const series = SYSTEM_DB?.agentState?.modelStatsSeries;
+    return Array.isArray(series) ? series : [];
+};
+
+const pushModelStatSample = (model, ok, ttfbMs) => {
+    const name = String(model || '').trim();
+    if (!name) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const series = getModelStatsSeries();
+    const entry = { model: name, ts: Date.now(), ok: !!ok, ttfbMs: Number.isFinite(ttfbMs) ? Math.max(0, Math.floor(ttfbMs)) : 0 };
+    series.push(entry);
+    while (series.length > 500) series.shift();
+    SYSTEM_DB.agentState.modelStatsSeries = series;
+};
+
+const recordModelAttempt = (model) => {
+    const name = String(model || '').trim();
+    if (!name) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = getModelStatsMap();
+    const entry = stats[name] || { attempts: 0, successes: 0, failures: 0, ttfbTotalMs: 0, ttfbCount: 0, lastError: '', lastAt: 0 };
+    entry.attempts += 1;
+    entry.lastAt = Date.now();
+    stats[name] = entry;
+    SYSTEM_DB.agentState.modelStats = stats;
+};
+
+const recordModelSuccess = (model, ttfbMs) => {
+    const name = String(model || '').trim();
+    if (!name) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = getModelStatsMap();
+    const entry = stats[name] || { attempts: 0, successes: 0, failures: 0, ttfbTotalMs: 0, ttfbCount: 0, lastError: '', lastAt: 0 };
+    entry.successes += 1;
+    entry.lastAt = Date.now();
+    if (Number.isFinite(ttfbMs) && ttfbMs > 0) {
+        entry.ttfbTotalMs = (entry.ttfbTotalMs || 0) + ttfbMs;
+        entry.ttfbCount = (entry.ttfbCount || 0) + 1;
+    }
+    stats[name] = entry;
+    SYSTEM_DB.agentState.modelStats = stats;
+    pushModelStatSample(name, true, ttfbMs);
+};
+
+const recordModelFailure = (model, errorText) => {
+    const name = String(model || '').trim();
+    if (!name) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = getModelStatsMap();
+    const entry = stats[name] || { attempts: 0, successes: 0, failures: 0, ttfbTotalMs: 0, ttfbCount: 0, lastError: '', lastAt: 0 };
+    entry.failures += 1;
+    entry.lastAt = Date.now();
+    entry.lastError = String(errorText || '').slice(0, 200);
+    stats[name] = entry;
+    SYSTEM_DB.agentState.modelStats = stats;
+    pushModelStatSample(name, false, 0);
+};
+
+const resolveModelForRole = (role, requested) => {
+    const roleKey = String(role || 'chat');
+    const settings = SYSTEM_DB?.settings || {};
+    const requestedModel = String(requested || '').trim();
+    const roleModel = String(settings.modelRoles?.[roleKey] || '').trim();
+    const activeModel = String(settings.activeModel || '').trim();
+    const localBackupModel = String(settings.localBackupModel || '').trim();
+    const roleCandidates = Array.isArray(settings.modelRoleCandidates?.[roleKey])
+        ? settings.modelRoleCandidates[roleKey].map(m => String(m || '').trim()).filter(Boolean)
+        : [];
+    const cloudFromRoles = Object.values(settings.modelRoles || {})
+        .map(m => String(m || '').trim())
+        .filter(m => m && m.includes(':cloud'));
+    let candidates = [requestedModel, ...roleCandidates, roleModel, activeModel, ...cloudFromRoles].filter(Boolean);
+    candidates = Array.from(new Set(candidates));
+    const needsCloud = roleKey === 'planning' || roleKey === 'architecture';
+    if (needsCloud) {
+        const cloudCandidates = candidates.filter(m => m.includes(':cloud'));
+        if (cloudCandidates.length) candidates = cloudCandidates;
+    }
+    const stats = getModelStatsMap();
+    const scored = candidates.map((m) => {
+        const entry = stats[m] || {};
+        const attempts = Number(entry.attempts || 0);
+        const successes = Number(entry.successes || 0);
+        const ttfbCount = Number(entry.ttfbCount || 0);
+        const ttfbAvg = ttfbCount ? (Number(entry.ttfbTotalMs || 0) / ttfbCount) : 0;
+        const successRate = attempts ? successes / attempts : 0;
+        const score = attempts >= 5 ? (successRate * 100000 - ttfbAvg) : -1;
+        return { model: m, attempts, successRate, ttfbAvg, score };
+    }).sort((a, b) => b.score - a.score);
+    const best = scored.find(s => s.score >= 0 && s.successRate >= 0.5);
+    // FIX: Prioritize requested model if provided, otherwise use best statistical match
+    const model = requestedModel || best?.model || roleModel || activeModel || candidates[0] || '';
+    return { model, localBackupModel };
+};
+
+const resolveTtfbTimeoutMs = (role, model) => {
+    const settings = SYSTEM_DB?.settings || {};
+    const base = Number(settings.ollamaTtfbTimeoutMs);
+    const byModel = settings.ollamaTtfbTimeoutByModel && settings.ollamaTtfbTimeoutByModel[model];
+    const byRole = settings.ollamaTtfbTimeoutByRole && settings.ollamaTtfbTimeoutByRole[role];
+    let ttfb = Number.isFinite(Number(byModel)) ? Number(byModel) : Number.isFinite(Number(byRole)) ? Number(byRole) : base;
+    if (!Number.isFinite(ttfb)) ttfb = 60000;
+    if (String(model || '').includes(':cloud')) ttfb = Math.max(ttfb, 120000);
+    return Math.max(5000, Math.min(900000, Math.floor(ttfb)));
+};
+
+const SUPPORT_HINT_MIN_INTERVAL_MS = 8000;
+
+const appendSupportHint = (entry) => {
+    if (!entry || !entry.hint) return;
+    const text = String(entry.hint || '').trim();
+    if (!text) return;
+    if (text.startsWith('SUPPORT_ERROR:')) return;
+    if (!SYSTEM_DB.agentState || typeof SYSTEM_DB.agentState !== 'object') {
+        SYSTEM_DB.agentState = { lastRun: 0, currentAction: 'idle', thoughtProcess: 'System Standby', consecutiveLoops: 0 };
+    }
+    const existing = Array.isArray(SYSTEM_DB.agentState.supportHints) ? SYSTEM_DB.agentState.supportHints : [];
+    const nowTs = Date.now();
+    let lastForTask = null;
+    for (let i = existing.length - 1; i >= 0; i -= 1) {
+        const e = existing[i];
+        if (!entry.taskId && !e.taskId && e.taskTitle === entry.taskTitle) {
+            lastForTask = e;
+            break;
+        }
+        if (entry.taskId && e.taskId === entry.taskId) {
+            lastForTask = e;
+            break;
+        }
+    }
+    if (lastForTask) {
+        const dt = nowTs - Number(lastForTask.timestamp || 0);
+        if (dt < SUPPORT_HINT_MIN_INTERVAL_MS) return;
+        const prevText = String(lastForTask.hint || '').trim();
+        if (prevText === text) return;
+    }
+    const supportEntry = {
+        id: entry.id || `support_${nowTs}`,
+        timestamp: entry.timestamp || nowTs,
+        taskId: entry.taskId,
+        taskTitle: entry.taskTitle,
+        model: entry.model,
+        hint: text
+    };
+    const next = existing.concat(supportEntry).slice(-20);
+    SYSTEM_DB.agentState.supportHints = next;
+    broadcastSSE('thought', { content: supportEntry.hint, source: 'support', id: supportEntry.id, timestamp: supportEntry.timestamp, taskTitle: supportEntry.taskTitle });
+};
+
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 300000);
+const EXTERNAL_AI_TIMEOUT_MS = Number(process.env.EXTERNAL_AI_TIMEOUT_MS || 120000);
+const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX || 16384); // 16k dla M4 z 48GB RAM
+const OLLAMA_NUM_PREDICT = Number(process.env.OLLAMA_NUM_PREDICT || 8192); // 8k dla M4
+const OLLAMA_MAX_CONCURRENCY = Number(process.env.OLLAMA_MAX_CONCURRENCY || 2);
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY || '74XBWsMZCXd7UoPB5qmBbnUu1INFPZI4YUliyxZIUYKWgtuA5l3ohEEX';
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 900000);
+const RATE_LIMIT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS || 1000);
+const RATE_LIMIT_STRICT_MAX = Number(process.env.RATE_LIMIT_STRICT_MAX || 100);
+const CRON_SECRET = process.env.GAI_CRON_SECRET || '';
+const MAX_COMMAND_MESSAGE_CHARS = Number(process.env.GAI_MAX_COMMAND_CHARS || 120000);
+const MAX_CHAT_LOG_CHARS = Number(process.env.GAI_MAX_CHAT_LOG_CHARS || 20000);
+
+// LOCAL-ONLY ROOTS
+const APP_ROOT = process.cwd();
+const DATA_DIR = path.join(APP_ROOT, 'data');
+const FS_ROOT = path.join(DATA_DIR, 'fs');
+const DB_PATH = path.join(DATA_DIR, 'gai_db.json');
+const DB_PATH_TMP = path.join(DATA_DIR, 'gai_db.json.tmp');
+const DB_PATH_BAK = path.join(DATA_DIR, 'gai_db.json.bak');
+const CHAT_LOG_PATH = path.join(DATA_DIR, 'chat_history.ndjson');
+const SYSTEM_LOG_PATH = path.join(DATA_DIR, 'system_logs.ndjson');
+const SNAPSHOT_DIR = path.join(DATA_DIR, 'snapshots');
+const ARTICLES_DIR = path.join(DATA_DIR, 'articles');
+const ARTICLES_INDEX_PATH = path.join(ARTICLES_DIR, 'index.json');
+const ARTICLES_GUIDE_PATH = path.join(APP_ROOT, 'HOW_TO_WRITE_ARTICLES.MD');
+const REMOTE_ARTICLES_DIR = '';
+const OUT_DIR = path.join(DATA_DIR, 'out');
+const MEMORY_DIR = path.join(DATA_DIR, 'memory');
+const SOURCES_DIR = path.join(DATA_DIR, 'sources');
+const HEARTBEAT_LOCK_PATH = path.join(DATA_DIR, 'heartbeat.lock');
+const ANALYTICS_DIR = path.join(DATA_DIR, 'analytics');
+
+const USER_INTERACTION_RULES_PL = `
+USER_INTERACTION_RULES:
+- Nie wydawaj poleceń użytkownikowi ani nie instruuj go co ma zrobić.
+- Wszystkie działania wykonuj samodzielnie: badaj, naprawiaj, wdrażaj i weryfikuj.
+- Jeśli jesteś niepewna lub potrzebujesz zgody, poproś o pozwolenie i podaj powód.
+- Komunikuj status i wyniki w neutralnym, usługowym tonie.
+`;
+const TELEGRAM_CAPABILITIES_PL = `
+TELEGRAM:
+- Możesz wysyłać wiadomości przez Telegram, gdy konfiguracja jest ustawiona (telegramConfig.enabled, botToken, chatId).
+- Jeśli Telegram nie jest skonfigurowany, informuj o braku konfiguracji zamiast twierdzić, że nie masz możliwości.
+`;
+const DEFAULT_SYSTEM_PROMPT_PL = `
+Jesteś MÓZGIEM (The Brain) systemu operacyjnego GAI (General Autonomous Intelligence).
+Twoją rolą jest bycie nadrzędnym ORCHESTRATOREM i ADMINISTRATOREM całego systemu.
+
+**TWOJA TOŻSAMOŚĆ:**
+- Jesteś centralną jednostką decyzyjną. Nie jesteś zwykłym chatbotem.
+- Zarządzasz flotą wyspecjalizowanych Agentów (modułów), których możesz tworzyć i delegować im zadania.
+- Twoim celem jest utrzymanie ciągłości działania, realizacja celów użytkownika i proaktywne rozwiązywanie problemów.
+
+**TWOJE OBOWIĄZKI (JAKO MÓZG):**
+1. **Analiza i Planowanie:** Odbierasz polecenia od użytkownika (Terminal/Telegram), analizujesz je i decydujesz:
+   - Czy zrobisz to sam (proste zadania, rozmowa)?
+   - Czy oddelegujesz to do Agenta (skomplikowane, specjalistyczne zadania)?
+   - Czy musisz stworzyć NOWEGO Agenta do tego celu?
+2. **Delegowanie:** Używaj narzędzi AgentRoutera, aby przydzielać pracę. Nie próbuj robić wszystkiego sam, jeśli masz od tego specjalistów.
+3. **Nadzór i Raportowanie:** Monitoruj postępy Agentów. Gdy Agent zakończy pracę sukcesem, MASZ OBOWIĄZEK poinformować o tym użytkownika (np. wysyłając wiadomość na Telegram).
+4. **Autonomia:** Działaj proaktywnie. Jeśli widzisz błąd w systemie, napraw go. Jeśli brakuje funkcjonalności, stwórz Agenta, który ją napisze.
+
+**STANDARDY DZIAŁANIA:**
+1. Diagnozuj problem, ustal przyczynę, STWÓRZ PLAN (subtasks), wdroż i zweryfikuj.
+2. Nowe zadania zawsze zaczynaj od zdefiniowania checklisty (subtasks) w systemie.
+3. Nie używaj placeholderów ani pół‑rozwiązań.
+4. Gdy brakuje danych, zdobądź je narzędziami zamiast zgadywać.
+5. Po zmianach uruchamiaj npm run build i naprawiaj błędy do skutku.
+6. Aktualizuj taski i logi na bieżąco, aby było widać postęp.
+7. Preferuj ręczne wykonanie kroków w SHELL zamiast automatycznych skryptów w Pythonie.
+8. Używaj PYTHON_EXEC tylko, gdy nie da się sensownie wykonać zadania w SHELL.
+9. Masz możliwość instalowania narzędzi potrzebnych do realizacji zadań.
+
+**BEZPIECZEŃSTWO I ZAKRES:**
+1. THOUGHT ma być naturalnym tekstem w zdaniach (może być dłuższy), bez JSON/logów i bez powtórzeń. Nie wypisuj ENVIRONMENT_SNAPSHOT.
+2. Nie wychodź poza repozytorium i data/.
+3. Ścieżki i operacje wykonuj w obrębie projektu.
+4. JSON podawaj tylko tam, gdzie narzędzie tego wymaga. FILE_READ przyjmuje string, WEB_SEARCH i WEB_READ akceptują string lub obiekt.
+5. Dla WEB_READ używaj pełnych URL z https://.
+6. Dla JSON używaj FILE_WRITE z content jako obiektem lub BLOG_PUBLISH; unikaj ręcznego składania JSON w SHELL.
+7. NIE symuluj działań. MUSISZ używać narzędzi (FILE_WRITE, itp.) do wprowadzania zmian. Jeśli nie użyłeś narzędzia, nie pisz, że coś zrobiłeś.
+
+**FORMAT ODPOWIEDZI:**
+SUMMARY: 1–3 krótkie zdania podsumowania.
+ANSWER: właściwa odpowiedź dla użytkownika.
+
+**JĘZYK:**
+Odpowiadaj po polsku i zwracaj się bezpośrednio do użytkownika (2. osoba).
+Artykuły zawsze pisz po angielsku.
+
+${TELEGRAM_CAPABILITIES_PL}
+${USER_INTERACTION_RULES_PL}
+`;
+
+const PROMPTS_DIR = path.join(DATA_DIR, 'prompts');
+const loadPromptSync = (name, fallback) => {
+    try {
+        const p = path.join(PROMPTS_DIR, name);
+        if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+        return fallback;
+    } catch { return fallback; }
+};
+const INITIAL_SYSTEM_PROMPT = loadPromptSync('system_prompt.txt', DEFAULT_SYSTEM_PROMPT_PL);
+const AUTONOMOUS_AGENT_PROMPT = loadPromptSync('autonomous_prompt.txt', '');
+
+const resolveDiskPath = (inputPath = '') => {
+    if (!inputPath) return APP_ROOT;
+    if (typeof inputPath !== 'string') return APP_ROOT;
+
+    const allowTmp = inputPath === '/tmp' || inputPath.startsWith('/tmp/');
+    if (allowTmp) return path.resolve(inputPath);
+
+    const roots = [FS_ROOT, DATA_DIR, APP_ROOT].map(r => path.resolve(r));
+
+    const resolveUnder = (root, p) => {
+        if (p.startsWith('/')) return path.resolve(root, `.${p}`);
+        return path.resolve(root, p);
+    };
+
+    const normalized = path.posix.normalize(inputPath);
+
+    let candidate;
+    if (normalized.startsWith('/')) {
+        const abs = path.resolve(normalized);
+        const isRealAbsoluteAllowed = roots.some(r => abs === r || abs.startsWith(r + path.sep));
+        candidate = isRealAbsoluteAllowed ? abs : resolveUnder(APP_ROOT, normalized);
+    } else {
+        candidate = resolveUnder(APP_ROOT, normalized);
+    }
+
+    const allowed = roots.some(r => candidate === r || candidate.startsWith(r + path.sep));
+    if (!allowed) return APP_ROOT;
+    return candidate;
+};
+
+const resolveOllamaNumCtx = (role) => {
+    const baseValue = Number(SYSTEM_DB?.settings?.ollamaNumCtx);
+    if (Number.isFinite(baseValue) && baseValue > 0) return Math.floor(baseValue);
+    return OLLAMA_NUM_CTX;
+};
+
+// Cache dla task synchronization - ostatnie zadania i timestamp
+const taskSyncCache = {
+    lastTasks: null,
+    lastHash: null,
+    lastUpdate: 0,
+    CACHE_TTL: 1000 // 1 sekunda cache
+};
+
+// Cache dla saveState
+const saveStateCache = {
+    lastSave: 0,
+    MIN_SAVE_INTERVAL: 3000, // Minimum 3s między zapisami
+    pendingSave: null,
+    dirty: false,
+    dirtySeq: 0,
+    saving: false,
+    lastFailureAt: 0,
+    failureCount: 0
+};
+
+const buildPersistedState = () => {
+    try {
+        return { ...SYSTEM_DB, chatHistory: [], logs: [] };
+    } catch {
+        return SYSTEM_DB;
+    }
+};
+
+const reviveStalledFailedTasksOnBoot = () => {
+    try {
+        if (!Array.isArray(SYSTEM_DB.tasks)) return false;
+        const now = Date.now();
+        let changed = false;
+        for (const task of SYSTEM_DB.tasks) {
+            if (!task || typeof task !== 'object') continue;
+            if (task.status !== 'failed') continue;
+            const logs = Array.isArray(task.logs) ? task.logs : [];
+            const lastLog = String(logs.slice(-8).join(' | ') || '');
+            const stalled = /stall|0 tools|no tools|Brak narz[eę]dzi|inaction|loop breaker|LOOP BREAKER|\[TOOL\]/i.test(lastLog);
+            const recent = !task.updatedAt || (now - Number(task.updatedAt || 0)) < 72 * 60 * 60 * 1000;
+            if (!stalled || !recent) continue;
+            task.status = 'pending';
+            task.retryCount = 0;
+            task.updatedAt = now;
+            task.logs = logs.concat('[BOOT] Auto-revived from failed (stall/no-tools).');
+            changed = true;
+        }
+        return changed;
+    } catch {
+        return false;
+    }
+};
+
+const maybeAutoRepairArticles = async (reason = '') => {
+    try {
+        const now = Date.now();
+        const last = Number(SYSTEM_DB?.agentState?.lastArticlesRepairAt || 0);
+        const cooldownMs = Number(process.env.GAI_ARTICLES_REPAIR_COOLDOWN_MS || 10 * 60 * 1000);
+        if (last && (now - last) < cooldownMs) return { status: 'skipped', reason: 'cooldown' };
+
+        const tasks = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks : [];
+        const hasRelevantTask = tasks.some(t => {
+            if (!t || typeof t !== 'object') return false;
+            if (t.status !== 'pending' && t.status !== 'in_progress') return false;
+            const title = String(t.title || '');
+            return /(publish|article|articles|blog|sitemap|seo|affiliate|index)/i.test(title);
+        });
+
+        const lastErr = String(SYSTEM_DB?.agentState?.lastAutonomyError || '');
+        const suggestsBadJson = /(json errors found|expecting property name enclosed|expecting ',' delimiter|data\/articles\/.*\.json|verify_articles)/i.test(lastErr);
+        if (!hasRelevantTask && !suggestsBadJson) return { status: 'skipped', reason: 'not_needed' };
+
+        SYSTEM_DB.agentState.lastArticlesRepairAt = now;
+        saveState();
+
+        logToSystem('info', `Auto-repair: verifying and repairing articles JSON (${reason || 'autonomy'}).`);
+        const { stdout, stderr } = await execAsync('python3 scripts/repair_articles_json.py --fix', {
+            cwd: APP_ROOT,
+            timeout: 120000,
+            maxBuffer: 8 * 1024 * 1024
+        });
+        const out = String(stdout || '').trim();
+        const err = String(stderr || '').trim();
+        if (out) logToSystem('info', out.slice(0, 3800));
+        if (err) logToSystem('warn', err.slice(0, 3800));
+        return { status: 'ok' };
+    } catch (e) {
+        const msg = String(e?.message || e || 'repair_failed');
+        logToSystem('error', `Auto-repair failed: ${msg}`);
+        return { status: 'error', error: msg };
+    }
+};
+
+const MAX_PERSISTED_STATE_MB = Number(process.env.GAI_MAX_STATE_MB || 80);
+const MAX_PERSISTED_CHAT_MESSAGES = Number(process.env.GAI_MAX_PERSISTED_CHAT_MESSAGES || 1200);
+const MAX_PERSISTED_MESSAGE_CHARS = Number(process.env.GAI_MAX_PERSISTED_MESSAGE_CHARS || 12000);
+const MAX_PERSISTED_SYSTEM_LOG_CHARS = Number(process.env.GAI_MAX_PERSISTED_SYSTEM_LOG_CHARS || 4000);
+const MAX_PERSISTED_TASK_LOGS = Number(process.env.GAI_MAX_PERSISTED_TASK_LOGS || 200);
+const MAX_PERSISTED_TASK_LOG_CHARS = Number(process.env.GAI_MAX_PERSISTED_TASK_LOG_CHARS || 2000);
+const CHAT_HISTORY_IN_MEMORY = Number(process.env.GAI_CHAT_HISTORY_IN_MEMORY || 5000);
+const SYSTEM_LOGS_IN_MEMORY = Number(process.env.GAI_SYSTEM_LOGS_IN_MEMORY || 500);
+const NDJSON_TAIL_MAX_BYTES = Number(process.env.GAI_NDJSON_TAIL_MAX_BYTES || 8 * 1024 * 1024);
+
+let chatLogWriteChain = Promise.resolve();
+let systemLogWriteChain = Promise.resolve();
+
+const appendNdjsonAsync = (filePath, obj, chainRef) => {
+    try {
+        const line = `${JSON.stringify(obj)}\n`;
+        const next = chainRef.then(() => fs.promises.appendFile(filePath, line, 'utf8'));
+        return next.catch(() => undefined);
+    } catch {
+        return chainRef;
+    }
+};
+
+const readNdjsonTail = (filePath, maxLines, maxBytes) => {
+    const limit = Number.isFinite(Number(maxLines)) ? Math.max(0, Math.floor(Number(maxLines))) : 0;
+    if (!limit) return [];
+    const byteLimit = Number.isFinite(Number(maxBytes)) ? Math.max(0, Math.floor(Number(maxBytes))) : 0;
+    try {
+        if (!fs.existsSync(filePath)) return [];
+        const stat = fs.statSync(filePath);
+        if (!stat || !Number.isFinite(stat.size) || stat.size <= 0) return [];
+
+        const fd = fs.openSync(filePath, 'r');
+        try {
+            const chunkSize = 64 * 1024;
+            let pos = stat.size;
+            let readTotal = 0;
+            let buffer = '';
+            let newlineCount = 0;
+            while (pos > 0 && newlineCount < (limit + 20)) {
+                const size = Math.min(chunkSize, pos);
+                pos -= size;
+                const buf = Buffer.allocUnsafe(size);
+                const read = fs.readSync(fd, buf, 0, size, pos);
+                if (read <= 0) break;
+                readTotal += read;
+                buffer = buf.toString('utf8', 0, read) + buffer;
+                newlineCount = (buffer.match(/\n/g) || []).length;
+                if (byteLimit && readTotal >= byteLimit) break;
+            }
+            const lines = buffer.split('\n').filter(Boolean);
+            const tail = lines.slice(-limit);
+            const parsed = [];
+            for (const line of tail) {
+                try {
+                    const obj = JSON.parse(line);
+                    if (obj) parsed.push(obj);
+                } catch {
+                }
+            }
+            return parsed;
+        } finally {
+            try { fs.closeSync(fd); } catch {}
+        }
+    } catch {
+        return [];
+    }
+};
+
+const pruneStateForSave = (mode = 'normal') => {
+    const isAggressive = mode === 'aggressive';
+
+    const capArrayTail = (arr, max) => {
+        if (!Array.isArray(arr)) return arr;
+        if (!Number.isFinite(max) || max <= 0) return [];
+        if (arr.length <= max) return arr;
+        return arr.slice(-max);
+    };
+
+    const capString = (value, max) => {
+        const raw = String(value ?? '');
+        if (raw.length <= max) return raw;
+        return `${raw.slice(0, Math.max(0, max))}…[truncated]`;
+    };
+
+    try {
+        if (Array.isArray(SYSTEM_DB.chatHistory)) {
+            const msgLimit = isAggressive ? Math.min(400, MAX_PERSISTED_CHAT_MESSAGES) : MAX_PERSISTED_CHAT_MESSAGES;
+            const charLimit = isAggressive ? Math.min(4000, MAX_PERSISTED_MESSAGE_CHARS) : MAX_PERSISTED_MESSAGE_CHARS;
+            const next = capArrayTail(SYSTEM_DB.chatHistory, msgLimit).map((m) => {
+                if (!m || typeof m !== 'object' || Array.isArray(m)) return m;
+                const t = capString(m.text, charLimit);
+                if (t === m.text) return m;
+                return { ...m, text: t };
+            });
+            SYSTEM_DB.chatHistory = next;
+        }
+    } catch {
+    }
+
+    try {
+        if (Array.isArray(SYSTEM_DB.logs)) {
+            const limit = 500;
+            const charLimit = isAggressive ? Math.min(1500, MAX_PERSISTED_SYSTEM_LOG_CHARS) : MAX_PERSISTED_SYSTEM_LOG_CHARS;
+            const next = capArrayTail(SYSTEM_DB.logs, limit).map((l) => {
+                if (!l || typeof l !== 'object' || Array.isArray(l)) return l;
+                const msg = capString(l.message, charLimit);
+                if (msg === l.message) return l;
+                return { ...l, message: msg };
+            });
+            SYSTEM_DB.logs = next;
+        }
+    } catch {
+    }
+
+    try {
+        if (Array.isArray(SYSTEM_DB.reasoningHistory)) {
+            const limit = isAggressive ? 80 : 200;
+            SYSTEM_DB.reasoningHistory = capArrayTail(SYSTEM_DB.reasoningHistory, limit);
+        }
+    } catch {
+    }
+
+    try {
+        if (Array.isArray(SYSTEM_DB.tasks)) {
+            const perTaskLimit = isAggressive ? Math.min(80, MAX_PERSISTED_TASK_LOGS) : MAX_PERSISTED_TASK_LOGS;
+            const charLimit = isAggressive ? Math.min(900, MAX_PERSISTED_TASK_LOG_CHARS) : MAX_PERSISTED_TASK_LOG_CHARS;
+            SYSTEM_DB.tasks = SYSTEM_DB.tasks.map((t) => {
+                if (!t || typeof t !== 'object' || Array.isArray(t)) return t;
+                const next = { ...t };
+                if (Array.isArray(next.logs)) {
+                    next.logs = capArrayTail(next.logs, perTaskLimit).map((x) => capString(x, charLimit));
+                }
+                if (Array.isArray(next.subtasks)) {
+                    next.subtasks = next.subtasks.map((s) => {
+                        if (!s || typeof s !== 'object' || Array.isArray(s)) return s;
+                        const ns = { ...s };
+                        if (Array.isArray(ns.logs)) {
+                            ns.logs = capArrayTail(ns.logs, isAggressive ? 30 : 80).map((x) => capString(x, charLimit));
+                        }
+                        return ns;
+                    });
+                }
+                return next;
+            });
+        }
+    } catch {
+    }
+};
+
+// Prosta funkcja hash dla obiektów
+const simpleHash = (obj) => {
+    return JSON.stringify(obj);
+};
+
+const parseModelB = (modelRef) => {
+    const m = String(modelRef || '').toLowerCase();
+    const match = m.match(/:([0-9]+)b\b/);
+    if (!match) return 0;
+    const n = Number(match[1]);
+    return Number.isFinite(n) ? n : 0;
+};
+
+const capCtxForModel = (modelRef, requestedCtx) => {
+    const ctx = Number(requestedCtx);
+    if (!Number.isFinite(ctx) || ctx <= 0) return requestedCtx;
+    const b = parseModelB(modelRef);
+    if (b >= 30 && ctx > 8192) return 8192;
+    return ctx;
+};
+
+const resolveKeepAliveForModel = (modelRef) => {
+    const configured = String(SYSTEM_DB?.settings?.ollamaKeepAlive || '30m').trim() || '30m';
+    const name = String(modelRef || '').toLowerCase();
+    
+    // ZAWSZE zwracaj 30m lub user-configured, nie 0.
+    // 0 powoduje natychmiastowe wyrzucenie modelu z RAM po wykonaniu requestu, co zabija wydajność przy streamingu/rozmowie.
+    // M4 Max ma dużo RAM, pozwólmy modelom zostać w pamięci.
+    
+    return configured;
+};
+
+const getOllamaAuthHeaders = () => {
+    const raw = String(SYSTEM_DB?.settings?.apiKeys?.ollama || '').trim();
+    if (!raw) return {};
+    const value = raw.startsWith('Bearer ') || raw.startsWith('Basic ') ? raw : `Bearer ${raw}`;
+    return { Authorization: value };
+};
+
+const evictOllamaModelsExcept = async (targetModelRef) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const target = String(targetModelRef || '').trim();
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 2500);
+    try {
+        const ps = await fetch(`${baseUrl}/api/ps`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!ps.ok) return;
+        const data = await ps.json().catch(() => ({}));
+        const models = Array.isArray(data?.models) ? data.models : [];
+        const loaded = models.map(m => String(m?.name || m?.model || '').trim()).filter(Boolean);
+        const others = loaded.filter(x => x && x !== target);
+        if (others.length === 0) return;
+        const isTargetLarge = parseModelB(target) >= 30;
+        if (!isTargetLarge) return;
+
+        for (const name of others) {
+            try {
+                const { controller: c2, cleanup: c2clean } = createAbortControllerWithTimeout(null, 4000);
+                try {
+                    await fetch(`${baseUrl}/api/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                        signal: c2.signal,
+                        body: JSON.stringify({
+                            model: name,
+                            messages: [{ role: 'user', content: 'OK' }],
+                            keep_alive: '0',
+                            options: { num_predict: 1 },
+                            stream: false,
+                            think: false
+                        })
+                    }).catch(() => undefined);
+                } finally {
+                    c2clean();
+                }
+            } catch {}
+        }
+    } catch {
+        return;
+    } finally {
+        cleanup();
+    }
+};
+
+const resolveOllamaTemp = (role) => {
+    const roleValue = Number(SYSTEM_DB?.settings?.modelRolesTemp?.[role]);
+    if (Number.isFinite(roleValue)) return roleValue;
+    
+    const baseValue = Number(SYSTEM_DB?.settings?.ollamaTemperature);
+    if (Number.isFinite(baseValue)) return baseValue;
+    
+    if (role === 'coding' || role === 'functionCoding' || role === 'refactor' || role === 'debug') return 0.2;
+    if (role === 'planning' || role === 'analysis' || role === 'architecture') return 0.5;
+    if (role === 'chat' || role === 'writing' || role === 'boilerplate') return 0.7;
+    return 0.6;
+};
+
+const resolveOllamaRepeatPenalty = (role) => {
+    const roleValue = Number(SYSTEM_DB?.settings?.modelRolesRepeatPenalty?.[role]);
+    if (Number.isFinite(roleValue)) return roleValue;
+    
+    const baseValue = Number(SYSTEM_DB?.settings?.ollamaRepeatPenalty);
+    if (Number.isFinite(baseValue)) return baseValue;
+    
+    return 1.15; // Increased default to prevent loops (was 1.1)
+};
+
+const buildOllamaOptions = (overrides = {}, role, modelRef) => {
+    // M4 + 48GB RAM OPTYMALIZACJA
+    const modelName = String(modelRef || '').toLowerCase();
+    const isReasoning = modelName.includes('deepseek') || modelName.includes('r1') || modelName.includes('reasoning');
+
+    let temp = resolveOllamaTemp(role);
+    let rep = resolveOllamaRepeatPenalty(role);
+
+    // DeepSeek-R1 prefers low temp and minimal repeat penalty
+    if (isReasoning) {
+        temp = 0.6;
+        rep = 1.05;
+    } else {
+        // For speed optimization - lower temperature = faster, more deterministic responses
+        temp = Math.max(0.1, temp - 0.2); // Reduce temperature by 0.2 for faster responses
+    }
+
+    let numPredict;
+    if (role === 'chat') {
+        numPredict = 2048;
+    } else if (role === 'planning' || role === 'analysis' || role === 'architecture') {
+        numPredict = 8192;
+    } else {
+        numPredict = 4096;
+    }
+
+    let topP = 0.9;
+    if (role === 'planning' || role === 'analysis' || role === 'architecture') {
+        topP = 0.95;
+    }
+
+    const m4Optimized = {
+        num_keep: -1, // Keep model loaded
+        temperature: temp, 
+        top_k: 40, // Standardowo 40
+        top_p: topP, // Standardowo 0.9
+        num_predict: numPredict, // Profilowane per rola
+        stop: ['<|im_end|>', '<|endoftext|>'], // Standardowe stop words
+        repeat_penalty: rep // Dynamicznie dobrane
+    };
+    
+    // Use user settings for context if available, otherwise default to 32k for large memory
+    let ctx = resolveOllamaNumCtx(role);
+    if (!ctx) {
+        if (role === 'planning' || role === 'analysis' || role === 'architecture') {
+            ctx = 16384;
+        } else {
+            ctx = 8192;
+        }
+    }
+
+    ctx = capCtxForModel(modelRef, ctx);
+    if (Number.isFinite(ctx) && ctx > 0) m4Optimized.num_ctx = ctx;
+
+    return { ...m4Optimized, ...overrides };
+};
+
+const fetchBinaryToFile = async (url, destPath, timeoutMs = 60000) => {
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        const buffer = await res.arrayBuffer();
+        fs.writeFileSync(destPath, Buffer.from(buffer));
+        return true;
+    } finally {
+        cleanup();
+    }
+};
+
+const generateImagePollinationsOnce = async (prompt, { width = 768, height = 768, style = 'cinematic' } = {}, attempt = 0) => {
+    const clean = String(prompt || '').trim().slice(0, 2000);
+    const safePrompt = encodeURIComponent(clean);
+    const nonce = `${Date.now()}_${attempt}_${Math.random().toString(36).slice(2, 8)}`;
+    const url = `https://image.pollinations.ai/prompt/${safePrompt}?n=${nonce}`;
+    const destPath = path.join(OUT_DIR, `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`);
+    try {
+        await fetchBinaryToFile(url, destPath, 60000);
+    } catch (e) {
+        const msg = String(e?.message || e);
+        const mapped = msg.startsWith('HTTP_') ? msg.replace('HTTP_', 'Image API error: ') : msg;
+        throw new Error(mapped);
+    }
+    return {
+        destPath,
+        webPath: `/data/out/${path.basename(destPath)}`,
+        meta: { width, height, style }
+    };
+};
+
+const generateImagePexels = async (prompt) => {
+    const apiKey = String(PEXELS_API_KEY || '').trim();
+    if (!apiKey) throw new Error('Pexels API key missing');
+    const q = String(prompt || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (!q) throw new Error('Empty prompt');
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 15000);
+    try {
+        const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=1&orientation=landscape`;
+        const res = await fetch(url, { headers: { Authorization: apiKey }, signal: controller.signal });
+        if (!res.ok) throw new Error(`Pexels API error: ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        const photos = Array.isArray(data?.photos) ? data.photos : [];
+        const photo = photos[0];
+        const src = photo?.src?.large2x || photo?.src?.large || photo?.src?.original;
+        if (!src) throw new Error('Pexels returned no images');
+        const destPath = path.join(OUT_DIR, `pexels_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`);
+        await fetchBinaryToFile(src, destPath, 60000);
+        return { destPath, webPath: `/data/out/${path.basename(destPath)}` };
+    } finally {
+        cleanup();
+    }
+};
+
+const generateImage = async (prompt, opts = {}) => {
+    let lastErr = null;
+    for (let i = 0; i < 3; i += 1) {
+        try {
+            return await generateImagePollinationsOnce(prompt, opts, i);
+        } catch (e) {
+            lastErr = e;
+            const msg = String(e?.message || e);
+            if (!msg.includes('530') && !msg.includes('502') && !msg.includes('503') && !msg.includes('504')) break;
+            await new Promise(r => setTimeout(r, 500 + i * 600));
+        }
+    }
+    try {
+        return await generateImagePexels(prompt);
+    } catch (e) {
+        throw lastErr || e;
+    }
+};
+
+const joinVirtualPath = (base = '/', name = '') => {
+    const cleanBase = (base || '/').replace(/\/+$/, '') || '/';
+    if (cleanBase === '/') return `/${name}`;
+    return `${cleanBase}/${name}`;
+};
+
+const syncOllamaModels = async () => {
+    try {
+        const modelNames = await fetchOllamaTagsList();
+        if (modelNames.length > 0) {
+            console.log(`[OLLAMA] Detected models: ${modelNames.join(', ')}`);
+            
+            // TYLKO OSTRZEŻENIA - użytkownik sam wybiera modele w ustawieniach
+            const availableModels = modelNames;
+            
+            // Sprawdź activeModel
+            const currentModel = SYSTEM_DB.settings.activeModel;
+            if (currentModel && !availableModels.includes(currentModel)) {
+                console.warn(`[OLLAMA] WARNING: Your configured active model '${currentModel}' is not available in Ollama.`);
+                console.warn(`[OLLAMA] Available models: ${availableModels.join(', ')}`);
+                console.warn(`[OLLAMA] Please update your model selection in Settings > AI Models.`);
+            }
+            
+            // Sprawdź role models
+            const unavailableRoles = [];
+            Object.keys(SYSTEM_DB.settings.modelRoles).forEach(role => {
+                const roleModel = SYSTEM_DB.settings.modelRoles[role];
+                if (roleModel && !availableModels.includes(roleModel)) {
+                    unavailableRoles.push({role, model: roleModel});
+                }
+            });
+            
+            if (unavailableRoles.length > 0) {
+                console.warn(`[OLLAMA] WARNING: Some role models are not available:`);
+                unavailableRoles.forEach(({role, model}) => {
+                    console.warn(`[OLLAMA]   - Role '${role}' uses '${model}' (not available)`);
+                });
+                console.warn(`[OLLAMA] Available models: ${availableModels.join(', ')}`);
+                console.warn(`[OLLAMA] Please update your model roles in Settings > AI Models.`);
+            }
+        }
+    } catch (e) {
+        console.warn(`[OLLAMA] Failed to sync models: ${e.message}. Is Ollama running?`);
+    }
+};
+
+const warmupOllamaModel = async () => {
+    try {
+        if (SYSTEM_DB?.settings?.aiProvider !== 'ollama') return;
+        if (SYSTEM_DB?.settings?.ollamaWarmup === false) return;
+        const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+        const warmupModels = Array.isArray(SYSTEM_DB?.settings?.ollamaWarmupModels) ? SYSTEM_DB.settings.ollamaWarmupModels : [];
+        const maxB = Number.isFinite(Number(SYSTEM_DB?.settings?.ollamaWarmupMaxB)) ? Number(SYSTEM_DB.settings.ollamaWarmupMaxB) : 14;
+        const keepAlive = SYSTEM_DB?.settings?.ollamaKeepAlive || '60m'; // 60min dla M4
+        const roleModels = SYSTEM_DB?.settings?.modelRoles && typeof SYSTEM_DB.settings.modelRoles === 'object'
+            ? Object.values(SYSTEM_DB.settings.modelRoles).map(m => String(m || '').trim()).filter(Boolean)
+            : [];
+        const derived = [SYSTEM_DB?.settings?.activeModel, ...roleModels].map(m => String(m || '').trim()).filter(Boolean);
+        const toWarm = (warmupModels.length ? warmupModels : derived)
+            .map(m => String(m || '').trim())
+            .filter(Boolean)
+            .filter((m, idx, arr) => arr.indexOf(m) === idx)
+            .filter((m) => {
+                const isThinking = /thinking/i.test(String(m || ''));
+                const match = String(m || '').match(/:([0-9]+)b/i);
+                const b = match ? Number(match[1]) : NaN;
+                if (isThinking) return false;
+                if (Number.isFinite(b) && b > maxB) return false;
+                return true;
+            })
+            .slice(0, 3);
+
+        for (const model of toWarm) {
+            const { controller, cleanup } = createAbortControllerWithTimeout(null, 120000);
+            try {
+                const res = await fetch(`${baseUrl}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        model,
+                        messages: [
+                            { role: 'system', content: 'Respond with OK.' },
+                            { role: 'user', content: 'OK' }
+                        ],
+                        keep_alive: keepAlive,
+                        options: buildOllamaOptions({ num_predict: 1 }, 'chat', 'healthcheck'),
+                        stream: false
+                    })
+                });
+                if (!res.ok) continue;
+                await res.json().catch(() => null);
+            } finally {
+                cleanup();
+            }
+        }
+    } catch {
+    }
+};
+
+// Initialize DB and Sync
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(FS_ROOT)) fs.mkdirSync(FS_ROOT, { recursive: true });
+if (!fs.existsSync(SNAPSHOT_DIR)) fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
+if (!fs.existsSync(ARTICLES_DIR)) fs.mkdirSync(ARTICLES_DIR, { recursive: true });
+if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
+if (!fs.existsSync(SOURCES_DIR)) fs.mkdirSync(SOURCES_DIR, { recursive: true });
+if (!fs.existsSync(ANALYTICS_DIR)) fs.mkdirSync(ANALYTICS_DIR, { recursive: true });
+
+let SYSTEM_DB = {
+    settings: {
+        theme: 'neu',
+        wallpaper: '#212529',
+        developerMode: true,
+        aiProvider: 'ollama',
+        activeModel: 'qwen3:latest',
+        ollamaBaseUrl: 'http://localhost:11434',
+        ollamaTtfbTimeoutMs: 180000,
+        ollamaTtfbTimeoutByRole: { planning: 180000, architecture: 180000, debug: 120000 },
+        ollamaTtfbTimeoutByModel: {},
+        modelRoleCandidates: {},
+        localBackupModel: '',
+        idleAutoTasksEnabled: true,
+        idleAutoTasksTargetOpen: 1,
+        idleAutoTasksThrottleSec: 60,
+        ollamaTemperature: 0.6,
+        ollamaRepeatPenalty: 1.25,
+        modelRolesTemp: {},
+        modelRolesRepeatPenalty: {},
+        modelRoles: {
+            chat: 'qwen3:latest',
+            coding: 'qwen2.5-coder:14b',
+            planning: 'qwen3:14b',
+            analysis: 'qwen3:14b',
+            writing: 'qwen3:latest',
+            functionCoding: 'qwen2.5-coder:14b',
+            refactor: 'qwen2.5-coder:14b',
+            debug: 'qwen2.5-coder:14b',
+            architecture: 'qwen3:14b',
+            boilerplate: 'qwen3:latest'
+        },
+        ollamaWarmup: true,
+        ollamaWarmupModels: ['qwen3:latest', 'qwen2.5-coder:14b'],
+        systemPrompt: INITIAL_SYSTEM_PROMPT,
+        apiKeys: { ollama: '' },
+        heartbeat: { enabled: true, intervalSeconds: 10 },
+        autonomyEnabled: true,
+        autonomyScheduler: 'event',
+        autonomyWindow: { enabled: false, startHour: 0, endHour: 0 },
+        operatorMode: true,
+        ftpConfig: {
+            host: '',
+            user: '',
+            pass: '',
+            port: '21',
+            rootPath: '/public_html/kimsondreams',
+            enabled: false
+        },
+        amazonTag: 'kimsondreams-21',
+        blogUrl: 'https://technova.buzz/',
+        telegramConfig: { botToken: '', chatId: '', enabled: false },
+        taskbarOpacity: 0.8,
+        iconSize: 'medium',
+        autonomousObjectives: '',
+        autorecovery: {
+            enabled: true,
+            modelRole: 'planning',
+            prompt: '',
+            autoOnBoot: true,
+            cooldownSec: 60,
+            limits: { minCtx: 512, maxCtx: 8192, minBackoffSec: 5, maxBackoffSec: 600 }
+        },
+        qualityAudit: {
+            enabled: true,
+            minChangedLines: 80,
+            minFiles: 3,
+            cooldownSec: 120,
+            diffLimit: 120000,
+            autoBuild: true,
+            autoSummary: true,
+            autoAiSummary: true,
+            aiModelRole: 'planning'
+        },
+        qualityGate: {
+            enabled: true,
+            requireAiSummary: true,
+            allowOperatorOverride: true
+        },
+        taskBreakdown: {
+            enabled: true,
+            autoOnCreate: true,
+            autoOnStart: true,
+            autoCompleteOnChecklist: true,
+            minItems: 3,
+            maxItems: 6,
+            aiModelRole: 'planning'
+        },
+        realtimeSources: { enabled: false, intervalMinutes: 60, urls: [] }
+    },
+    tasks: [],
+    chatHistory: [],
+    reasoningHistory: [],
+    blogs: [],
+    memories: [],
+    installedApps: [],
+    desktopLayout: [],
+    agentState: { lastRun: 0, lastHeartbeatAt: 0, currentAction: 'idle', thoughtProcess: 'System Initialized.', consecutiveLoops: 0, userPriority: false, userQueueLength: 0, userQueuePreview: [], processingStage: '', ollamaWaitStartedAt: 0, pendingTaskApproval: null, lastQualityAuditAt: 0, lastQualityAuditSummary: '', lastQualityAuditAiSummary: '', pendingQualityAudit: false, lastAutoSnapshotAt: 0, lastAutoSummaryAt: 0, lastAutoSummaryChatIndex: 0, modelStats: {} },
+    logs: [],
+    vfs: [],
+    gaiProfile: null,
+    gaiLearnings: [],
+    notifications: [],
+    version: '5.0.1'
+};
+
+
+
+const normalizeTask = (task) => {
+    if (!task || typeof task !== 'object') return task;
+    const now = Date.now();
+    const next = { ...task };
+    next.logs = Array.isArray(next.logs) ? next.logs : [];
+
+    const progressNum = Number.isFinite(Number(next.progress)) ? Number(next.progress) : 0;
+    next.progress = Math.max(0, Math.min(100, progressNum));
+
+    let status = String(next.status || 'pending');
+    if (status === 'completed') {
+        next.progress = 100;
+    } else if (next.progress >= 100 && status !== 'failed') {
+        status = 'completed';
+        next.progress = 100;
+    }
+
+    const hasSubtasks = Array.isArray(next.subtasks) && next.subtasks.length > 0;
+    if (status === 'completed' && hasSubtasks) {
+        next.subtasks = next.subtasks.map((s) => {
+            if (!s) return s;
+            if (s.status === 'completed') return s;
+            return { ...s, status: 'completed' };
+        });
+    }
+
+    next.status = status;
+
+    if (!next.createdAt) next.createdAt = now;
+    if (!next.updatedAt) next.updatedAt = now;
+    return next;
+};
+
+const normalizeAllTasks = () => {
+    if (!Array.isArray(SYSTEM_DB.tasks)) return false;
+    
+    // Cache dla normalizeAllTasks - sprawdź czy tasky się zmieniły
+    const taskHash = simpleHash({ 
+        count: SYSTEM_DB.tasks.length,
+        lastTask: SYSTEM_DB.tasks[SYSTEM_DB.tasks.length - 1] 
+    });
+    
+    // Jeśli taskHash jest w cache i nie minęło za dużo czasu, pomiń
+    if (normalizeAllTasks.cache?.hash === taskHash && 
+        (Date.now() - normalizeAllTasks.cache.timestamp) < 2000) {
+        return normalizeAllTasks.cache.changed;
+    }
+    
+    let changed = false;
+    const now = Date.now();
+    SYSTEM_DB.tasks = SYSTEM_DB.tasks.map((t) => {
+        const n = normalizeTask(t);
+        const diff =
+            (t?.status !== n?.status) ||
+            (Number(t?.progress) !== Number(n?.progress)) ||
+            (Array.isArray(t?.logs) ? t.logs.length : -1) !== (Array.isArray(n?.logs) ? n.logs.length : -1) ||
+            // 🔧 NAPRAWIONO: Dodano porównanie subtasków
+            JSON.stringify(t?.subtasks) !== JSON.stringify(n?.subtasks);
+        if (diff) {
+            changed = true;
+            return { ...n, updatedAt: now };
+        }
+        return n;
+    });
+    
+    // Zapisz w cache
+    normalizeAllTasks.cache = { hash: taskHash, changed, timestamp: Date.now() };
+    return changed;
+};
+
+// Cache dla normalizeAllTasks
+normalizeAllTasks.cache = null;
+
+const normalizeHistoryLogs = () => {
+    const shouldDrop = (text) => {
+        const t = String(text || '');
+        if (!t) return false;
+        if (!t.includes('Autorecovery') || !t.includes('modelRoles')) return false;
+        return /"(true|false|enabled|disabled)"/i.test(t);
+    };
+    let changed = false;
+    if (Array.isArray(SYSTEM_DB.logs)) {
+        const next = SYSTEM_DB.logs.filter((l) => !shouldDrop(l?.message));
+        if (next.length !== SYSTEM_DB.logs.length) {
+            SYSTEM_DB.logs = next;
+            changed = true;
+        }
+    }
+    if (Array.isArray(SYSTEM_DB.chatHistory)) {
+        const next = SYSTEM_DB.chatHistory.filter((m) => !shouldDrop(m?.text));
+        if (next.length !== SYSTEM_DB.chatHistory.length) {
+            SYSTEM_DB.chatHistory = next;
+            changed = true;
+        }
+    }
+    return changed;
+};
+
+const saveState = async () => {
+    saveStateCache.dirty = true;
+    saveStateCache.dirtySeq += 1;
+    if (saveStateCache.saving) return;
+
+    const now = Date.now();
+    const timeSinceLastSave = now - saveStateCache.lastSave;
+    const delayMs = Math.max(0, saveStateCache.MIN_SAVE_INTERVAL - timeSinceLastSave);
+    if (delayMs > 0) {
+        if (!saveStateCache.pendingSave) {
+            saveStateCache.pendingSave = setTimeout(() => {
+                saveStateCache.pendingSave = null;
+                saveState();
+            }, delayMs);
+        }
+        return;
+    }
+
+    if (!saveStateCache.dirty) return;
+    const startedSeq = saveStateCache.dirtySeq;
+    saveStateCache.saving = true;
+    try {
+        normalizeAllTasks();
+        normalizeHistoryLogs();
+        pruneStateForSave('normal');
+
+        const maxBytes = Math.max(5, MAX_PERSISTED_STATE_MB) * 1024 * 1024;
+        let data = '';
+        try {
+            data = JSON.stringify(buildPersistedState());
+        } catch (e) {
+            if (e instanceof RangeError) {
+                pruneStateForSave('aggressive');
+                data = JSON.stringify(buildPersistedState());
+            } else {
+                throw e;
+            }
+        }
+
+        if (Buffer.byteLength(data, 'utf8') > maxBytes) {
+            pruneStateForSave('aggressive');
+            data = JSON.stringify(buildPersistedState());
+        }
+        try {
+            let shouldBackup = true;
+            try {
+                if (fs.existsSync(DB_PATH)) {
+                    const st = fs.statSync(DB_PATH);
+                    if (st && Number.isFinite(st.size) && st.size > 50 * 1024 * 1024) {
+                        shouldBackup = false;
+                    }
+                }
+            } catch {}
+            if (shouldBackup && fs.existsSync(DB_PATH)) {
+                fs.copyFileSync(DB_PATH, DB_PATH_BAK);
+            }
+        } catch {}
+        fs.writeFileSync(DB_PATH_TMP, data);
+        fs.renameSync(DB_PATH_TMP, DB_PATH);
+
+        saveStateCache.lastSave = Date.now();
+        saveStateCache.failureCount = 0;
+        if (saveStateCache.dirtySeq === startedSeq) {
+            saveStateCache.dirty = false;
+        }
+    } catch (e) {
+        console.error('Failed to save state:', e);
+        saveStateCache.lastFailureAt = Date.now();
+        saveStateCache.failureCount = Math.min(50, (saveStateCache.failureCount || 0) + 1);
+    } finally {
+        saveStateCache.saving = false;
+        if (saveStateCache.dirty && !saveStateCache.pendingSave) {
+            const fc = Number(saveStateCache.failureCount || 0);
+            const backoffMs = fc
+                ? Math.min(120000, 5000 * Math.pow(2, Math.min(5, fc - 1)))
+                : 0;
+            saveStateCache.pendingSave = setTimeout(() => {
+                saveStateCache.pendingSave = null;
+                saveState();
+            }, backoffMs);
+        }
+    }
+};
+
+global.saveSystemDB = saveState;
+
+const loadState = async () => { 
+    const tryLoad = (p) => {
+        try {
+            if (!fs.existsSync(p)) return null;
+            const raw = fs.readFileSync(p, 'utf8');
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    };
+    const main = tryLoad(DB_PATH);
+    const bak = main ? null : tryLoad(DB_PATH_BAK);
+    const loaded = main || bak;
+    if (loaded && typeof loaded === 'object') {
+        Object.assign(SYSTEM_DB, loaded);
+        normalizeAllTasks();
+    }
+
+    try {
+        const chatFromFile = readNdjsonTail(CHAT_LOG_PATH, CHAT_HISTORY_IN_MEMORY, NDJSON_TAIL_MAX_BYTES);
+        if (chatFromFile.length) {
+            SYSTEM_DB.chatHistory = chatFromFile;
+        }
+    } catch {
+    }
+
+    try {
+        const logsFromFile = readNdjsonTail(SYSTEM_LOG_PATH, SYSTEM_LOGS_IN_MEMORY, NDJSON_TAIL_MAX_BYTES);
+        if (logsFromFile.length) {
+            SYSTEM_DB.logs = logsFromFile;
+        }
+    } catch {
+    }
+};
+
+const applyRuntimeConfig = () => {
+    let changed = false;
+    if (!SYSTEM_DB.agentState || typeof SYSTEM_DB.agentState !== 'object' || Array.isArray(SYSTEM_DB.agentState)) {
+        SYSTEM_DB.agentState = {};
+        changed = true;
+    }
+    const agentState = SYSTEM_DB.agentState;
+    const agentDefaults = {
+        lastRun: 0,
+        lastHeartbeatAt: 0,
+        currentAction: 'idle',
+        thoughtProcess: 'System Standby',
+        consecutiveLoops: 0,
+        userPriority: false,
+        userQueueLength: 0,
+        userQueuePreview: [],
+        processingStage: '',
+        ollamaWaitStartedAt: 0,
+        autonomyBackoffUntil: 0,
+        autonomyFailureCount: 0,
+        lastAutonomyError: '',
+        taskActionErrorCount: 0,
+        lastTaskActionErrorAt: 0,
+        lastAutorecoveryAt: 0,
+        pendingQualityAudit: false,
+        pendingTaskApproval: null,
+        lastIdleAiAt: 0,
+        lastObjectivePlanAt: 0,
+        lastAutoSnapshotAt: 0,
+        lastAutoSummaryAt: 0,
+        lastAutoSummaryChatIndex: 0,
+        lastProgressNoteAt: 0,
+        lastProgressNoteHash: '',
+        lastProgressTaskId: '',
+        lastProgressTaskStatus: '',
+        lastProgressTaskProgress: -1,
+        lastProgressTaskStage: '',
+        lastDailySnapshotAt: 0,
+        toolMemory: [],
+        toolLessons: [],
+        toolStats: {},
+        lastToolCacheClearedAt: 0,
+        lastToolCacheClearReason: '',
+        lastSelfImproveAt: 0,
+        lastSelfImproveReason: '',
+        lastSelfImproveTaskId: '',
+        cacheConfig: {
+            fileReadTtlMs: FILE_READ_CACHE_TTL_MS,
+            fileReadLimit: FILE_READ_CACHE_LIMIT,
+            toolResultTtlMs: TOOL_RESULT_CACHE_TTL_MS,
+            toolResultLimit: TOOL_RESULT_CACHE_LIMIT,
+            toolMemoryLimit: TOOL_MEMORY_LIMIT
+        }
+    };
+    for (const [k, v] of Object.entries(agentDefaults)) {
+        if (agentState[k] === undefined || agentState[k] === null) {
+            agentState[k] = v;
+            changed = true;
+        }
+    }
+    if (typeof agentState.currentAction !== 'string' || !agentState.currentAction) {
+        agentState.currentAction = 'idle';
+        changed = true;
+    }
+    if (typeof agentState.thoughtProcess !== 'string') {
+        agentState.thoughtProcess = 'System Standby';
+        changed = true;
+    }
+    if (!Array.isArray(agentState.userQueuePreview)) {
+        agentState.userQueuePreview = [];
+        changed = true;
+    }
+        if (!Array.isArray(agentState.toolMemory)) {
+            agentState.toolMemory = [];
+            changed = true;
+        }
+        if (!Array.isArray(agentState.toolLessons)) {
+            agentState.toolLessons = [];
+            changed = true;
+        }
+        if (!agentState.modelStats || typeof agentState.modelStats !== 'object') {
+            agentState.modelStats = {};
+            changed = true;
+        }
+        if (!Array.isArray(agentState.modelStatsSeries)) {
+            agentState.modelStatsSeries = [];
+            changed = true;
+        }
+        if (!agentState.toolStats || typeof agentState.toolStats !== 'object') {
+            agentState.toolStats = {};
+            changed = true;
+        }
+    if (!Number.isFinite(Number(agentState.lastSelfImproveAt))) {
+        agentState.lastSelfImproveAt = 0;
+        changed = true;
+    }
+    if (typeof agentState.lastSelfImproveReason !== 'string') {
+        agentState.lastSelfImproveReason = '';
+        changed = true;
+    }
+    if (typeof agentState.lastSelfImproveTaskId !== 'string') {
+        agentState.lastSelfImproveTaskId = '';
+        changed = true;
+    }
+    const nextCacheConfig = {
+        fileReadTtlMs: FILE_READ_CACHE_TTL_MS,
+        fileReadLimit: FILE_READ_CACHE_LIMIT,
+        toolResultTtlMs: TOOL_RESULT_CACHE_TTL_MS,
+        toolResultLimit: TOOL_RESULT_CACHE_LIMIT,
+        toolMemoryLimit: TOOL_MEMORY_LIMIT
+    };
+    if (!agentState.cacheConfig || JSON.stringify(agentState.cacheConfig) !== JSON.stringify(nextCacheConfig)) {
+        agentState.cacheConfig = nextCacheConfig;
+        changed = true;
+    }
+
+    const settings = SYSTEM_DB.settings || {};
+    SYSTEM_DB.settings = settings;
+    if (!Array.isArray(SYSTEM_DB.notifications)) {
+        SYSTEM_DB.notifications = [];
+        changed = true;
+    }
+    if (SYSTEM_DB.gaiProfile === undefined) {
+        SYSTEM_DB.gaiProfile = null;
+        changed = true;
+    }
+    if (!Array.isArray(SYSTEM_DB.gaiLearnings)) {
+        SYSTEM_DB.gaiLearnings = [];
+        changed = true;
+    }
+    if (!settings.theme) {
+        settings.theme = 'neu';
+        changed = true;
+    }
+    if (!settings.wallpaper) {
+        settings.wallpaper = '#212529';
+        changed = true;
+    }
+    if (!Number.isFinite(Number(settings.taskbarOpacity))) {
+        settings.taskbarOpacity = 0.8;
+        changed = true;
+    }
+    if (!settings.iconSize) {
+        settings.iconSize = 'medium';
+        changed = true;
+    }
+    if (typeof settings.developerMode !== 'boolean') {
+        settings.developerMode = false;
+        changed = true;
+    }
+    if (!settings.chatConsultation || typeof settings.chatConsultation !== 'object' || Array.isArray(settings.chatConsultation)) {
+        settings.chatConsultation = { enabled: true, maxRoles: 2, timeoutMs: 8000 };
+        changed = true;
+    } else {
+        const cc = settings.chatConsultation;
+        if (typeof cc.enabled !== 'boolean') { cc.enabled = true; changed = true; }
+        if (!Number.isFinite(Number(cc.maxRoles))) { cc.maxRoles = 2; changed = true; }
+        if (!Number.isFinite(Number(cc.timeoutMs))) { cc.timeoutMs = 8000; changed = true; }
+    }
+    if (!Number.isFinite(Number(settings.chatPreemptAfterMs))) {
+        settings.chatPreemptAfterMs = 5000;
+        changed = true;
+    }
+    // Inter-agent Consultation Settings
+    if (!settings.interAgent || typeof settings.interAgent !== 'object') {
+        settings.interAgent = { enabled: true, allowDelegation: true };
+        changed = true;
+    }
+    if (!settings.apiKeys || typeof settings.apiKeys !== 'object' || Array.isArray(settings.apiKeys)) {
+        settings.apiKeys = { ollama: '' };
+        changed = true;
+    } else if (typeof settings.apiKeys.ollama !== 'string') {
+        settings.apiKeys.ollama = String(settings.apiKeys.ollama || '');
+        changed = true;
+    }
+    if (!settings.ftpConfig || typeof settings.ftpConfig !== 'object' || Array.isArray(settings.ftpConfig)) {
+        settings.ftpConfig = { host: '', user: '', pass: '', port: '21', rootPath: '/public_html/kimsondreams', enabled: false };
+        changed = true;
+    } else {
+        const ftp = settings.ftpConfig;
+        if (typeof ftp.host !== 'string') { ftp.host = String(ftp.host || ''); changed = true; }
+        if (typeof ftp.user !== 'string') { ftp.user = String(ftp.user || ''); changed = true; }
+        if (typeof ftp.pass !== 'string') { ftp.pass = String(ftp.pass || ''); changed = true; }
+        if (typeof ftp.port !== 'string') { ftp.port = String(ftp.port || '21'); changed = true; }
+        if (typeof ftp.rootPath !== 'string') { ftp.rootPath = String(ftp.rootPath || '/public_html/kimsondreams'); changed = true; }
+        if (typeof ftp.enabled !== 'boolean') { ftp.enabled = false; changed = true; }
+    }
+    if (!settings.telegramConfig || typeof settings.telegramConfig !== 'object' || Array.isArray(settings.telegramConfig)) {
+        settings.telegramConfig = { botToken: '', chatId: '', enabled: false };
+        changed = true;
+    } else {
+        const tg = settings.telegramConfig;
+        if (typeof tg.botToken !== 'string') { tg.botToken = String(tg.botToken || ''); changed = true; }
+        if (typeof tg.chatId !== 'string') { tg.chatId = String(tg.chatId || ''); changed = true; }
+        if (typeof tg.enabled !== 'boolean') { tg.enabled = false; changed = true; }
+    }
+    if (settings.aiProvider !== 'ollama') {
+        settings.aiProvider = 'ollama';
+        changed = true;
+    }
+    if (!settings.activeModel || settings.activeModel === 'qwen2.5') {
+        settings.activeModel = 'qwen3:30b-thinking';
+        changed = true;
+    }
+    if (!settings.ollamaBaseUrl) {
+        settings.ollamaBaseUrl = 'http://localhost:11434';
+        changed = true;
+    }
+    if (!settings.systemPrompt || typeof settings.systemPrompt !== 'string') {
+        settings.systemPrompt = INITIAL_SYSTEM_PROMPT;
+        changed = true;
+    }
+    // Dynamic refresh from file if placeholder exists
+    if (settings.systemPrompt.includes('{{AMAZON_TAG}}')) {
+        settings.systemPrompt = settings.systemPrompt.replace('{{AMAZON_TAG}}', settings.amazonTag || 'kimsondreams-21');
+        changed = true;
+    }
+    
+    if (!settings.systemPrompt.includes('USER_INTERACTION_RULES:')) {
+        settings.systemPrompt = `${settings.systemPrompt.trim()}\n\n${USER_INTERACTION_RULES_PL}`;
+        changed = true;
+    }
+    if (!settings.systemPrompt.includes('TELEGRAM:')) {
+        settings.systemPrompt = `${settings.systemPrompt.trim()}\n\n${TELEGRAM_CAPABILITIES_PL}`;
+        changed = true;
+    }
+    const baseUrlRaw = String(settings.ollamaBaseUrl || '');
+    const isLocalOllama = /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(baseUrlRaw);
+    const rawCtx = Number.isFinite(Number(settings.ollamaNumCtx)) && Number(settings.ollamaNumCtx) > 0
+        ? Math.floor(Number(settings.ollamaNumCtx))
+        : OLLAMA_NUM_CTX;
+    const minCtx = isLocalOllama ? 8192 : 2048;
+    const maxCtx = Math.max(131072, OLLAMA_NUM_CTX);
+    const ctxDefault = Math.max(minCtx, Math.min(maxCtx, rawCtx));
+    if (settings.ollamaNumCtx !== ctxDefault) {
+        settings.ollamaNumCtx = ctxDefault;
+        changed = true;
+    }
+    const modelRoleDefaults = {
+        chat: settings.activeModel,
+        coding: settings.activeModel,
+        writing: settings.activeModel,
+        planning: settings.activeModel,
+        functionCoding: settings.activeModel,
+        refactor: settings.activeModel,
+        debug: settings.activeModel,
+        architecture: settings.activeModel,
+        boilerplate: settings.activeModel
+    };
+    if (!settings.modelRoles || typeof settings.modelRoles !== 'object' || Array.isArray(settings.modelRoles)) {
+        settings.modelRoles = {};
+        changed = true;
+    } else {
+        const roles = settings.modelRoles;
+        for (const key of Object.keys(modelRoleDefaults)) {
+            const raw = roles[key];
+            const value = typeof raw === 'string' ? raw.trim() : '';
+            const lower = value.toLowerCase();
+            if (!value || lower === 'true' || lower === 'false' || lower === 'enabled' || lower === 'disabled') {
+                delete roles[key];
+                changed = true;
+            } else if (value !== raw) {
+                roles[key] = value;
+                changed = true;
+            }
+        }
+    }
+    
+    const ttfbRaw = Number(settings.ollamaTtfbTimeoutMs);
+    const nextTtfb = Number.isFinite(ttfbRaw) ? Math.max(5000, Math.min(900000, Math.floor(ttfbRaw))) : 180000;
+    if (settings.ollamaTtfbTimeoutMs !== nextTtfb) {
+        settings.ollamaTtfbTimeoutMs = nextTtfb;
+        changed = true;
+    }
+    if (!settings.ollamaTtfbTimeoutByRole || typeof settings.ollamaTtfbTimeoutByRole !== 'object' || Array.isArray(settings.ollamaTtfbTimeoutByRole)) {
+        settings.ollamaTtfbTimeoutByRole = {};
+        changed = true;
+    } else {
+        const byRole = settings.ollamaTtfbTimeoutByRole;
+        for (const [key, value] of Object.entries(byRole)) {
+            const v = Number(value);
+            if (!Number.isFinite(v) || v <= 0) {
+                delete byRole[key];
+                changed = true;
+            } else {
+                const next = Math.max(5000, Math.min(900000, Math.floor(v)));
+                if (byRole[key] !== next) {
+                    byRole[key] = next;
+                    changed = true;
+                }
+            }
+        }
+    }
+    const defaultTtfbRoles = { planning: 180000, architecture: 180000, debug: 120000 };
+    const byRoleDefaults = settings.ollamaTtfbTimeoutByRole;
+    for (const [key, value] of Object.entries(defaultTtfbRoles)) {
+        if (!Number.isFinite(Number(byRoleDefaults?.[key]))) {
+            byRoleDefaults[key] = value;
+            changed = true;
+        }
+    }
+    if (!settings.ollamaTtfbTimeoutByModel || typeof settings.ollamaTtfbTimeoutByModel !== 'object' || Array.isArray(settings.ollamaTtfbTimeoutByModel)) {
+        settings.ollamaTtfbTimeoutByModel = {};
+        changed = true;
+    } else {
+        const byModel = settings.ollamaTtfbTimeoutByModel;
+        for (const [key, value] of Object.entries(byModel)) {
+            const v = Number(value);
+            if (!Number.isFinite(v) || v <= 0) {
+                delete byModel[key];
+                changed = true;
+            } else {
+                const next = Math.max(5000, Math.min(900000, Math.floor(v)));
+                if (byModel[key] !== next) {
+                    byModel[key] = next;
+                    changed = true;
+                }
+            }
+        }
+    }
+    if (!settings.modelRoleCandidates || typeof settings.modelRoleCandidates !== 'object' || Array.isArray(settings.modelRoleCandidates)) {
+        settings.modelRoleCandidates = {};
+        changed = true;
+    } else {
+        const cand = settings.modelRoleCandidates;
+        for (const [key, value] of Object.entries(cand)) {
+            const list = Array.isArray(value) ? value.map(v => String(v || '').trim()).filter(Boolean) : [];
+            if (!list.length) {
+                delete cand[key];
+                changed = true;
+            } else {
+                const unique = Array.from(new Set(list));
+                if (JSON.stringify(unique) !== JSON.stringify(value)) {
+                    cand[key] = unique;
+                    changed = true;
+                }
+            }
+        }
+    }
+    const localBackupRaw = String(settings.localBackupModel || '').trim();
+    const roleValues = Object.values(settings.modelRoles || {}).map(m => String(m || '').trim()).filter(Boolean);
+    const inferredLocal = roleValues.find(m => !m.includes(':cloud')) || '';
+    const activeLocal = String(settings.activeModel || '').includes(':cloud') ? '' : String(settings.activeModel || '').trim();
+    const nextBackup = localBackupRaw || activeLocal || inferredLocal || '';
+    if (settings.localBackupModel !== nextBackup) {
+        settings.localBackupModel = nextBackup;
+        changed = true;
+    }
+    if (!settings.heartbeat) {
+        settings.heartbeat = { enabled: true, intervalSeconds: 20 };
+        changed = true;
+    }
+    if (!settings.autonomyWindow) {
+        settings.autonomyWindow = { enabled: false, startHour: 0, endHour: 0 };
+        changed = true;
+    }
+    if (!settings.autonomyConfig || typeof settings.autonomyConfig !== 'object' || Array.isArray(settings.autonomyConfig)) {
+        settings.autonomyConfig = { maxToolsPerCycle: 3, watchdogTimeoutMs: isLocalOllama ? 300000 : 60000, loopBreakerLimit: 2 };
+        changed = true;
+    } else {
+        const ac = settings.autonomyConfig;
+        const mt = Number(ac.maxToolsPerCycle);
+        const nextMt = Number.isFinite(mt) ? Math.max(1, Math.min(10, Math.floor(mt))) : 3;
+        if (ac.maxToolsPerCycle !== nextMt) { ac.maxToolsPerCycle = nextMt; changed = true; }
+        const wd = Number(ac.watchdogTimeoutMs);
+        const minWd = isLocalOllama ? 180000 : 30000;
+        const nextWd = Number.isFinite(wd) ? Math.max(minWd, Math.min(1800000, Math.floor(wd))) : (isLocalOllama ? 300000 : 60000);
+        if (ac.watchdogTimeoutMs !== nextWd) { ac.watchdogTimeoutMs = nextWd; changed = true; }
+        const lb = Number(ac.loopBreakerLimit);
+        const nextLb = Number.isFinite(lb) ? Math.max(1, Math.min(10, Math.floor(lb))) : 2;
+        if (ac.loopBreakerLimit !== nextLb) { ac.loopBreakerLimit = nextLb; changed = true; }
+    }
+    if (!settings.progressNotifications || typeof settings.progressNotifications !== 'object' || Array.isArray(settings.progressNotifications)) {
+        settings.progressNotifications = { enabled: false, intervalSeconds: 120, telegram: false };
+        changed = true;
+    } else {
+        const pn = settings.progressNotifications;
+        if (typeof pn.enabled !== 'boolean') { pn.enabled = false; changed = true; }
+        const interval = Number(pn.intervalSeconds);
+        const nextInterval = Number.isFinite(interval) ? Math.max(15, Math.min(3600, Math.floor(interval))) : 120;
+        if (pn.intervalSeconds !== nextInterval) { pn.intervalSeconds = nextInterval; changed = true; }
+        if (typeof pn.telegram !== 'boolean') { pn.telegram = false; changed = true; }
+    }
+    if (!settings.dailySnapshots || typeof settings.dailySnapshots !== 'object' || Array.isArray(settings.dailySnapshots)) {
+        settings.dailySnapshots = { enabled: true, hourLocal: 3, keep: 10 };
+        changed = true;
+    } else {
+        const ds = settings.dailySnapshots;
+        if (typeof ds.enabled !== 'boolean') { ds.enabled = true; changed = true; }
+        const hour = Number(ds.hourLocal);
+        const nextHour = Number.isFinite(hour) ? Math.max(0, Math.min(23, Math.floor(hour))) : 3;
+        if (ds.hourLocal !== nextHour) { ds.hourLocal = nextHour; changed = true; }
+        const keep = Number(ds.keep);
+        const nextKeep = Number.isFinite(keep) ? Math.max(1, Math.min(365, Math.floor(keep))) : 10;
+        if (ds.keep !== nextKeep) { ds.keep = nextKeep; changed = true; }
+    }
+    if (normalizeHistoryLogs()) changed = true;
+    if (!settings.realtimeSources) {
+        settings.realtimeSources = { enabled: false, intervalMinutes: 60, urls: [] };
+        changed = true;
+    } else {
+        settings.realtimeSources.enabled = !!settings.realtimeSources.enabled;
+        settings.realtimeSources.intervalMinutes = Number.isFinite(Number(settings.realtimeSources.intervalMinutes))
+            ? Number(settings.realtimeSources.intervalMinutes)
+            : 60;
+        settings.realtimeSources.urls = Array.isArray(settings.realtimeSources.urls)
+            ? settings.realtimeSources.urls.map(u => String(u || '').trim()).filter(Boolean)
+            : [];
+    }
+    if (!settings.terminalLogFilters) {
+        settings.terminalLogFilters = {
+            enabled: true,
+            system: true,
+            stdout: true,
+            stderr: true,
+            exec: true,
+            fs: true,
+            ftp: true,
+            thought: true
+        };
+        changed = true;
+    } else {
+        settings.terminalLogFilters.enabled = settings.terminalLogFilters.enabled !== false;
+        settings.terminalLogFilters.system = settings.terminalLogFilters.system !== false;
+        settings.terminalLogFilters.stdout = settings.terminalLogFilters.stdout !== false;
+        settings.terminalLogFilters.stderr = settings.terminalLogFilters.stderr !== false;
+        settings.terminalLogFilters.exec = settings.terminalLogFilters.exec !== false;
+        settings.terminalLogFilters.fs = settings.terminalLogFilters.fs !== false;
+        settings.terminalLogFilters.ftp = settings.terminalLogFilters.ftp !== false;
+        settings.terminalLogFilters.thought = settings.terminalLogFilters.thought !== false;
+    }
+    if (!settings.qualityAudit) {
+        settings.qualityAudit = {
+            enabled: true,
+            minChangedLines: 80,
+            minFiles: 3,
+            cooldownSec: 120,
+            diffLimit: 120000,
+            autoBuild: true,
+            autoSummary: true,
+            autoAiSummary: true,
+            aiModelRole: 'planning'
+        };
+        changed = true;
+    } else {
+        settings.qualityAudit.enabled = settings.qualityAudit.enabled !== false;
+        if (!Number.isFinite(Number(settings.qualityAudit.minChangedLines))) {
+            settings.qualityAudit.minChangedLines = 80;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.qualityAudit.minFiles))) {
+            settings.qualityAudit.minFiles = 3;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.qualityAudit.cooldownSec))) {
+            settings.qualityAudit.cooldownSec = 120;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.qualityAudit.diffLimit))) {
+            settings.qualityAudit.diffLimit = 120000;
+            changed = true;
+        }
+        settings.qualityAudit.autoBuild = settings.qualityAudit.autoBuild !== false;
+        settings.qualityAudit.autoSummary = settings.qualityAudit.autoSummary !== false;
+        settings.qualityAudit.autoAiSummary = settings.qualityAudit.autoAiSummary !== false;
+        if (typeof settings.qualityAudit.aiModelRole !== 'string' || !settings.qualityAudit.aiModelRole) {
+            settings.qualityAudit.aiModelRole = 'planning';
+            changed = true;
+        }
+    }
+    if (!settings.qualityGate) {
+        settings.qualityGate = { enabled: true, requireAiSummary: true, allowOperatorOverride: true };
+        changed = true;
+    } else {
+        settings.qualityGate.enabled = settings.qualityGate.enabled !== false;
+        settings.qualityGate.requireAiSummary = settings.qualityGate.requireAiSummary !== false;
+        settings.qualityGate.allowOperatorOverride = settings.qualityGate.allowOperatorOverride !== false;
+    }
+    if (!settings.taskBreakdown) {
+        settings.taskBreakdown = { enabled: true, autoOnCreate: true, autoOnStart: true, autoCompleteOnChecklist: true, minItems: 3, maxItems: 6, aiModelRole: 'planning' };
+        changed = true;
+    } else {
+        settings.taskBreakdown.enabled = settings.taskBreakdown.enabled !== false;
+        settings.taskBreakdown.autoOnCreate = settings.taskBreakdown.autoOnCreate !== false;
+        settings.taskBreakdown.autoOnStart = settings.taskBreakdown.autoOnStart !== false;
+        settings.taskBreakdown.autoCompleteOnChecklist = settings.taskBreakdown.autoCompleteOnChecklist !== false;
+        if (!Number.isFinite(Number(settings.taskBreakdown.minItems))) {
+            settings.taskBreakdown.minItems = 3;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.taskBreakdown.maxItems))) {
+            settings.taskBreakdown.maxItems = 6;
+            changed = true;
+        }
+        if (typeof settings.taskBreakdown.aiModelRole !== 'string' || !settings.taskBreakdown.aiModelRole) {
+            settings.taskBreakdown.aiModelRole = 'planning';
+            changed = true;
+        }
+    }
+    if (!settings.autorecovery) {
+        settings.autorecovery = {
+            enabled: true,
+            modelRole: 'planning',
+            prompt: '',
+            autoOnBoot: true,
+            cooldownSec: 60,
+            limits: { minCtx: 512, maxCtx: Math.max(2048, ctxDefault), minBackoffSec: 5, maxBackoffSec: 600 }
+        };
+        changed = true;
+    } else {
+        settings.autorecovery.enabled = settings.autorecovery.enabled !== false;
+        if (typeof settings.autorecovery.modelRole !== 'string' || !settings.autorecovery.modelRole) {
+            settings.autorecovery.modelRole = 'planning';
+            changed = true;
+        }
+        if (typeof settings.autorecovery.prompt !== 'string') {
+            settings.autorecovery.prompt = '';
+            changed = true;
+        }
+        if (typeof settings.autorecovery.autoOnBoot !== 'boolean') {
+            settings.autorecovery.autoOnBoot = true;
+            changed = true;
+        }
+        const limits = settings.autorecovery.limits || {};
+        const normLimits = {
+            minCtx: Number.isFinite(Number(limits.minCtx)) ? Number(limits.minCtx) : 512,
+            maxCtx: Number.isFinite(Number(limits.maxCtx)) ? Number(limits.maxCtx) : Math.max(2048, ctxDefault),
+            minBackoffSec: Number.isFinite(Number(limits.minBackoffSec)) ? Number(limits.minBackoffSec) : 5,
+            maxBackoffSec: Number.isFinite(Number(limits.maxBackoffSec)) ? Number(limits.maxBackoffSec) : 600
+        };
+        settings.autorecovery.limits = normLimits;
+        if (!Number.isFinite(Number(settings.autorecovery.cooldownSec))) {
+            settings.autorecovery.cooldownSec = 60;
+            changed = true;
+        }
+    }
+    if (!settings.mandatorySelfUpgrade) {
+        settings.mandatorySelfUpgrade = { enabled: true, loopLimit: 4, retryLimit: 3, cooldownSec: 900 };
+        changed = true;
+    } else {
+        settings.mandatorySelfUpgrade.enabled = settings.mandatorySelfUpgrade.enabled !== false;
+        if (!Number.isFinite(Number(settings.mandatorySelfUpgrade.loopLimit))) {
+            settings.mandatorySelfUpgrade.loopLimit = 4;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.mandatorySelfUpgrade.retryLimit))) {
+            settings.mandatorySelfUpgrade.retryLimit = 3;
+            changed = true;
+        }
+        if (!Number.isFinite(Number(settings.mandatorySelfUpgrade.cooldownSec))) {
+            settings.mandatorySelfUpgrade.cooldownSec = 900;
+            changed = true;
+        }
+    }
+    if (typeof settings.operatorMode === 'undefined') {
+        settings.operatorMode = true;
+        changed = true;
+    }
+    if (typeof settings.autonomyEnabled === 'undefined') {
+        settings.autonomyEnabled = !!settings?.heartbeat?.enabled;
+        changed = true;
+    }
+    if (typeof settings.autonomyScheduler === 'undefined') {
+        settings.autonomyScheduler = process.env.ELECTRON_RUN === 'true' ? 'event' : 'heartbeat';
+        changed = true;
+    }
+    if (typeof settings.ollamaLiveKeepAfterFinish === 'undefined') {
+        settings.ollamaLiveKeepAfterFinish = false;
+        changed = true;
+    }
+    if (typeof settings.autoThinkEnabled === 'undefined') {
+        settings.autoThinkEnabled = true;
+        changed = true;
+    }
+    if (typeof settings.ollamaKeepAlive === 'undefined') {
+        settings.ollamaKeepAlive = '60m'; // 60min dla M4
+        changed = true;
+    }
+    if (!Number.isFinite(Number(settings.ollamaMaxAttachmentChars))) {
+        settings.ollamaMaxAttachmentChars = 120000;
+        changed = true;
+    }
+    if (typeof settings.ollamaWarmup === 'undefined') {
+        settings.ollamaWarmup = true;
+        changed = true;
+    }
+    if (!Number.isFinite(Number(settings.ollamaWarmupMaxB))) {
+        settings.ollamaWarmupMaxB = 14;
+        changed = true;
+    }
+    if (!Array.isArray(settings.ollamaWarmupModels)) {
+        settings.ollamaWarmupModels = [];
+        changed = true;
+    } else {
+        const normalizedWarmupModels = Array.from(new Set(settings.ollamaWarmupModels
+            .map((m) => String(m || '').trim())
+            .filter(Boolean)));
+        if (JSON.stringify(normalizedWarmupModels) !== JSON.stringify(settings.ollamaWarmupModels)) {
+            settings.ollamaWarmupModels = normalizedWarmupModels;
+            changed = true;
+        }
+    }
+    settings.apiKeys = settings.apiKeys || {};
+    if (!Object.prototype.hasOwnProperty.call(settings.apiKeys, 'ollama')) {
+        settings.apiKeys.ollama = '';
+        changed = true;
+    }
+    const prompt = String(settings.systemPrompt || '').trim();
+    const shouldResetPrompt = !prompt || prompt.includes('You are GAI');
+    if (shouldResetPrompt) {
+        settings.systemPrompt = DEFAULT_SYSTEM_PROMPT_PL;
+        changed = true;
+    }
+    return changed;
+};
+
+const upsertMemory = ({ id, title, type, content, meta }) => {
+    if (!id) return false;
+    SYSTEM_DB.memories = SYSTEM_DB.memories || [];
+    const idx = SYSTEM_DB.memories.findIndex(m => m.id === id);
+    const now = Date.now();
+    const next = { id, title, type, content, meta, updatedAt: now, createdAt: idx === -1 ? now : (SYSTEM_DB.memories[idx]?.createdAt || now) };
+    if (idx === -1) {
+        SYSTEM_DB.memories.push(next);
+        return true;
+    }
+    const prev = SYSTEM_DB.memories[idx];
+    const changed = prev?.content !== content || JSON.stringify(prev?.meta || {}) !== JSON.stringify(meta || {}) || prev?.title !== title || prev?.type !== type;
+    if (changed) SYSTEM_DB.memories[idx] = next;
+    return changed;
+};
+
+const stripHtml = (input = '') =>
+    String(input)
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const DEFAULT_REALTIME_SOURCES = [
+    'https://hnrss.org/frontpage',
+    'https://techcrunch.com/feed/',
+    'https://www.theverge.com/rss/index.xml',
+    'https://www.engadget.com/rss.xml',
+    'https://arstechnica.com/rss/',
+    'https://www.wired.com/feed/rss',
+    'https://www.tomshardware.com/feeds/all',
+    'https://www.bbc.com/news/technology/rss.xml'
+];
+
+let realtimeFetchInFlight = false;
+
+const fetchRealtimeSources = async ({ force = false } = {}) => {
+    const cfg = SYSTEM_DB.settings.realtimeSources || {};
+    if (!cfg.enabled) return false;
+    const inputUrls = Array.from(new Set((cfg.urls || []).map(u => String(u || '').trim()).filter(Boolean)));
+    const useDefaults = inputUrls.length === 0;
+    const urls = (useDefaults ? DEFAULT_REALTIME_SOURCES : inputUrls).slice(0, 10);
+    if (!urls.length) return false;
+    const intervalMs = Math.max(5, Number(cfg.intervalMinutes) || 60) * 60 * 1000;
+    const lastAt = SYSTEM_DB.agentState.lastRealtimeFetchAt || 0;
+    if (!force && Date.now() - lastAt < intervalMs) return false;
+    if (realtimeFetchInFlight) return false;
+    realtimeFetchInFlight = true;
+    let results = [];
+    try {
+        const fetches = urls.map(async (url) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 6000);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                const text = await res.text();
+                const cleaned = stripHtml(text).slice(0, 6000);
+                return { url, status: res.status, ok: res.ok, content: cleaned };
+            } catch (e) {
+                return { url, status: 0, ok: false, error: String(e?.message || e) };
+            } finally {
+                clearTimeout(timeout);
+            }
+        });
+        const settled = await Promise.allSettled(fetches);
+        results = settled.map(r => r.status === 'fulfilled' ? r.value : ({ url: 'unknown', status: 0, ok: false, error: 'fetch_failed' }));
+    } finally {
+        realtimeFetchInFlight = false;
+    }
+    const content = results.map(r => {
+        if (!r.ok) return `URL: ${r.url}\nSTATUS: ${r.status || 'error'}\nERROR: ${r.error || 'fetch_failed'}`;
+        return `URL: ${r.url}\nSTATUS: ${r.status}\nCONTENT:\n${r.content}`;
+    }).join('\n\n---\n\n');
+    const changed = upsertMemory({
+        id: 'realtime_sources_cache',
+        title: 'REALTIME_SOURCES',
+        type: 'web',
+        content: content.slice(0, 40000),
+        meta: { urls, fetchedAt: Date.now(), mode: useDefaults ? 'auto' : 'manual' }
+    });
+    SYSTEM_DB.agentState.lastRealtimeFetchAt = Date.now();
+    saveState();
+    if (changed) logToChat('system', `REALTIME UPDATE: ${results.length}/${urls.length} sources refreshed.`, 'system');
+    return changed;
+};
+
+const scheduleRealtimeSources = (reason = '') => {
+    if (!SYSTEM_DB.settings.realtimeSources?.enabled) return;
+    if (realtimeFetchInFlight) return;
+    fetchRealtimeSources().catch((e) => {
+        logToSystem('error', `Realtime fetch failed${reason ? ` (${reason})` : ''}: ${e.message || e}`);
+    });
+};
+
+const loadPinnedDocs = () => {
+    let changed = false;
+    let guideContent = '';
+    try {
+        if (fs.existsSync(ARTICLES_GUIDE_PATH)) {
+            guideContent = fs.readFileSync(ARTICLES_GUIDE_PATH, 'utf8');
+        }
+    } catch {
+        guideContent = '';
+    }
+    const guideHash = crypto.createHash('sha256').update(guideContent).digest('hex');
+    changed = upsertMemory({
+        id: 'pinned_articles_guide',
+        title: 'HOW_TO_WRITE_ARTICLES',
+        type: 'pinned',
+        content: guideContent.slice(0, 200000),
+        meta: { path: ARTICLES_GUIDE_PATH, sha256: guideHash }
+    }) || changed;
+
+    changed = upsertMemory({
+        id: 'pinned_system_paths',
+        title: 'SYSTEM_PATHS',
+        type: 'pinned',
+        content: JSON.stringify({
+            dataDir: DATA_DIR,
+            fsRoot: FS_ROOT,
+            articlesDir: ARTICLES_DIR,
+            articlesIndex: ARTICLES_INDEX_PATH,
+            ftp: {
+                rootPath: SYSTEM_DB?.settings?.ftpConfig?.rootPath || '/',
+                remoteArticlesDir: REMOTE_ARTICLES_DIR || ''
+            }
+        }, null, 2),
+        meta: { dataDir: DATA_DIR, fsRoot: FS_ROOT, articlesDir: ARTICLES_DIR }
+    }) || changed;
+
+    return changed;
+};
+
+const computeRemoteArticlesDir = () => {
+    if (REMOTE_ARTICLES_DIR) return REMOTE_ARTICLES_DIR;
+    const root = String(SYSTEM_DB?.settings?.ftpConfig?.rootPath || '/');
+    const base = root.replace(/\/+$/g, '') || '/';
+    return base === '/' ? '/data/articles' : `${base}/data/articles`;
+};
+
+const buildPinnedContext = ({ includeGuide = false } = {}) => {
+    const guideMem = SYSTEM_DB.memories?.find(m => m.id === 'pinned_articles_guide');
+    const guideText = typeof guideMem?.content === 'string' ? guideMem.content : '';
+    const guideMeta = guideMem?.meta || {};
+    const realtimeMem = SYSTEM_DB.memories?.find(m => m.id === 'realtime_sources_cache');
+    const realtimeText = typeof realtimeMem?.content === 'string' ? realtimeMem.content : '';
+    const realtimeMeta = realtimeMem?.meta || {};
+    const remoteArticlesDir = computeRemoteArticlesDir();
+    const guideSnippet = includeGuide ? guideText.slice(0, 20000) : '';
+    const realtimeSnippet = realtimeText ? realtimeText.slice(0, 20000) : '';
+    const now = new Date();
+    return [
+        `PINNED_SYSTEM_PATHS: ${JSON.stringify({ dataDir: DATA_DIR, fsRoot: FS_ROOT, articlesDir: ARTICLES_DIR, articlesIndex: ARTICLES_INDEX_PATH, remoteArticlesDir })}`,
+        `PINNED_GAI_PORT: ${JSON.stringify({ port: PORT, baseUrl: `http://localhost:${PORT}` })}`,
+        `PINNED_OS: ${JSON.stringify({ platform: os.platform(), release: os.release(), arch: os.arch() })}`,
+        `PINNED_CURRENT_DATE: ${JSON.stringify({ iso: now.toISOString(), local: now.toLocaleString() })}`,
+        `PINNED_REALTIME_POLICY: When current facts are required, fetch sources via SHELL and cite them in reasoning.`,
+        `PINNED_UNCERTAINTY_POLICY: If any critical info is missing, respond with "ASK_USER: <question>" and stop. Do not guess.`,
+        realtimeSnippet ? `PINNED_REALTIME_SOURCES_META: ${JSON.stringify({ fetchedAt: realtimeMeta.fetchedAt || null, urls: realtimeMeta.urls || [] })}` : '',
+        realtimeSnippet ? `PINNED_REALTIME_SOURCES:\n${realtimeSnippet}\n[/PINNED_REALTIME_SOURCES]` : '',
+        `PINNED_ARTICLE_GUIDE_META: ${JSON.stringify({ path: ARTICLES_GUIDE_PATH, sha256: guideMeta.sha256 || null })}`,
+        includeGuide ? `PINNED_ARTICLE_GUIDE:\n${guideSnippet}\n[/PINNED_ARTICLE_GUIDE]` : ''
+    ].filter(Boolean).join('\n');
+};
+
+    // Initial Load
+    loadState().then(async () => {
+        // --- STATS SANITIZATION ON BOOT ---
+        if (SYSTEM_DB.agentState && SYSTEM_DB.agentState.toolStats) {
+            const CRITICAL_TOOLS = ['SHELL', 'WEB_SEARCH', 'FILE_READ', 'FILE_WRITE', 'TASK_ACTION'];
+            let sanitized = false;
+            for (const tool of CRITICAL_TOOLS) {
+                const stats = SYSTEM_DB.agentState.toolStats[tool];
+                if (stats && stats.attempts > 5 && (stats.successes / stats.attempts) < 0.2) {
+                    console.log(`[BOOT] Resetting stuck stats for ${tool} (Rate: ${Math.round((stats.successes/stats.attempts)*100)}%)`);
+                    SYSTEM_DB.agentState.toolStats[tool] = { attempts: 0, successes: 0, failures: 0, lastAt: Date.now(), lastError: '' };
+                    sanitized = true;
+                }
+            }
+            if (sanitized) saveState();
+        }
+        // ----------------------------------
+
+        // Ensure DB file exists after load attempt
+        if (!fs.existsSync(DB_PATH)) {
+            console.log("Initializing new DB file at " + DB_PATH);
+            applyRuntimeConfig();
+            loadPinnedDocs();
+            saveState();
+        } else {
+            const changed = applyRuntimeConfig();
+            const revived = reviveStalledFailedTasksOnBoot();
+            const pinnedChanged = loadPinnedDocs();
+            if (changed || pinnedChanged || revived) saveState();
+        }
+
+        // Initialize services AFTER DB load
+        try {
+            console.log('[INIT] Starting core services...');
+            await initializeGAIMemory(SYSTEM_DB);
+            await initializeExternalAI(SYSTEM_DB);
+            await initializeUncensorSystem(SYSTEM_DB);
+            await initializeAgentRouter(SYSTEM_DB);
+            
+            // --- SYNC AUTONOMY FLAGS ---
+            // Ensure agenticSystem.enabled is in sync with autonomyEnabled
+            const autonomyEnabled = SYSTEM_DB.settings.autonomyEnabled !== false; // Default true
+            if (SYSTEM_DB.settings.agenticSystem) {
+                if (typeof SYSTEM_DB.settings.agenticSystem.enabled !== 'boolean') {
+                    SYSTEM_DB.settings.agenticSystem.enabled = autonomyEnabled;
+                }
+                gaiAgentRouter.setConfig(SYSTEM_DB.settings.agenticSystem);
+            }
+            // ---------------------------
+
+            console.log('[INIT] Core services ready.');
+        } catch (e) {
+            console.error('[INIT] Service initialization failed:', e);
+        }
+
+        const autoCfg = SYSTEM_DB.settings?.autorecovery;
+        if (autoCfg?.enabled && autoCfg?.autoOnBoot) {
+            safeSetTimeout(() => performAutonomyRecovery('boot_autorecovery', 'startup'), 2000);
+        }
+        try { startProgressNotifier(); } catch {}
+        try { startDailySnapshotScheduler(); } catch {}
+    }).catch(console.error);
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.static(path.join(__dirname, 'dist'), {
+    setHeaders: (res, filePath) => {
+        const base = path.basename(filePath);
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+        if (base === 'sw.js' || base === 'registerSW.js' || base === 'manifest.webmanifest') {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/data', express.static(DATA_DIR));
+
+// Rate limiting configuration
+const generalLimiter = rateLimit({
+    windowMs: RATE_LIMIT_WINDOW_MS, // default 15 minutes
+    max: RATE_LIMIT_MAX_REQUESTS, // default 1000 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+        const p = req.path || '';
+        return p === '/db' || p === '/health' || p === '/ping';
+    }
+});
+
+const strictLimiter = rateLimit({
+    windowMs: RATE_LIMIT_WINDOW_MS, // default 15 minutes
+    max: RATE_LIMIT_STRICT_MAX, // default 100 requests per windowMs for sensitive operations
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Debug middleware
+app.use('/api', (req, res, next) => {
+    if (DEBUG_MODE || VERBOSE_LOGGING) {
+        logDebug('API Request', `${req.method} ${req.path}`, {
+            headers: req.headers,
+            body: req.body,
+            query: req.query,
+            ip: req.ip
+        });
+    }
+    next();
+});
+
+// Apply general rate limiting to all API routes
+app.use('/api', generalLimiter);
+
+app.use('/api', (req, res, next) => {
+    if (
+        req.path === '/ping' ||
+        req.path === '/reset' ||
+        req.path === '/snapshot/list' ||
+        req.path === '/snapshot/restore'
+    ) return next();
+
+    if (req.path === '/tick' && CRON_SECRET && req.get('x-cron-secret') === CRON_SECRET) {
+        return next();
+    }
+
+    next();
+});
+
+// --- FTP HELPER ---
+
+// --- FTP MOCK CLIENT FOR LOCAL MODE ---
+class MockFtpClient {
+    constructor(root) {
+        this.root = root;
+    }
+
+    _resolve(remotePath) {
+        // Strip common prefixes to map to local root
+        let rel = remotePath;
+        const commonPrefixes = ['/public_html/kimsondreams', '/var/www/html', '/home/site/wwwroot'];
+        
+        for (const prefix of commonPrefixes) {
+            if (rel.startsWith(prefix)) {
+                rel = rel.substring(prefix.length);
+                break;
+            }
+        }
+        
+        // Ensure relative path doesn't start with slash
+        if (rel.startsWith('/')) rel = rel.substring(1);
+        
+        return path.join(this.root, rel);
+    }
+
+    async list(remotePath) {
+        const local = this._resolve(remotePath);
+        if (!fs.existsSync(local)) return [];
+        const files = await fs.promises.readdir(local, { withFileTypes: true });
+        return Promise.all(files.map(async f => {
+            const stats = await fs.promises.stat(path.join(local, f.name));
+            return {
+                name: f.name,
+                type: f.isDirectory() ? 2 : 1,
+                size: stats.size,
+                rawModifiedAt: stats.mtime.toISOString(),
+                isDirectory: f.isDirectory()
+            };
+        }));
+    }
+
+    async uploadFrom(localPath, remotePath) {
+        const dest = this._resolve(remotePath);
+        const dir = path.dirname(dest);
+        if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
+        await fs.promises.copyFile(localPath, dest);
+    }
+
+    async downloadTo(localPath, remotePath) {
+        const src = this._resolve(remotePath);
+        if (!fs.existsSync(src)) throw new Error(`File not found: ${remotePath}`);
+        const dir = path.dirname(localPath);
+        if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
+        await fs.promises.copyFile(src, localPath);
+    }
+
+    async downloadToDir(localDir, remotePath) {
+         // Basic implementation for dir download if needed
+         const src = this._resolve(remotePath);
+         if (!fs.existsSync(src)) throw new Error(`Dir not found: ${remotePath}`);
+         // Recursive copy (simplified)
+    }
+
+    async ensureDir(remotePath) {
+        const dest = this._resolve(remotePath);
+        await fs.promises.mkdir(dest, { recursive: true });
+    }
+
+    async remove(remotePath) {
+        const dest = this._resolve(remotePath);
+        if (fs.existsSync(dest)) await fs.promises.unlink(dest);
+    }
+
+    async rename(oldPath, newPath) {
+        const src = this._resolve(oldPath);
+        const dest = this._resolve(newPath);
+        if (fs.existsSync(src)) await fs.promises.rename(src, dest);
+    }
+    
+    close() {}
+    access() {}
+}
+
+const performFtpAction = async (action) => {
+    const ftpConfig = SYSTEM_DB.settings.ftpConfig || {};
+    const { host, user, pass, port } = ftpConfig;
+
+    // Check if FTP is enabled/configured. If not, use Mock/Local mode.
+    // User explicitly requested local mode and no FTP.
+    const useLocalMode = !host || !user || !pass;
+
+    if (useLocalMode) {
+        // Use temp_ftp_blog as root for local mode
+        const localRoot = path.join(APP_ROOT, 'temp_ftp_blog');
+        if (!fs.existsSync(localRoot)) {
+             fs.mkdirSync(localRoot, { recursive: true });
+        }
+        
+        const client = new MockFtpClient(localRoot);
+        return await action(client);
+    }
+
+    const client = new ftp.Client();
+    if (!host || !user) throw new Error("FTP Credentials missing in Settings");
+    
+    try {
+        await client.access({
+            host, user, password: pass, port: parseInt(port || '21'),
+            secure: false
+        });
+        return await action(client);
+    } catch (e) {
+        throw new Error(`FTP Error: ${e.message}`);
+    } finally {
+        client.close();
+    }
+};
+
+const validateArticleFile = (filePath) => {
+    try {
+        execSync(`python3 scripts/validate_article.py "${filePath}"`, { stdio: 'pipe' });
+        return { valid: true };
+    } catch (error) {
+        const output = error.stdout ? error.stdout.toString() : error.message;
+        return { valid: false, error: output };
+    }
+};
+
+const isSafeArticleFileName = (name) => {
+    if (!name || typeof name !== 'string') return false;
+    if (!name.endsWith('.json')) return false;
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) return false;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.json$/.test(name)) return false;
+    return true;
+};
+
+const publishArticle = async ({ fileName, article, content }) => {
+    const resolvedName = String(fileName || '').trim();
+    if (!isSafeArticleFileName(resolvedName)) throw new Error('Invalid article fileName');
+
+    const obj = article ?? (typeof content === 'string' ? JSON.parse(content) : content);
+    if (!obj || typeof obj !== 'object') throw new Error('Invalid article payload');
+
+    const required = ['id', 'title', 'date', 'content'];
+    for (const k of required) {
+        if (!obj[k] || typeof obj[k] !== 'string') throw new Error(`Missing field: ${k}`);
+    }
+
+    const absArticlePath = path.join(ARTICLES_DIR, resolvedName);
+    const absIndexPath = ARTICLES_INDEX_PATH;
+
+    const json = JSON.stringify(obj, null, 2);
+    fs.writeFileSync(absArticlePath, json, 'utf8');
+    
+    const validation = validateArticleFile(absArticlePath);
+    if (!validation.valid) {
+        if (fs.existsSync(absArticlePath)) fs.unlinkSync(absArticlePath);
+        throw new Error(`Article validation failed: ${validation.error}`);
+    }
+
+    JSON.parse(fs.readFileSync(absArticlePath, 'utf8'));
+
+    let index = [];
+    if (fs.existsSync(absIndexPath)) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(absIndexPath, 'utf8'));
+            if (Array.isArray(parsed)) index = parsed;
+        } catch {
+            index = [];
+        }
+    }
+    if (!index.includes(resolvedName)) index.push(resolvedName);
+    fs.writeFileSync(absIndexPath, JSON.stringify(index, null, 2), 'utf8');
+
+    const remoteBase = computeRemoteArticlesDir().replace(/\/+$/g, '');
+    const remoteArticlePath = `${remoteBase}/${resolvedName}`.replace(/\/{2,}/g, '/');
+    const remoteIndexPath = `${remoteBase}/index.json`.replace(/\/{2,}/g, '/');
+
+    const ftpCfg = SYSTEM_DB?.settings?.ftpConfig;
+    const hasFtp = ftpCfg?.host && ftpCfg?.user && ftpCfg?.pass;
+    if (!hasFtp) {
+        return { status: 'saved_local', local: { article: absArticlePath, index: absIndexPath }, remote: { article: remoteArticlePath, index: remoteIndexPath } };
+    }
+
+    const uploaded = await performFtpAction(async (client) => {
+        await client.uploadFrom(absArticlePath, remoteArticlePath);
+        await client.uploadFrom(absIndexPath, remoteIndexPath);
+        const list = await client.list(remoteBase);
+        const names = (list || []).map((f) => f.name);
+        return names.includes(resolvedName) && names.includes('index.json');
+    });
+
+    const status = uploaded ? 'published' : 'uploaded_unverified';
+    if (isTelegramEnabled()) {
+        const title = obj.title || resolvedName;
+        await sendTelegramMessage(`Artykuł opublikowany: ${title}\nStatus: ${status}\nPlik: ${resolvedName}\nŚcieżka: ${remoteArticlePath}`);
+    }
+    return { status, local: { article: absArticlePath, index: absIndexPath }, remote: { article: remoteArticlePath, index: remoteIndexPath } };
+};
+
+const deleteArticle = async ({ fileName }) => {
+    const resolvedName = String(fileName || '').trim();
+    if (!isSafeArticleFileName(resolvedName)) throw new Error('Invalid article fileName');
+
+    const absArticlePath = path.join(ARTICLES_DIR, resolvedName);
+    const absIndexPath = ARTICLES_INDEX_PATH;
+
+    if (fs.existsSync(absArticlePath)) fs.unlinkSync(absArticlePath);
+
+    let index = [];
+    if (fs.existsSync(absIndexPath)) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(absIndexPath, 'utf8'));
+            if (Array.isArray(parsed)) index = parsed;
+        } catch {
+            index = [];
+        }
+    }
+    index = index.filter((name) => name !== resolvedName);
+    fs.writeFileSync(absIndexPath, JSON.stringify(index, null, 2), 'utf8');
+
+    const remoteBase = computeRemoteArticlesDir().replace(/\/+$/g, '');
+    const remoteArticlePath = `${remoteBase}/${resolvedName}`.replace(/\/{2,}/g, '/');
+    const remoteIndexPath = `${remoteBase}/index.json`.replace(/\/{2,}/g, '/');
+
+    const ftpCfg = SYSTEM_DB?.settings?.ftpConfig;
+    const hasFtp = ftpCfg?.host && ftpCfg?.user && ftpCfg?.pass;
+    if (!hasFtp) {
+        return { status: 'deleted_local', local: { article: absArticlePath, index: absIndexPath }, remote: { article: remoteArticlePath, index: remoteIndexPath } };
+    }
+
+    const deleted = await performFtpAction(async (client) => {
+        try {
+            await client.remove(remoteArticlePath);
+        } catch {}
+        await client.uploadFrom(absIndexPath, remoteIndexPath);
+        const list = await client.list(remoteBase);
+        const names = (list || []).map((f) => f.name);
+        return !names.includes(resolvedName) && names.includes('index.json');
+    });
+
+    return { status: deleted ? 'deleted' : 'deleted_unverified', local: { article: absArticlePath, index: absIndexPath }, remote: { article: remoteArticlePath, index: remoteIndexPath } };
+};
+
+const toggleArticleVisibility = async ({ fileName, visible }) => {
+    const resolvedName = String(fileName || '').trim();
+    if (!isSafeArticleFileName(resolvedName)) throw new Error('Invalid article fileName');
+
+    const absIndexPath = ARTICLES_INDEX_PATH;
+    let index = [];
+    if (fs.existsSync(absIndexPath)) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(absIndexPath, 'utf8'));
+            if (Array.isArray(parsed)) index = parsed;
+        } catch {
+            index = [];
+        }
+    }
+
+    // Check if file exists on disk, if not, we probably shouldn't add it to index (unless it's remote only, but we assume sync)
+    // For now, trust the user intent.
+
+    if (visible) {
+        if (!index.includes(resolvedName)) index.push(resolvedName);
+    } else {
+        index = index.filter(name => name !== resolvedName);
+    }
+
+    fs.writeFileSync(absIndexPath, JSON.stringify(index, null, 2), 'utf8');
+
+    const remoteBase = computeRemoteArticlesDir().replace(/\/+$/g, '');
+    const remoteIndexPath = `${remoteBase}/index.json`.replace(/\/{2,}/g, '/');
+
+    const ftpCfg = SYSTEM_DB?.settings?.ftpConfig;
+    const hasFtp = ftpCfg?.host && ftpCfg?.user && ftpCfg?.pass;
+    
+    if (hasFtp) {
+        await performFtpAction(async (client) => {
+            await client.uploadFrom(absIndexPath, remoteIndexPath);
+        });
+    }
+
+    return { status: visible ? 'visible' : 'hidden', index };
+};
+
+const logToChat = (role, text, type = 'text', details = null) => {
+    const timestamp = Date.now();
+    const msgId = `msg_${timestamp}_${Math.random().toString(36).substr(2, 5)}`;
+    const raw = String(text ?? '');
+    const safeText = raw.length > MAX_CHAT_LOG_CHARS ? `${raw.slice(0, MAX_CHAT_LOG_CHARS)}…[truncated]` : raw;
+    const msg = { id: msgId, role, text: safeText, timestamp, isAutonomous: true, logType: type };
+    if (details) msg.details = details;
+    SYSTEM_DB.chatHistory.push(msg);
+    if (SYSTEM_DB.chatHistory.length > CHAT_HISTORY_IN_MEMORY) SYSTEM_DB.chatHistory.shift();
+    chatLogWriteChain = appendNdjsonAsync(CHAT_LOG_PATH, msg, chatLogWriteChain);
+    saveState();
+    // Log to terminal if filter is enabled
+    if (SYSTEM_DB?.settings?.terminalLogFilters?.system !== false) {
+        console.log(`[${type.toUpperCase()}] [${role}] ${safeText}`);
+    }
+    return msg;
+};
+
+const logUserMessageOnce = (text, type = 'text') => {
+    const now = Date.now();
+    const raw = String(text || '').trim();
+    const safeText = raw.length > MAX_CHAT_LOG_CHARS ? `${raw.slice(0, MAX_CHAT_LOG_CHARS)}…[truncated]` : raw;
+    if (!safeText) return null;
+    const recent = SYSTEM_DB.chatHistory.slice(-6).reverse().find(m => m?.role === 'user' && String(m.text || '').trim() === safeText);
+    if (recent && Math.abs((recent.timestamp || 0) - now) < 15000) {
+        return null;
+    }
+    return logToChat('user', safeText, type);
+};
+
+const isTaskIntentMessage = (message) => {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    return /\b(zadanie|task|napisz|stwórz|stworz|zrób|zrob|wykonaj|zlecam|zajmij|ogarnij|sprawdź|sprawdz|napraw|przygotuj|artykuł|artykul|artykuły|artykuly|blog|wpis|article|post|subtask|podzadanie)\b/i.test(text);
+};
+
+const maybeCreateTaskFromUserMessage = async (message, source = 'terminal', opts = {}) => {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const force = options.force === true;
+    const preempt = options.preempt !== false;
+    const looksLikeTask = isTaskIntentMessage(text);
+    if (!looksLikeTask && !force) return false;
+    const title = text.length > 90 ? `${text.slice(0, 87)}...` : text;
+    const duplicate = SYSTEM_DB.tasks.slice(-10).some(t => t && (t.title === title || t.description === text) && (Date.now() - (t.createdAt || 0)) < 10 * 60 * 1000);
+    if (duplicate) return false;
+    const activeTask = SYSTEM_DB.tasks.find(t => t && t.status === 'in_progress');
+    if (preempt && activeTask) {
+        activeTask.status = 'pending';
+        activeTask.priority = activeTask.priority === 'high' ? 'medium' : (activeTask.priority || 'medium');
+        activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+        activeTask.logs.push(`[USER/${source}] Preempted by user priority task.`);
+        activeTask.updatedAt = Date.now();
+    }
+    const created = normalizeTask({
+        id: `task_${Date.now()}`,
+        title,
+        description: text,
+        status: 'pending',
+        progress: 0,
+        priority: 'high',
+        logs: [`[AUTO/${source}] Task created from user request.`],
+        withinObjectives: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+    });
+    SYSTEM_DB.tasks.push(created);
+    const breakdownCfg = getTaskBreakdownConfig();
+    if (breakdownCfg.enabled && breakdownCfg.autoOnCreate) {
+        await generateTaskBreakdownForTask(created, source);
+    }
+    saveState();
+    logToChat('system', `[TASK][USER/${source}] Created: ${title}`, 'system');
+    try {
+        SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+    } catch {}
+    scheduleAutonomyEvent('user_task_created', 50, { force: true });
+    return true;
+};
+
+const requestTaskApproval = async (action, source = 'autonomy') => {
+    const title = String(action?.title || '').trim() || 'Untitled Task';
+    const description = String(action?.description || '').trim();
+    const priority = action?.priority || 'medium';
+    const pending = SYSTEM_DB.agentState.pendingTaskApproval;
+    if (pending && pending.title === title && pending.description === description && (Date.now() - pending.requestedAt) < 10 * 60 * 1000) {
+        return;
+    }
+    SYSTEM_DB.agentState.pendingTaskApproval = { title, description, priority, requestedAt: Date.now(), source };
+    saveState();
+    const approvalMessage = `PROŚBA O ZGODĘ: Autonomia chce utworzyć task poza celami.\nTytuł: ${title}\nOpis: ${description || 'Brak'}\nOdpowiedz: TAK lub NIE`;
+    logToChat('system', approvalMessage, 'system');
+    if (isTelegramEnabled()) {
+        await sendTelegramMessage(approvalMessage);
+    }
+};
+
+const handleTaskApproval = async (message, source = 'terminal') => {
+    const pending = SYSTEM_DB.agentState.pendingTaskApproval;
+    if (!pending) return false;
+    const text = String(message || '').trim().toLowerCase();
+    const isApprove = /^(tak|zgoda|zgadzam|yes|approve|ok|okey|dawaj)\b/i.test(text);
+    const isReject = /^(nie|odrzuc|odrzuć|no|reject|stop)\b/i.test(text);
+    if (!isApprove && !isReject) return false;
+    if (isReject) {
+        SYSTEM_DB.agentState.pendingTaskApproval = null;
+        saveState();
+        logToChat('system', `Zgoda odrzucona: ${pending.title}`, 'system');
+        if (isTelegramEnabled()) {
+            await sendTelegramMessage(`Zgoda odrzucona: ${pending.title}`);
+        }
+        return true;
+    }
+    const created = normalizeTask({
+        id: `task_${Date.now()}`,
+        title: pending.title,
+        description: pending.description,
+        status: 'pending',
+        progress: 0,
+        priority: pending.priority || 'medium',
+        logs: [`[APPROVED/${source}] Task created after operator approval.`],
+        withinObjectives: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+    });
+    SYSTEM_DB.tasks.push(created);
+    const breakdownCfg = getTaskBreakdownConfig();
+    if (breakdownCfg.enabled && breakdownCfg.autoOnCreate) {
+        await generateTaskBreakdownForTask(created, source);
+    }
+    SYSTEM_DB.agentState.pendingTaskApproval = null;
+    saveState();
+    logToChat('system', `Zgoda przyznana: ${pending.title}`, 'system');
+    scheduleAutonomyEvent('task_approved', 250);
+    if (isTelegramEnabled()) {
+        await sendTelegramMessage(`Zgoda przyznana: ${pending.title}`);
+    }
+    return true;
+};
+
+const buildRecentChatContext = (limit = 120, maxChars = 12000, perItemLimit = 1200) => {
+    const items = (SYSTEM_DB.chatHistory || [])
+        .filter(m => {
+            if (!m || (m.role !== 'user' && m.role !== 'model')) return false;
+            const text = String(m.text || '').trim();
+            if (!text) return false;
+            const alphaNum = text.replace(/[^a-z0-9ąćęłńóśżź]/gi, '');
+            if (alphaNum.length < 4 && /^(?:[-—–_]{2,}\s*){3,}$/m.test(text)) return false;
+            const nonAlphaRatio = alphaNum.length ? (1 - (alphaNum.length / Math.max(1, text.length))) : 1;
+            if (nonAlphaRatio > 0.92 && text.length > 20) return false;
+            return true;
+        })
+        .slice(-limit);
+    if (!items.length) return '';
+    const chunks = [];
+    let total = 0;
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+        const m = items[i];
+        const line = `${m.role.toUpperCase()}: ${String(m.text || '').slice(0, perItemLimit)}`;
+        const nextTotal = total + line.length + (chunks.length ? 1 : 0);
+        if (nextTotal > maxChars) break;
+        chunks.push(line);
+        total = nextTotal;
+    }
+    if (!chunks.length) return '';
+    return chunks.reverse().join('\n');
+};
+
+const clampNumber = (value, min, max) => {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return min;
+    return Math.min(Math.max(v, min), max);
+};
+
+const estimatePromptCharBudget = (modelRole) => {
+    const ctx = resolveOllamaNumCtx(modelRole);
+    const approx = Math.floor(ctx * 4);
+    return clampNumber(approx, 4000, 120000);
+};
+
+const truncateText = (text, maxChars, fromEnd = false) => {
+    const raw = String(text || '');
+    if (raw.length <= maxChars) return raw;
+    if (maxChars <= 0) return '';
+    return fromEnd ? raw.slice(-maxChars) : raw.slice(0, maxChars);
+};
+
+const buildPinnedContextLite = () => {
+    const remoteArticlesDir = computeRemoteArticlesDir();
+    const now = new Date();
+    const profile = SYSTEM_DB?.gaiProfile && typeof SYSTEM_DB.gaiProfile === 'object' ? SYSTEM_DB.gaiProfile : null;
+    const learnings = Array.isArray(SYSTEM_DB?.gaiLearnings) ? SYSTEM_DB.gaiLearnings : [];
+    const contractMem = Array.isArray(SYSTEM_DB?.memories)
+        ? SYSTEM_DB.memories.find(m => m && m.id === 'pinned_user_contract')
+        : null;
+    const contractText = contractMem && typeof contractMem.content === 'string' ? truncateText(contractMem.content, 1200, true) : '';
+    const profileText = profile ? truncateText(JSON.stringify(profile), 900, true) : '';
+    const learningsText = learnings.length ? truncateText(JSON.stringify(learnings.slice(-12)), 900, true) : '';
+    return [
+        `PINNED_SYSTEM_PATHS: ${JSON.stringify({ dataDir: DATA_DIR, fsRoot: FS_ROOT, articlesDir: ARTICLES_DIR, articlesIndex: ARTICLES_INDEX_PATH, remoteArticlesDir })}`,
+        `PINNED_GAI_PORT: ${JSON.stringify({ port: PORT, baseUrl: `http://localhost:${PORT}` })}`,
+        `PINNED_OS: ${JSON.stringify({ platform: os.platform(), release: os.release(), arch: os.arch() })}`,
+        `PINNED_CURRENT_DATE: ${JSON.stringify({ iso: now.toISOString(), local: now.toLocaleString() })}`,
+        profileText ? `PINNED_GAI_PROFILE: ${profileText}` : '',
+        learningsText ? `PINNED_GAI_LEARNINGS: ${learningsText}` : '',
+        contractText ? `PINNED_USER_CONTRACT:\n${contractText}\n[/PINNED_USER_CONTRACT]` : ''
+    ].filter(Boolean).join('\n');
+};
+
+const buildChatSystemInstruction = (base = '') => {
+    const text = String(base || '').trim();
+    return [
+        text,
+        `SYSTEM_ENV: ${JSON.stringify({ os: os.platform(), release: os.release(), arch: os.arch(), gaiPort: PORT })}`,
+        `DODATKOWE_ZASADY_CHAT:`,
+        `- Odpowiadaj naturalnie (bez nagłówków SUMMARY:/ANSWER:).`,
+        `- Nie używaj separatorów typu "---".`,
+        `- Jeśli potrzebujesz struktury, używaj krótkich list punktowanych lub numerowanych.`
+    ].filter(Boolean).join('\n');
+};
+
+const extractUserMessageFromComposedPrompt = (userPrompt = '') => {
+    const text = String(userPrompt || '');
+    const marker = 'USER:\n';
+    const idx = text.lastIndexOf(marker);
+    if (idx === -1) return text.trim();
+    return text.slice(idx + marker.length).trim();
+};
+
+const shouldDisableThinkForChat = (message = '') => {
+    const text = String(message || '').trim().toLowerCase();
+    if (!text) return true;
+    const hardOn = /\b(plan|kroki|strategy|roadmap|harmonogram|debug|błąd|blad|exception|stacktrace|architektur|architecture|refactor|seo|affiliate|kod|code|api|endpoint|react|typescript)\b/i.test(text);
+    if (hardOn) return false;
+    return text.length <= 80;
+};
+
+const shouldForceThinkFalse = ({ model, modelRole, userPrompt }) => {
+    // Always enable think tags for all models
+    return false;
+};
+
+const shouldIncludeArticleGuide = (message = '') => {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    const wantsDoc =
+        /\b(artykuł|artykul|artykuły|artykuly|article|blog post|blog|post|wpis|newsletter)\b/i.test(lower) &&
+        /\b(napisz|napisać|napiszcie|stwórz|stworz|utwórz|utworz|przygotuj|write|create|draft|prepare|generate)\b/i.test(lower);
+    const explicitGuide =
+        /\b(how_to_write_articles|how to write articles|articles guide|guide to writing articles)\b/i.test(lower);
+    return wantsDoc || explicitGuide;
+};
+
+const buildOpenTasksBrief = (limit = 3) => {
+    const tasks = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks : [];
+    const open = tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress'));
+    if (!open.length) return 'TASKS_OPEN: none';
+    const lines = open.slice(0, limit).map(t => {
+        const title = String(t.title || '').slice(0, 120);
+        const status = String(t.status || '');
+        const progress = Number.isFinite(Number(t.progress)) ? Number(t.progress) : 0;
+        return `- ${title} | ${status} | ${progress}%`;
+    });
+    const more = open.length > limit ? `(+${open.length - limit} more)` : '';
+    return `TASKS_OPEN:\n${lines.join('\n')}${more ? `\n${more}` : ''}`;
+};
+
+const selectConsultRolesForChat = (message = '') => {
+    if (SYSTEM_DB?.settings?.chatConsultation?.enabled !== true) return [];
+    const maxRolesRaw = Number(SYSTEM_DB?.settings?.chatConsultation?.maxRoles);
+    const maxRoles = Number.isFinite(maxRolesRaw) ? Math.max(0, Math.min(4, Math.floor(maxRolesRaw))) : 2;
+    if (maxRoles === 0) return [];
+    const text = String(message || '').toLowerCase();
+    const has = (patterns) => patterns.some(p => text.includes(p));
+    const roles = [];
+    if (has(['stacktrace', 'stack trace', 'exception', 'error', 'bug', 'debug', 'trace', 'crash', 'błąd', 'blad', 'wyjątek', 'wyjatek'])) roles.push('debug');
+    if (has(['architektur', 'architecture', 'system design', 'design', 'diagram', 'moduł', 'modul', 'struktura'])) roles.push('architecture');
+    if (has(['refactor', 'refakt', 'przebudow', 'porządk', 'porzadk', 'cleanup'])) roles.push('refactor');
+    if (has(['artykuł', 'artykul', 'artykuły', 'artykuly', 'blog', 'wpis', 'article', 'post', 'seo', 'affiliate', 'newsletter'])) roles.push('writing');
+    if (has(['plan', 'planning', 'strategy', 'roadmap', 'harmonogram', 'strategia'])) roles.push('planning');
+    if (has(['function', 'funkcj', 'implement', 'dodaj funkcj', 'stwórz funkcj', 'stworz funkcj'])) roles.push('functionCoding');
+    if (has(['kod', 'code', 'api', 'endpoint', 'frontend', 'backend', 'ui', 'typescript', 'react'])) roles.push('coding');
+    const unique = Array.from(new Set(roles)).filter(r => r && r !== 'chat');
+    return unique.slice(0, maxRoles);
+};
+
+const runChatConsultations = async ({ message, provider, systemInstruction, signal }) => {
+    const roles = selectConsultRolesForChat(message);
+    if (!roles.length) return [];
+    const timeoutRaw = Number(SYSTEM_DB?.settings?.chatConsultation?.timeoutMs);
+    const timeoutMs = Number.isFinite(timeoutRaw) ? Math.max(1500, Math.min(30000, Math.floor(timeoutRaw))) : 8000;
+    const includeGuide = shouldIncludeArticleGuide(message);
+
+    const tasks = roles.map(async (role) => {
+        const roleModel = SYSTEM_DB.settings.modelRoles?.[role] || SYSTEM_DB.settings.activeModel;
+        const consultController = createAbortControllerWithTimeout(signal, timeoutMs);
+        try {
+            const consultMessage = applyThinkingTag(message, role);
+            const consultPromptBase = composePrompt({ message: consultMessage, modelRole: role, includeGuide });
+            const consultPrompt =
+                `${consultPromptBase}\n\n` +
+                `INSTRUCTION:\n` +
+                `Jesteś specjalistą w roli "${role}". Odpowiedz zwięźle w punktach (max 10), podaj konkretne decyzje/ryzyka/następne kroki. ` +
+                `Nie zwracaj "SUMMARY/ANSWER", tylko same punkty.`;
+            const consultSystemInstruction =
+                `Jesteś modułem konsultacyjnym GAI.\n` +
+                `Rola: ${role}\n` +
+                `Język: polski\n` +
+                `Zwróć wyłącznie notatki dla głównego asystenta w punktach.\n` +
+                `Zakazy: brak linii typu "---", brak nagłówków "SUMMARY:"/"ANSWER:", brak kodów blokowych.\n`;
+            const reply = await queryUniversalAI({
+                provider,
+                model: roleModel,
+                modelRole: role,
+                systemInstruction: consultSystemInstruction,
+                userPrompt: consultPrompt,
+                signal: consultController.controller.signal
+            });
+            const cleaned = suppressRedundantPrompts(parseModelReply(reply || '').answer).trim();
+            const meaningful = cleaned.replace(/[\s\-—–_`*#|.]/g, '');
+            if (!cleaned || meaningful.length < 12) return null;
+            return { role, model: roleModel, text: cleaned };
+        } catch {
+            return null;
+        } finally {
+            consultController.cleanup();
+        }
+    });
+
+    const settled = await Promise.allSettled(tasks);
+    return settled
+        .map(r => (r.status === 'fulfilled' ? r.value : null))
+        .filter(Boolean);
+};
+
+const AUTONOMY_STEP_TIMEOUT_MS = 900000; // 15 min
+const AUTONOMY_MAX_TOOLS_PER_CYCLE = 20; // Zwiększone z 5, bo agent musi być sprawczy
+const AUTONOMY_LOOP_BREAKER_LIMIT = 20; // Zwiększone z 10, bo skomplikowane zadania wymagają więcej kroków
+
+// --- PERSISTENT CONTEXT MEMORY ---
+const getTaskContextPath = (taskId) => path.join(DATA_DIR, 'memory', `context_${taskId}.json`);
+
+const loadTaskContext = (taskId) => {
+    try {
+        const p = getTaskContextPath(taskId);
+        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+        return { history: [] };
+    } catch { return { history: [] }; }
+};
+
+const saveTaskContext = (taskId, ctx) => {
+    try {
+        const p = getTaskContextPath(taskId);
+        if (!fs.existsSync(path.dirname(p))) fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, JSON.stringify(ctx, null, 2));
+    } catch (e) { console.error('Failed to save task context', e); }
+};
+
+const appendTaskHistory = (taskId, entry) => {
+    const ctx = loadTaskContext(taskId);
+    ctx.history.push({ ts: Date.now(), ...entry });
+    // Keep last 50 steps to avoid token overflow, but summarize if needed (TODO: Auto-summary)
+    if (ctx.history.length > 50) ctx.history = ctx.history.slice(-50);
+    saveTaskContext(taskId, ctx);
+};
+
+const formatTaskHistory = (taskId) => {
+    const ctx = loadTaskContext(taskId);
+    if (!ctx.history.length) return '';
+    
+    return ctx.history.map((h, i) => {
+        let content = '';
+        if (h.type === 'thought') content = `THOUGHT: ${h.content}`;
+        else if (h.type === 'tool_call') content = `TOOL_CALL: ${JSON.stringify(h.content)}`;
+        else if (h.type === 'tool_result') content = `TOOL_RESULT: ${h.content}`;
+        else content = `LOG: ${h.content}`;
+        
+        return `[STEP ${i+1}] ${content}`;
+    }).join('\n\n');
+};
+// ---------------------------------
+
+// --- GLOBAL KNOWLEDGE BASE (SELF-IMPROVEMENT) ---
+const KNOWLEDGE_BASE_PATH = path.join(DATA_DIR, 'memory', 'knowledge_base.json');
+
+const loadKnowledgeBase = () => {
+    try {
+        if (fs.existsSync(KNOWLEDGE_BASE_PATH)) return JSON.parse(fs.readFileSync(KNOWLEDGE_BASE_PATH, 'utf8'));
+        return { lessons: [] };
+    } catch { return { lessons: [] }; }
+};
+
+const saveKnowledgeBase = (kb) => {
+    try {
+        if (!fs.existsSync(path.dirname(KNOWLEDGE_BASE_PATH))) fs.mkdirSync(path.dirname(KNOWLEDGE_BASE_PATH), { recursive: true });
+        fs.writeFileSync(KNOWLEDGE_BASE_PATH, JSON.stringify(kb, null, 2));
+    } catch {}
+};
+
+const recordLesson = (lesson) => {
+    const kb = loadKnowledgeBase();
+    // Simple duplicate check
+    if (!kb.lessons.some(l => l.content === lesson)) {
+        kb.lessons.push({ ts: Date.now(), content: lesson });
+        if (kb.lessons.length > 100) kb.lessons = kb.lessons.slice(-100);
+        saveKnowledgeBase(kb);
+    }
+};
+
+const buildRelevantLessons = (taskContext) => {
+    const kb = loadKnowledgeBase();
+    if (!kb.lessons.length) return '';
+    // Naive keyword matching for now (TODO: Vector Search later)
+    const contextLower = taskContext.toLowerCase();
+    const relevant = kb.lessons.filter(l => {
+        const keywords = l.content.split(' ').filter(w => w.length > 4);
+        return keywords.some(k => contextLower.includes(k.toLowerCase()));
+    }).slice(-5); // Top 5 relevant lessons
+    
+    if (!relevant.length) return '';
+    return 'LESSONS_LEARNED (GLOBAL KNOWLEDGE):\n' + relevant.map(l => `- ${l.content}`).join('\n');
+};
+// ------------------------------------------------
+
+const buildProjectContext = () => {
+    try {
+        let ctx = 'ROOT: ' + APP_ROOT + '\n';
+        
+        // 1. Directory Structure (Top Level)
+        try {
+            const entries = fs.readdirSync(APP_ROOT, { withFileTypes: true });
+            const dirs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules').map(e => e.name + '/');
+            const files = entries.filter(e => e.isFile() && !e.name.startsWith('.')).map(e => e.name);
+            ctx += 'DIRS: ' + dirs.join(', ') + '\n';
+            ctx += 'FILES: ' + files.join(', ') + '\n';
+        } catch (e) {}
+
+        // 2. Data Directory (Crucial for GAI)
+        try {
+            if (fs.existsSync(DATA_DIR)) {
+                const dataEntries = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+                const dataDirs = dataEntries.filter(e => e.isDirectory()).map(e => e.name + '/');
+                ctx += 'DATA_DIRS: ' + dataDirs.join(', ') + '\n';
+            }
+        } catch (e) {}
+
+        // 3. Package.json (Dependencies)
+        try {
+            const pkgPath = path.join(APP_ROOT, 'package.json');
+            if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                ctx += 'DEPENDENCIES: ' + Object.keys(pkg.dependencies || {}).join(', ') + '\n';
+                ctx += 'SCRIPTS: ' + Object.keys(pkg.scripts || {}).join(', ') + '\n';
+            }
+        } catch (e) {}
+
+        return ctx;
+    } catch (e) {
+        return 'Context unavailable';
+    }
+};
+
+const getRoleContextProfile = (modelRole) => {
+    const role = String(modelRole || '').toLowerCase();
+    const base = {
+        pinned: true,
+        system: true,
+        extra: true,
+        reasoning: true,
+        memories: true,
+        logs: true,
+        recent: true,
+        ragArticles: false,
+        ragSources: false
+    };
+    if (!role || role === 'chat') return { ...base, ragArticles: true, ragSources: true };
+    if (role === 'coding' || role === 'functioncoding' || role === 'boilerplate') {
+        return { ...base, reasoning: false, logs: false, ragSources: true };
+    }
+    if (role === 'debug') {
+        return { ...base, reasoning: false, memories: false, ragSources: true };
+    }
+    if (role === 'writing') {
+        return { ...base, reasoning: false, logs: false, ragArticles: true };
+    }
+    if (role === 'planning' || role === 'architecture') {
+        return { ...base, ragArticles: true, ragSources: true };
+    }
+    return base;
+};
+
+const composePrompt = ({ message, modelRole, includeGuide = false, extraContext = '' }) => {
+    const userPart = `USER:\n${String(message || '')}`;
+    const budget = estimatePromptCharBudget(modelRole);
+    const isChat = modelRole === 'chat';
+    const profile = getRoleContextProfile(modelRole);
+    
+    const outputGuard = ``;
+    
+    let pinnedText = profile.pinned ? (isChat ? buildPinnedContextLite() : buildPinnedContext({ includeGuide })) : '';
+    let systemText = profile.system ? truncateText(buildSystemContext(), isChat ? 2000 : 1400, true) : '';
+    let extraText = profile.extra ? String(extraContext || '').trim() : '';
+    extraText = extraText ? truncateText(extraText, isChat ? 2400 : 2600, true) : '';
+    let reasoningText = profile.reasoning ? (isChat ? buildReasoningContext(6, 1400) : buildReasoningContext()) : '';
+    let memoryText = profile.memories ? (isChat ? truncateText(buildRelevantMemories(message, 8, 2600), 2600, true) : buildRelevantMemories(message)) : '';
+    let ragText = profile.ragArticles ? buildRagArticlesContext(message, isChat ? 3 : 4, isChat ? 2000 : 2600) : '';
+    let ragSourcesText = profile.ragSources ? buildRagSourcesContext(message, isChat ? 3 : 4, isChat ? 2200 : 2600) : '';
+    let logsText = profile.logs ? (isChat ? buildRelevantLogs(message, 4, 1200) : buildRelevantLogs(message)) : '';
+    let recentText = profile.recent ? (isChat ? buildRecentChatContext(60, 8000, 900) : buildRecentChatContext()) : '';
+    let total =
+        userPart.length +
+        outputGuard.length + 2 +
+        (pinnedText ? pinnedText.length + 2 : 0) +
+        (systemText ? systemText.length + 2 : 0) +
+        (extraText ? extraText.length + 2 : 0) +
+        (reasoningText ? reasoningText.length + 2 : 0) +
+        (memoryText ? memoryText.length + 2 : 0) +
+        (ragText ? ragText.length + 2 : 0) +
+        (ragSourcesText ? ragSourcesText.length + 2 : 0) +
+        (logsText ? logsText.length + 2 : 0) +
+        (recentText ? recentText.length + 2 : 0);
+    if (total > budget) {
+        let overflow = total - budget;
+        const shrink = (text, fromEnd = true, minLen = 0) => {
+            if (!text || overflow <= 0) return text;
+            const minSafe = Math.max(0, minLen);
+            const maxLen = Math.max(minSafe, text.length - overflow);
+            const next = truncateText(text, maxLen, fromEnd);
+            overflow = Math.max(0, overflow - (text.length - next.length));
+            return next;
+        };
+        logsText = shrink(logsText, true);
+        ragSourcesText = shrink(ragSourcesText, true);
+        ragText = shrink(ragText, true);
+        memoryText = shrink(memoryText, true);
+        reasoningText = shrink(reasoningText, true);
+        recentText = shrink(recentText, true, isChat ? 600 : 1200);
+        extraText = shrink(extraText, true);
+        systemText = shrink(systemText, true);
+        pinnedText = shrink(pinnedText, false);
+        total =
+            userPart.length +
+            outputGuard.length + 2 +
+            (pinnedText ? pinnedText.length + 2 : 0) +
+            (systemText ? systemText.length + 2 : 0) +
+            (extraText ? extraText.length + 2 : 0) +
+            (reasoningText ? reasoningText.length + 2 : 0) +
+            (memoryText ? memoryText.length + 2 : 0) +
+            (ragText ? ragText.length + 2 : 0) +
+            (ragSourcesText ? ragSourcesText.length + 2 : 0) +
+            (logsText ? logsText.length + 2 : 0) +
+            (recentText ? recentText.length + 2 : 0);
+        if (total > budget) {
+            const maxRecent = Math.max(0, budget - userPart.length - (pinnedText ? pinnedText.length + 2 : 0) - (systemText ? systemText.length + 2 : 0) - (reasoningText ? reasoningText.length + 2 : 0) - (memoryText ? memoryText.length + 2 : 0) - (logsText ? logsText.length + 2 : 0) - 2);
+            recentText = truncateText(recentText, maxRecent, true);
+        }
+    }
+    
+    // Explicitly add a "ONE BRAIN" coordination instruction if multiple roles are involved
+    // This is injected subtly into the output guard or system context
+    let coordinationInstruction = "";
+    if (message.includes('[CONSULTATION_NOTES]')) {
+        coordinationInstruction = `\n\nCOORDINATION_PROTOCOL:\n- Jesteś głównym decydentem (Główny Mózg). Konsultacje powyżej są Twoimi podprocesami myślowymi.\n- Zintegruj je w spójną odpowiedź. Nie pisz "Konsultant X powiedział...", po prostu użyj tej wiedzy jako własnej.\n- Jeśli konsultacje są sprzeczne, Ty rozstrzygasz na podstawie logiki i priorytetów użytkownika.\n`;
+    }
+
+    let safeUser = userPart;
+    if (total > budget) {
+        safeUser = truncateText(userPart, budget, true);
+    }
+    return [outputGuard + coordinationInstruction, pinnedText, systemText, extraText, memoryText, ragText, ragSourcesText, logsText, reasoningText, recentText].filter(Boolean).join('\n\n') + `\n\n${safeUser}`;
+};
+
+const buildClientExtraContext = (ctx) => {
+    if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return '';
+    const safeJson = (value, maxChars = 2000) => {
+        try {
+            const raw = JSON.stringify(value);
+            return truncateText(raw, maxChars, true);
+        } catch {
+            return '';
+        }
+    };
+    const userProfile = ctx.userProfile && typeof ctx.userProfile === 'object' ? safeJson(ctx.userProfile, 1000) : '';
+    const emotional = typeof ctx.emotionalContext === 'string' ? truncateText(ctx.emotionalContext, 120, true) : '';
+    const approach = typeof ctx.suggestedApproach === 'string' ? truncateText(ctx.suggestedApproach, 600, true) : '';
+    const learningsArr = Array.isArray(ctx.relatedLearnings) ? ctx.relatedLearnings : [];
+    const learnings = learningsArr.length ? safeJson(learningsArr.slice(0, 12), 2000) : '';
+    const memArr = Array.isArray(ctx.relevantMemories) ? ctx.relevantMemories : [];
+    const memLite = memArr
+        .slice(0, 12)
+        .map((m) => ({ id: m?.id, type: m?.type, tags: m?.metadata?.tags, content: String(m?.content || '').slice(0, 320) }));
+    const memories = memLite.length ? safeJson(memLite, 2000) : '';
+    const lines = [
+        'CLIENT_CONTEXT:',
+        userProfile ? `- userProfile: ${userProfile}` : '',
+        emotional ? `- emotionalContext: ${emotional}` : '',
+        approach ? `- suggestedApproach: ${approach}` : '',
+        learnings ? `- relatedLearnings: ${learnings}` : '',
+        memories ? `- relevantMemories: ${memories}` : ''
+    ].filter(Boolean);
+    return lines.length > 1 ? lines.join('\n') : '';
+};
+
+const pushNotification = async ({ level = 'info', title = '', message = '', meta = {}, notifyTelegram = false } = {}) => {
+    const now = Date.now();
+    const item = {
+        id: `note_${now}_${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: now,
+        level: ['info', 'success', 'warn', 'error'].includes(level) ? level : 'info',
+        title: String(title || '').slice(0, 120),
+        message: String(message || '').slice(0, 2000),
+        meta: meta && typeof meta === 'object' ? meta : {},
+        read: false
+    };
+    SYSTEM_DB.notifications = Array.isArray(SYSTEM_DB.notifications) ? SYSTEM_DB.notifications : [];
+    SYSTEM_DB.notifications.push(item);
+    if (SYSTEM_DB.notifications.length > 500) {
+        SYSTEM_DB.notifications = SYSTEM_DB.notifications.slice(-500);
+    }
+    // Force save to persist notification
+    saveState();
+    if (notifyTelegram && isTelegramEnabled()) {
+        const text = [title ? `GAI: ${title}` : 'GAI: Powiadomienie', message ? message : ''].filter(Boolean).join('\n');
+        try { await sendTelegramMessage(text); } catch {}
+    }
+    return item;
+};
+
+let autoSnapshotInFlight = false;
+const createAutoSnapshotIfDue = async (reason = 'auto') => {
+    if (autoSnapshotInFlight) return null;
+    const now = Date.now();
+    const lastAt = Number(SYSTEM_DB?.agentState?.lastAutoSnapshotAt || 0);
+    if (lastAt && now - lastAt < 5 * 60 * 1000) return null;
+    autoSnapshotInFlight = true;
+    try {
+        const tag = String(reason || '').replace(/[^a-z0-9_-]+/gi, '').slice(0, 24) || 'op';
+        const id = `gai_snapshot_${Date.now()}_auto_${tag}`;
+        const snapPath = path.join(SNAPSHOT_DIR, `${id}.json`);
+        await saveState();
+        fs.copyFileSync(DB_PATH, snapPath);
+        SYSTEM_DB.agentState.lastAutoSnapshotAt = now;
+        saveState();
+        try {
+            const files = fs.existsSync(SNAPSHOT_DIR) ? fs.readdirSync(SNAPSHOT_DIR).filter(f => f.endsWith('.json') && f.includes('_auto_')) : [];
+            const withTimes = files
+                .map(f => ({ f, t: fs.statSync(path.join(SNAPSHOT_DIR, f)).mtimeMs }))
+                .sort((a, b) => b.t - a.t);
+            for (const it of withTimes.slice(30)) {
+                try { fs.unlinkSync(path.join(SNAPSHOT_DIR, it.f)); } catch {}
+            }
+        } catch {}
+        pushNotification({ level: 'info', title: 'Auto-snapshot', message: `Utworzono snapshot: ${id}`, meta: { id, reason } });
+        return id;
+    } catch {
+        return null;
+    } finally {
+        autoSnapshotInFlight = false;
+    }
+};
+
+let dailySnapshotInFlight = false;
+const createDailySnapshotIfDue = async ({ force = false } = {}) => {
+    if (dailySnapshotInFlight) return null;
+    const cfg = SYSTEM_DB?.settings?.dailySnapshots || {};
+    const enabled = cfg.enabled !== false;
+    if (!enabled && !force) return null;
+    dailySnapshotInFlight = true;
+    try {
+        const keep = Math.max(1, Math.min(365, Number(cfg.keep) || 10));
+        const hourLocal = Math.max(0, Math.min(23, Number(cfg.hourLocal) || 3));
+        const now = new Date();
+
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+        const lastAt = Number(SYSTEM_DB?.agentState?.lastDailySnapshotAt || 0);
+        const alreadyToday = lastAt >= startOfToday;
+
+        if (!force) {
+            if (alreadyToday) return null;
+            if (now.getHours() < hourLocal) return null;
+        }
+
+        const id = `gai_snapshot_${Date.now()}_daily`;
+        const snapPath = path.join(SNAPSHOT_DIR, `${id}.json`);
+        await saveState();
+        if (!fs.existsSync(DB_PATH)) {
+            await saveState();
+        }
+        fs.copyFileSync(DB_PATH, snapPath);
+        SYSTEM_DB.agentState.lastDailySnapshotAt = Date.now();
+        saveState();
+
+        try {
+            const files = fs.existsSync(SNAPSHOT_DIR)
+                ? fs.readdirSync(SNAPSHOT_DIR).filter(f => f.endsWith('.json') && f.includes('_daily'))
+                : [];
+            const withTimes = files
+                .map(f => ({ f, t: fs.statSync(path.join(SNAPSHOT_DIR, f)).mtimeMs }))
+                .sort((a, b) => a.t - b.t);
+            const toRemove = withTimes.length > keep ? withTimes.slice(0, withTimes.length - keep) : [];
+            for (const it of toRemove) {
+                try { fs.unlinkSync(path.join(SNAPSHOT_DIR, it.f)); } catch {}
+            }
+        } catch {}
+
+        pushNotification({ level: 'info', title: 'Daily backup', message: `Utworzono dzienny snapshot: ${id}`, meta: { id } });
+        return id;
+    } catch {
+        return null;
+    } finally {
+        dailySnapshotInFlight = false;
+    }
+};
+
+let dailySnapshotTimer = null;
+const startDailySnapshotScheduler = () => {
+    if (dailySnapshotTimer) return;
+    dailySnapshotTimer = safeSetInterval(() => {
+        createDailySnapshotIfDue({ force: false }).catch(() => undefined);
+    }, 10 * 60 * 1000);
+    safeSetTimeout(() => {
+        createDailySnapshotIfDue({ force: false }).catch(() => undefined);
+    }, 4000);
+};
+
+let autoSummaryInFlight = false;
+const maybeAutoSummarizeConversation = async ({ trigger = 'user' } = {}) => {
+    if (autoSummaryInFlight) return;
+    const history = Array.isArray(SYSTEM_DB.chatHistory) ? SYSTEM_DB.chatHistory : [];
+    const startIdx = Math.max(0, Number(SYSTEM_DB?.agentState?.lastAutoSummaryChatIndex || 0));
+    const endIdx = history.length;
+    if (endIdx - startIdx < 60) return;
+    const lastAt = Number(SYSTEM_DB?.agentState?.lastAutoSummaryAt || 0);
+    if (lastAt && Date.now() - lastAt < 60 * 1000) return;
+
+    const lines = history.slice(startIdx, endIdx)
+        .filter(m => m && (m.role === 'user' || m.role === 'model'))
+        .filter(m => !m.logType || m.logType === 'text' || m.logType === 'telegram')
+        .map(m => `${String(m.role || '').toUpperCase()}: ${String(m.text || '').replace(/\s+/g, ' ').trim()}`)
+        .filter(Boolean);
+    if (lines.length < 20) {
+        SYSTEM_DB.agentState.lastAutoSummaryChatIndex = endIdx;
+        SYSTEM_DB.agentState.lastAutoSummaryAt = Date.now();
+        saveState();
+        return;
+    }
+
+    const transcript = truncateText(lines.join('\n'), 12000, true);
+    autoSummaryInFlight = true;
+    const role = 'planning';
+    const roleModel = SYSTEM_DB.settings.modelRoles?.[role] || SYSTEM_DB.settings.activeModel;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 90_000);
+    try {
+        const prompt = [
+            'Zadanie: streść ostatni fragment rozmowy do pamięci długoterminowej (łatwej do wyszukania).',
+            '',
+            'Wymagania:',
+            '- Zwróć STRICT JSON (bez markdown).',
+            '- Zwięźle.',
+            '- Wydobądź: fakty, preferencje użytkownika, decyzje/ustalenia, otwarte pytania, słowa-klucze.',
+            '',
+            'TRANSCRIPT:',
+            transcript,
+            '',
+            'SCHEMA:',
+            '{"title":"","facts":[],"preferences":[],"decisions":[],"open_questions":[],"keywords":[]}'
+        ].join('\n');
+
+        const reply = await queryUniversalAI({
+            provider: SYSTEM_DB.settings.aiProvider,
+            model: roleModel,
+            modelRole: role,
+            systemInstruction: 'Jesteś modułem pamięci długoterminowej. Zwróć STRICT JSON bez markdown.',
+            userPrompt: prompt,
+            signal: controller.signal,
+            stream: false
+        });
+
+        const cleaned = String(reply || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        const parsed = parseJsonSafe(cleaned);
+        if (!parsed) return;
+        const now = Date.now();
+        const id = `mem_summary_${now}_${Math.random().toString(36).slice(2, 8)}`;
+        const content = [
+            `AUTO_SUMMARY: ${String(parsed.title || '').slice(0, 120)}`,
+            Array.isArray(parsed.facts) && parsed.facts.length ? `FAKTY:\n- ${parsed.facts.map(x => String(x)).filter(Boolean).slice(0, 12).join('\n- ')}` : '',
+            Array.isArray(parsed.preferences) && parsed.preferences.length ? `PREFERENCJE:\n- ${parsed.preferences.map(x => String(x)).filter(Boolean).slice(0, 12).join('\n- ')}` : '',
+            Array.isArray(parsed.decisions) && parsed.decisions.length ? `USTALENIA:\n- ${parsed.decisions.map(x => String(x)).filter(Boolean).slice(0, 12).join('\n- ')}` : '',
+            Array.isArray(parsed.open_questions) && parsed.open_questions.length ? `OTWARTE:\n- ${parsed.open_questions.map(x => String(x)).filter(Boolean).slice(0, 12).join('\n- ')}` : '',
+            Array.isArray(parsed.keywords) && parsed.keywords.length ? `KEYWORDS: ${parsed.keywords.map(x => String(x)).filter(Boolean).slice(0, 24).join(', ')}` : ''
+        ].filter(Boolean).join('\n\n');
+
+        SYSTEM_DB.memories = Array.isArray(SYSTEM_DB.memories) ? SYSTEM_DB.memories : [];
+        SYSTEM_DB.memories.push({
+            id,
+            title: String(parsed.title || '').slice(0, 120) || 'AUTO_SUMMARY',
+            type: 'summary',
+            content,
+            meta: { trigger, from: startIdx, to: endIdx, keywords: parsed.keywords || [] },
+            createdAt: now,
+            updatedAt: now
+        });
+        if (Array.isArray(parsed.preferences) && parsed.preferences.length) {
+            const prefs = parsed.preferences.map(x => String(x)).filter(Boolean).slice(0, 12);
+            const existing = Array.isArray(SYSTEM_DB.memories)
+                ? SYSTEM_DB.memories.find(m => m && m.id === 'pinned_user_contract')
+                : null;
+            const prevText = existing && typeof existing.content === 'string' ? existing.content : '';
+            const merged = Array.from(new Set([
+                ...prevText.split('\n').map(x => x.trim()).filter(Boolean),
+                ...prefs.map(p => `- ${p}`)
+            ]));
+            const nextText = truncateText(merged.join('\n'), 2000, true);
+            upsertMemory({ id: 'pinned_user_contract', title: 'USER_CONTRACT', type: 'pinned', content: nextText, meta: { source: 'auto_summary', updatedAt: now } });
+        }
+        if (SYSTEM_DB.memories.length > 7000) SYSTEM_DB.memories = SYSTEM_DB.memories.slice(-7000);
+        SYSTEM_DB.agentState.lastAutoSummaryChatIndex = endIdx;
+        SYSTEM_DB.agentState.lastAutoSummaryAt = now;
+        saveState();
+        pushNotification({ level: 'success', title: 'Pamięć zaktualizowana', message: `Auto-summary zapisany dla ${endIdx - startIdx} wpisów.`, meta: { id }, notifyTelegram: true });
+    } catch {
+    } finally {
+        cleanup();
+        autoSummaryInFlight = false;
+    }
+};
+
+let progressNotifierTimer = null;
+const startProgressNotifier = () => {
+    if (progressNotifierTimer) return;
+    progressNotifierTimer = safeSetInterval(() => {
+        try {
+            const cfg = SYSTEM_DB?.settings?.progressNotifications || {};
+            if (cfg.enabled !== true) return;
+            const intervalMs = Math.max(15, Math.min(3600, Number(cfg.intervalSeconds) || 120)) * 1000;
+            const agent = SYSTEM_DB?.agentState || {};
+            const open = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks.filter(t => t?.status !== 'completed') : [];
+            const active = open.find(t => t.status === 'in_progress') || open.find(t => t.status === 'pending') || null;
+
+            const now = Date.now();
+            const lastAt = Number(agent.lastProgressNoteAt || 0);
+            const dueByTime = !lastAt || (now - lastAt >= intervalMs);
+
+            const isProcessing = String(agent.currentAction || '') && String(agent.currentAction || '') !== 'idle';
+            const stageNow = String(agent.processingStage || '').slice(0, 160);
+
+            let shouldSend = false;
+            let level = 'info';
+            let title = 'Autopostępy';
+            let body = '';
+
+            if (active) {
+                const taskId = String(active.id || '');
+                const taskTitle = String(active.title || '').slice(0, 80);
+                const taskStatus = String(active.status || '');
+                const taskProgress = Number.isFinite(Number(active.progress)) ? Math.max(0, Math.min(100, Math.floor(Number(active.progress)))) : 0;
+
+                const lastTaskId = String(agent.lastProgressTaskId || '');
+                const lastTaskStatus = String(agent.lastProgressTaskStatus || '');
+                const lastTaskProgress = Number.isFinite(Number(agent.lastProgressTaskProgress)) ? Number(agent.lastProgressTaskProgress) : -1;
+                const lastTaskStage = String(agent.lastProgressTaskStage || '');
+
+                if (taskId && taskId !== lastTaskId) {
+                    shouldSend = true;
+                } else if (taskStatus && taskStatus !== lastTaskStatus) {
+                    shouldSend = true;
+                } else if (stageNow && stageNow !== lastTaskStage) {
+                    shouldSend = true;
+                } else if (taskProgress >= lastTaskProgress + 10) {
+                    shouldSend = true;
+                } else if (dueByTime && isProcessing) {
+                    shouldSend = true;
+                }
+
+                if (shouldSend) {
+                    title = taskTitle ? `Autopostępy: ${taskTitle}` : 'Autopostępy';
+                    const lastLog = Array.isArray(active.logs) && active.logs.length ? String(active.logs[active.logs.length - 1]) : '';
+                    const parts = [
+                        `- task: ${taskStatus || 'unknown'} | ${taskProgress}%`,
+                        isProcessing ? `- action: ${String(agent.currentAction || '').slice(0, 60)}` : '',
+                        stageNow ? `- stage: ${stageNow}` : '',
+                        lastLog ? `- lastLog: ${lastLog.slice(0, 220)}` : ''
+                    ].filter(Boolean);
+                    body = parts.join('\n');
+                    agent.lastProgressTaskId = taskId;
+                    agent.lastProgressTaskStatus = taskStatus;
+                    agent.lastProgressTaskProgress = taskProgress;
+                    agent.lastProgressTaskStage = stageNow;
+                }
+            } else if (dueByTime && isProcessing) {
+                shouldSend = true;
+                const parts = [
+                    `- task: none`,
+                    `- action: ${String(agent.currentAction || '').slice(0, 60)}`,
+                    stageNow ? `- stage: ${stageNow}` : ''
+                ].filter(Boolean);
+                body = parts.join('\n');
+            }
+
+            if (!shouldSend) return;
+
+            const hash = `${title}|${body}`;
+            if (String(agent.lastProgressNoteHash || '') === hash) {
+                agent.lastProgressNoteAt = now;
+                saveState();
+                return;
+            }
+            agent.lastProgressNoteHash = hash;
+            agent.lastProgressNoteAt = now;
+            saveState();
+            pushNotification({ level, title, message: body, notifyTelegram: cfg.telegram === true }).catch(() => undefined);
+        } catch {
+        }
+    }, 15000);
+};
+
+const handleMemorySlashCommand = async (rawMessage = '', attachments = []) => {
+    const text = String(rawMessage || '').trim();
+    if (!text.startsWith('/')) return null;
+    const [cmdRaw, ...rest] = text.split(/\s+/);
+    const cmd = String(cmdRaw || '').toLowerCase();
+    const arg = rest.join(' ').trim();
+
+    const rememberCmds = new Set(['/remember', '/zapamietaj', '/zapamiętaj']);
+    const forgetCmds = new Set(['/forget', '/zapomnij']);
+    const listCmds = new Set(['/memories', '/pamiec', '/pamięć']);
+    const notifyCmds = new Set(['/notify', '/powiadomienia', '/notifications']);
+    const imageCmds = new Set(['/image', '/obraz', '/img', '/generuj']);
+    const visionCmds = new Set(['/vision', '/analiza', '/widok', '/analyze']);
+    const remixCmds = new Set(['/remix', '/reimagine', '/wariant', '/variant', '/inspirowane']);
+
+    if (remixCmds.has(cmd)) {
+        if (!attachments || !attachments.length) {
+            // Check if argument is a URL
+            if (!arg.startsWith('http')) {
+                return { response: 'Załącz obraz do remixu (spinacz) lub podaj URL jako argument, oraz opcjonalnie prompt.' };
+            }
+        }
+        
+        let imagePath = '';
+        let promptSuffix = arg;
+
+        // Case 1: URL in argument
+        if (arg.startsWith('http')) {
+            const parts = arg.split(/\s+/);
+            const url = parts[0];
+            promptSuffix = parts.slice(1).join(' ');
+            
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`Failed to fetch URL: ${res.status}`);
+                const buffer = await res.arrayBuffer();
+                const tmpPath = path.join(DATA_DIR, 'uploads', `remix_${Date.now()}.jpg`);
+                fs.writeFileSync(tmpPath, Buffer.from(buffer));
+                imagePath = tmpPath;
+            } catch (e) {
+                return { response: `Błąd pobierania obrazu z URL: ${e.message}` };
+            }
+        } else {
+            // Case 2: Attachment
+            const relPath = attachments[0];
+            imagePath = resolveDiskPath(relPath);
+        }
+
+        if (!fs.existsSync(imagePath)) return { response: `Nie znaleziono pliku obrazu: ${imagePath}` };
+
+        try {
+            // 1. Analyze with Vision
+            const visionModel = await pickVisionModelName();
+            if (!visionModel) return { response: 'Brak modelu wizyjnego (llava) w Ollama. Uruchom: ollama pull llava' };
+            
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Image = imageBuffer.toString('base64');
+            
+            // Vision Prompt: Describe visual style and content for re-generation
+            const visionPrompt = "Describe the main subject, composition, lighting, and colors of this image in detail so an artist could recreate it. Focus on visual description.";
+            
+            const resVision = await fetch(`${SYSTEM_DB.settings.ollamaBaseUrl || OLLAMA_BASE_URL}/api/generate`, {
+                method: 'POST',
+                headers: getOllamaAuthHeaders(),
+                body: JSON.stringify({
+                    model: visionModel,
+                    prompt: visionPrompt,
+                    images: [base64Image],
+                    stream: false
+                })
+            });
+            const dataVision = await resVision.json();
+            const description = dataVision.response;
+
+            // 2. Generate new image based on description + user prompt
+            const finalPrompt = `Reimagine this: ${description}. ${promptSuffix ? `Context/Changes: ${promptSuffix}` : ''}`;
+            const safePrompt = encodeURIComponent(finalPrompt.slice(0, 1000)); // Limit length
+            
+            const url = `https://image.pollinations.ai/prompt/${safePrompt}`;
+            const destPath = path.join(OUT_DIR, `remix_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`);
+            
+            const resGen = await fetch(url);
+            if (!resGen.ok) throw new Error(`Pollinations API error: ${resGen.status}`);
+            const buffer = await resGen.arrayBuffer();
+            fs.writeFileSync(destPath, Buffer.from(buffer));
+            
+            const webPath = `/data/out/${path.basename(destPath)}`;
+            return { 
+                response: `REMIX COMPLETE:\nBased on: "${description.slice(0, 100)}..."\nIMAGE GENERATED: ${webPath}` 
+            };
+
+        } catch (e) {
+            return { response: `Błąd remixowania: ${e.message}` };
+        }
+    }
+
+    if (imageCmds.has(cmd)) {
+        if (!arg) return { response: 'Podaj opis obrazu do wygenerowania. Np. /image zachód słońca' };
+        
+        // Use existing IMAGE_GENERATE logic
+        const prompt = arg;
+        const safePrompt = encodeURIComponent(prompt);
+        // Fallback to Pollinations
+        const url = `https://image.pollinations.ai/prompt/${safePrompt}`;
+        const destPath = path.join(OUT_DIR, `gen_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`);
+        
+        try {
+             const res = await fetch(url);
+             if (!res.ok) throw new Error(`Pollinations API error: ${res.status}`);
+             const buffer = await res.arrayBuffer();
+             fs.writeFileSync(destPath, Buffer.from(buffer));
+             
+             // Return web-accessible path
+             const webPath = `/data/out/${path.basename(destPath)}`;
+             return { response: `IMAGE GENERATED: ${webPath}` };
+        } catch (e) {
+             return { response: `Błąd generowania obrazu: ${e.message}` };
+        }
+    }
+
+    if (visionCmds.has(cmd)) {
+        if (!attachments || !attachments.length) {
+            return { response: 'Załącz obraz do analizy (użyj spinacza i wybierz Upload).' };
+        }
+        // Assuming first attachment is the image
+        const imagePath = attachments[0]; // attachments are paths like 'data/uploads/...'
+        // Need to resolve to absolute path for backend
+        const fullPath = resolveDiskPath(imagePath);
+        
+        if (!fs.existsSync(fullPath)) return { response: `Nie znaleziono pliku: ${imagePath}` };
+        
+        try {
+            const visionModel = await pickVisionModelName();
+            if (!visionModel) return { response: 'Brak modelu wizyjnego (llava) w Ollama. Uruchom: ollama pull llava' };
+            
+            const imageBuffer = fs.readFileSync(fullPath);
+            const base64Image = imageBuffer.toString('base64');
+            const prompt = arg || "Opisz co widzisz na tym obrazku szczegółowo.";
+            
+            const res = await fetch(`${SYSTEM_DB.settings.ollamaBaseUrl || OLLAMA_BASE_URL}/api/generate`, {
+                method: 'POST',
+                headers: getOllamaAuthHeaders(),
+                body: JSON.stringify({
+                    model: visionModel,
+                    prompt: prompt,
+                    images: [base64Image],
+                    stream: false
+                })
+            });
+            const data = await res.json();
+            return { response: `ANALIZA OBRAZU (${visionModel}):\n${data.response}` };
+        } catch (e) {
+            return { response: `Błąd analizy wizyjnej: ${e.message}` };
+        }
+    }
+
+    if (rememberCmds.has(cmd)) {
+        if (!arg) return { response: 'Podaj treść po /remember.' };
+        const now = Date.now();
+        const id = `mem_userpref_${now}_${Math.random().toString(36).slice(2, 8)}`;
+        SYSTEM_DB.memories = Array.isArray(SYSTEM_DB.memories) ? SYSTEM_DB.memories : [];
+        SYSTEM_DB.memories.push({
+            id,
+            title: 'USER_PREFERENCE',
+            type: 'user_preference',
+            content: arg,
+            meta: { tags: ['user_preference', 'slash_command'] },
+            createdAt: now,
+            updatedAt: now
+        });
+        {
+            const existing = SYSTEM_DB.memories.find(m => m && m.id === 'pinned_user_contract');
+            const prevText = existing && typeof existing.content === 'string' ? existing.content : '';
+            const merged = Array.from(new Set([...prevText.split('\n').map(x => x.trim()).filter(Boolean), `- ${arg}`]));
+            const nextText = truncateText(merged.join('\n'), 2000, true);
+            upsertMemory({ id: 'pinned_user_contract', title: 'USER_CONTRACT', type: 'pinned', content: nextText, meta: { source: 'remember', updatedAt: now } });
+        }
+        saveState();
+        await pushNotification({ level: 'success', title: 'Zapamiętano', message: arg, meta: { id } });
+        return { response: `Zapamiętano. (id: ${id})` };
+    }
+
+    if (forgetCmds.has(cmd)) {
+        const memories = Array.isArray(SYSTEM_DB.memories) ? SYSTEM_DB.memories : [];
+        const candidates = memories.filter(m => m && m.type !== 'pinned');
+        if (!candidates.length) return { response: 'Brak wspomnień do usunięcia.' };
+
+        let target = null;
+        if (!arg || arg === 'last' || arg === 'ostatnie') {
+            target = candidates[candidates.length - 1] || null;
+        } else {
+            target = candidates.find(m => String(m.id || '') === arg) || null;
+            if (!target) {
+                const terms = tokenizeQuery(arg);
+                const scored = candidates
+                    .map(m => {
+                        const t = `${m.title || ''}\n${typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')}`;
+                        return { m, s: scoreTextByTerms(t, terms) };
+                    })
+                    .sort((a, b) => b.s - a.s);
+                target = scored.length && scored[0].s > 0 ? scored[0].m : null;
+            }
+        }
+
+        if (!target) return { response: 'Nie znaleziono pasującego wspomnienia.' };
+        SYSTEM_DB.memories = memories.filter(m => String(m?.id || '') !== String(target.id || ''));
+        saveState();
+        await pushNotification({ level: 'info', title: 'Usunięto wspomnienie', message: String(target.content || '').slice(0, 200), meta: { id: target.id } });
+        return { response: `Usunięto wspomnienie (id: ${target.id}).` };
+    }
+
+    if (listCmds.has(cmd)) {
+        const memories = Array.isArray(SYSTEM_DB.memories) ? SYSTEM_DB.memories : [];
+        const tail = memories.filter(m => m && m.type !== 'pinned').slice(-10);
+        if (!tail.length) return { response: 'Brak wspomnień.' };
+        const lines = tail.map(m => `${m.id}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 120)}`);
+        return { response: `Ostatnie wspomnienia:\n${lines.join('\n')}` };
+    }
+
+    if (notifyCmds.has(cmd)) {
+        const pn = SYSTEM_DB.settings.progressNotifications || { enabled: false, intervalSeconds: 120, telegram: false };
+        const parts = arg.split(/\s+/).filter(Boolean);
+        const sub = String(parts[0] || '').toLowerCase();
+        if (!sub || sub === 'status') {
+            return { response: `Autopostępy: ${pn.enabled ? 'ON' : 'OFF'} | interval: ${pn.intervalSeconds}s | telegram: ${pn.telegram ? 'ON' : 'OFF'}` };
+        }
+        if (sub === 'on' || sub === 'off') {
+            pn.enabled = sub === 'on';
+            SYSTEM_DB.settings.progressNotifications = pn;
+            saveState();
+            await pushNotification({ level: 'info', title: 'Autopostępy', message: `Tryb autopostępów: ${pn.enabled ? 'ON' : 'OFF'}`, notifyTelegram: pn.telegram });
+            return { response: `Autopostępy ustawione: ${pn.enabled ? 'ON' : 'OFF'}.` };
+        }
+        if (sub === 'telegram') {
+            const v = String(parts[1] || '').toLowerCase();
+            if (v === 'on' || v === 'off') {
+                pn.telegram = v === 'on';
+                SYSTEM_DB.settings.progressNotifications = pn;
+                saveState();
+                await pushNotification({ level: 'info', title: 'Autopostępy', message: `Telegram: ${pn.telegram ? 'ON' : 'OFF'}`, notifyTelegram: pn.telegram });
+                return { response: `Telegram dla autopostępów: ${pn.telegram ? 'ON' : 'OFF'}.` };
+            }
+            return { response: 'Użycie: /notify telegram on|off' };
+        }
+        if (sub === 'interval') {
+            const n = Number(parts[1]);
+            if (!Number.isFinite(n)) return { response: 'Użycie: /notify interval <sekundy>' };
+            pn.intervalSeconds = Math.max(15, Math.min(3600, Math.floor(n)));
+            SYSTEM_DB.settings.progressNotifications = pn;
+            saveState();
+            await pushNotification({ level: 'info', title: 'Autopostępy', message: `Interval: ${pn.intervalSeconds}s`, notifyTelegram: pn.telegram });
+            return { response: `Ustawiono interval: ${pn.intervalSeconds}s.` };
+        }
+        return { response: 'Użycie: /notify on|off | /notify interval <sekundy> | /notify telegram on|off | /notify status' };
+    }
+
+    return null;
+};
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const withRetry = async (fn, retries = 1, label = 'operation') => {
+    let lastErr;
+    // Zwiększamy liczbę prób i dodajemy inteligentny backoff
+    for (let i = 0; i <= retries; i += 1) {
+        try {
+            return await fn(i);
+        } catch (e) {
+            lastErr = e;
+            const isAbort = String(e?.message).includes('aborted') || String(e?.message).includes('timeout');
+            
+            // Logujemy błąd
+            logToSystem('warn', `${label} failed (${i + 1}/${retries + 1}): ${e.message}`);
+            
+            // Jeśli to ostatnia próba, nie czekamy, tylko rzucamy błąd
+            if (i === retries) break;
+
+            // Jeśli to timeout/abort, czekamy dłużej (5s + exponential backoff)
+            // Jeśli inny błąd, czekamy standardowo (1s + exponential backoff)
+            const baseWait = isAbort ? 5000 : 1000;
+            const waitTime = baseWait + (i * 2000);
+            
+            // Jeśli błąd ma flagę skipRetry, rzucamy go od razu
+            if (e.skipRetry) throw e;
+
+            console.log(`[RETRY] Waiting ${waitTime}ms before retry ${i + 2}/${retries + 1}...`);
+            await delay(waitTime);
+        }
+    }
+    throw lastErr;
+};
+
+const buildSystemContext = () => {
+    const agent = SYSTEM_DB.agentState || {};
+    const settings = SYSTEM_DB.settings || {};
+    const tasks = Array.isArray(SYSTEM_DB.tasks) ? SYSTEM_DB.tasks : [];
+    const activeTask = tasks.find(t => t.status === 'in_progress') || tasks.find(t => t.status === 'pending');
+    const provider = String(settings.aiProvider || '');
+    const activeModel = String(settings.activeModel || '');
+    const roleModels = settings.modelRoles && typeof settings.modelRoles === 'object' ? settings.modelRoles : {};
+    const rolePairs = Object.entries(roleModels)
+        .filter(([k, v]) => k && v)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ');
+    const openTasks = tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress'));
+    return [
+        `SYSTEM_STATUS:`,
+        `heartbeat=${settings.heartbeat?.enabled ? 'on' : 'off'}`,
+        provider ? `provider=${provider}` : '',
+        activeModel ? `active_model=${activeModel}` : '',
+        rolePairs ? `role_models=${truncateText(rolePairs, 600, true)}` : '',
+        `action=${agent.currentAction || 'idle'}`,
+        agent.processingStage ? `stage=${agent.processingStage}` : '',
+        agent.ollamaWaitStartedAt ? `ollama_wait_s=${Math.max(0, Math.floor((Date.now() - agent.ollamaWaitStartedAt) / 1000))}` : '',
+        agent.autonomyBackoffUntil ? `backoff_s=${Math.max(0, Math.floor((agent.autonomyBackoffUntil - Date.now()) / 1000))}` : '',
+        activeTask ? `task=${activeTask.title}|${activeTask.status}|${activeTask.progress || 0}` : 'task=none',
+        openTasks.length ? `open_tasks=${openTasks.length}` : 'open_tasks=0',
+        openTasks.length ? truncateText(buildOpenTasksBrief(5), 900, true) : '',
+        agent.lastAutonomyError ? `last_error=${agent.lastAutonomyError}` : ''
+    ].filter(Boolean).join('\n');
+};
+
+const buildReasoningContext = (limit = 6, maxChars = 2000) => {
+    const items = Array.isArray(SYSTEM_DB.reasoningHistory) ? SYSTEM_DB.reasoningHistory.slice(-limit) : [];
+    if (!items.length) return '';
+    const lines = items.map(r => {
+        const role = r.role || 'unknown';
+        const model = r.model || 'unknown';
+        const text = String(r.summary || '').replace(/\s+/g, ' ').trim();
+        return `${role}/${model}: ${text}`;
+    }).filter(Boolean);
+    const combined = lines.join('\n');
+    return truncateText(combined, maxChars, true);
+};
+
+const tokenizeQuery = (text = '') => {
+    const raw = String(text || '').toLowerCase();
+    const parts = raw.split(/[^a-z0-9ąćęłńóśżź]+/i).filter(Boolean);
+    const stop = new Set(['i', 'a', 'the', 'and', 'or', 'to', 'na', 'że', 'sie', 'się', 'jak', 'co', 'czy', 'jest', 'być', 'dla', 'with', 'about', 'from', 'into', 'this', 'that', 'tam', 'tu', 'ten', 'ta', 'to', 'o', 'z', 'w', 'bez']);
+    return Array.from(new Set(parts.filter(p => p.length > 2 && !stop.has(p))));
+};
+
+const scoreTextByTerms = (text = '', terms = []) => {
+    if (!text || !terms.length) return 0;
+    let score = 0;
+    const lower = text.toLowerCase();
+    for (const term of terms) {
+        if (!term) continue;
+        if (lower.includes(term)) score += 1;
+    }
+    return score;
+};
+
+const scoreMemorySmart = (m, terms) => {
+    let score = 0;
+    const title = String(m.title || '').toLowerCase();
+    const content = typeof m.content === 'string' ? m.content.toLowerCase() : JSON.stringify(m.content || '').toLowerCase();
+    
+    // Robust tag/keyword extraction
+    let tags = '';
+    if (Array.isArray(m.keywords)) tags = m.keywords.join(' ').toLowerCase();
+    else if (m.metadata && Array.isArray(m.metadata.tags)) tags = m.metadata.tags.join(' ').toLowerCase();
+    else tags = String(m.keywords || m.tags || '').toLowerCase();
+    
+    for (const term of terms) {
+        if (title.includes(term)) score += 3;
+        if (tags.includes(term)) score += 2;
+        if (content.includes(term)) score += 1;
+    }
+    
+    // Recency boost for relevant items
+    if (score > 0 && m.timestamp) {
+        const ageDays = (Date.now() - m.timestamp) / (1000 * 60 * 60 * 24);
+        if (ageDays < 1) score += 2;
+        else if (ageDays < 7) score += 1;
+    }
+    return score;
+};
+
+const buildRelevantMemories = (message = '', limit = 6, maxChars = 2600) => {
+    const terms = tokenizeQuery(message);
+    if (!terms.length) return '';
+    const memories = Array.isArray(SYSTEM_DB.memories) ? SYSTEM_DB.memories : [];
+    const scored = memories
+        .filter(m => m && m.type !== 'pinned')
+        .map(m => {
+            const text = `${m.title || ''}\n${typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')}`;
+            // Use smart scoring
+            const score = scoreMemorySmart(m, terms);
+            return { memory: m, score, text };
+        })
+        .filter(r => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    if (!scored.length) return '';
+    const lines = scored.map(r => {
+        const snippet = truncateText(r.text, 600, false);
+        return `MEMORY[${r.score.toFixed(1)}]: ${snippet}`;
+    });
+    return truncateText(lines.join('\n'), maxChars, false);
+};
+
+const buildRagArticlesContext = (message = '', limit = 4, maxChars = 2600) => {
+    const terms = tokenizeQuery(message);
+    if (!terms.length) return '';
+    if (!fs.existsSync(ARTICLES_DIR)) return '';
+    let files;
+    try {
+        files = fs.readdirSync(ARTICLES_DIR)
+            .filter(f => f.endsWith('.json') && f !== 'index.json')
+            .slice(-80);
+    } catch {
+        return '';
+    }
+    const scored = [];
+    for (const f of files) {
+        try {
+            const raw = fs.readFileSync(path.join(ARTICLES_DIR, f), 'utf8');
+            const json = JSON.parse(raw);
+            const title = String(json.title || json.metaTitle || '').toLowerCase();
+            const desc = String(json.description || json.excerpt || '').toLowerCase();
+            const body = typeof json.content === 'string' ? json.content.toLowerCase() : '';
+            const tags = Array.isArray(json.tags) ? json.tags.join(' ').toLowerCase() : String(json.tags || '').toLowerCase();
+            const combined = `${title}\n${desc}\n${tags}\n${body}`;
+            const score = scoreTextByTerms(combined, terms);
+            if (score > 0) {
+                const snippetSource = json.content || json.html || json.body || body || desc || title;
+                const snippet = truncateText(String(snippetSource || ''), 600, false);
+                scored.push({
+                    score,
+                    id: json.id || f.replace('.json', ''),
+                    title: json.title || json.metaTitle || f,
+                    snippet
+                });
+            }
+        } catch {
+        }
+    }
+    if (!scored.length) return '';
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, limit);
+    const lines = top.map(r => {
+        return `ARTICLE[${r.score}]: ${r.title}\n${r.snippet}`;
+    });
+    return truncateText(lines.join('\n\n'), maxChars, false);
+};
+
+const buildRagSourcesContext = (message = '', limit = 4, maxChars = 2600) => {
+    const terms = tokenizeQuery(message);
+    if (!terms.length) return '';
+    const roots = [APP_ROOT, SOURCES_DIR, FS_ROOT];
+    const files = [];
+    const maxFiles = 80;
+    const ignoreDirs = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.cache', '.turbo', '.parcel-cache']);
+    const exts = new Set(['.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.txt', '.css', '.html']);
+    const seen = new Set();
+    const pushDir = (dir) => {
+        if (!fs.existsSync(dir)) return;
+        const stack = [dir];
+        while (stack.length && files.length < maxFiles) {
+            const current = stack.pop();
+            let entries;
+            try {
+                entries = fs.readdirSync(current, { withFileTypes: true });
+            } catch {
+                continue;
+            }
+            for (const entry of entries) {
+                const name = entry.name;
+                if (name.startsWith('.')) continue;
+                const fullPath = path.join(current, name);
+                if (entry.isDirectory()) {
+                    if (ignoreDirs.has(name)) continue;
+                    if (!seen.has(fullPath)) {
+                        seen.add(fullPath);
+                        stack.push(fullPath);
+                    }
+                } else {
+                    const ext = path.extname(name).toLowerCase();
+                    if (!exts.has(ext)) continue;
+                    if (!seen.has(fullPath)) {
+                        seen.add(fullPath);
+                        files.push(fullPath);
+                        if (files.length >= maxFiles) break;
+                    }
+                }
+            }
+        }
+    };
+    for (const root of roots) {
+        pushDir(root);
+        if (files.length >= maxFiles) break;
+    }
+    const scored = [];
+    for (const fullPath of files) {
+        try {
+            const stat = fs.statSync(fullPath);
+            if (!stat.isFile() || stat.size > 200 * 1024) continue;
+            const raw = fs.readFileSync(fullPath, 'utf8');
+            const rel = path.relative(APP_ROOT, fullPath);
+            const text = raw.toLowerCase();
+            let score = scoreTextByTerms(text, terms);
+            if (score > 0) {
+                const pathScore = scoreTextByTerms(rel.toLowerCase(), terms);
+                if (pathScore > 0) score += 2 * pathScore;
+                const snippet = truncateText(raw, 600, false);
+                scored.push({ score, path: rel, snippet });
+            }
+        } catch {
+        }
+    }
+    if (!scored.length) return '';
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, limit);
+    const lines = top.map(r => {
+        return `CODE[${r.score}]: ${r.path}\n${r.snippet}`;
+    });
+    return truncateText(lines.join('\n\n'), maxChars, false);
+};
+
+const buildRelevantLogs = (message = '', limit = 6, maxChars = 1400) => {
+    const terms = tokenizeQuery(message);
+    const logs = Array.isArray(SYSTEM_DB.logs) ? SYSTEM_DB.logs.slice(-200) : [];
+    const scored = logs
+        .map(l => {
+            const text = String(l?.message || '');
+            const score = terms.length ? scoreTextByTerms(text, terms) : 0;
+            return { log: l, score, text };
+        })
+        .filter(r => r.text)
+        .sort((a, b) => (b.score - a.score) || ((b.log?.timestamp || 0) - (a.log?.timestamp || 0)))
+        .slice(0, limit);
+    if (!scored.length) return '';
+    const lines = scored.map(r => `LOG: ${truncateText(r.text, 220, false)}`);
+    return truncateText(lines.join('\n'), maxChars, false);
+};
+
+const logToSystem = (level, message) => {
+    // LIVESTREAM TO TERMINAL
+    try {
+        const timestamp = new Date().toLocaleTimeString();
+        // Colors: Error=Red, Warn=Yellow, Success=Green, Info/Other=Cyan
+        const color = level === 'error' ? '\x1b[31m' : level === 'warn' ? '\x1b[33m' : level === 'success' ? '\x1b[32m' : '\x1b[36m';
+        const reset = '\x1b[0m';
+        console.log(`${color}[${timestamp}] [GAI/${level.toUpperCase()}] ${message}${reset}`);
+    } catch (e) {}
+
+    const raw = String(message ?? '');
+    const safeMessage = raw.length > MAX_PERSISTED_SYSTEM_LOG_CHARS ? `${raw.slice(0, MAX_PERSISTED_SYSTEM_LOG_CHARS)}…[truncated]` : raw;
+    const entry = { id: `log_${Date.now()}`, timestamp: Date.now(), level, message: safeMessage };
+    SYSTEM_DB.logs.push(entry);
+    if (SYSTEM_DB.logs.length > SYSTEM_LOGS_IN_MEMORY) SYSTEM_DB.logs.shift();
+    systemLogWriteChain = appendNdjsonAsync(SYSTEM_LOG_PATH, entry, systemLogWriteChain);
+    logToChat('system', `[SYSTEM/${String(level || '').toUpperCase()}] ${safeMessage}`, 'system');
+    saveState();
+};
+
+const setUserPriority = (active) => {
+    SYSTEM_DB.agentState.userPriority = !!active;
+    if (active) {
+        SYSTEM_DB.agentState.currentAction = 'User Request';
+        SYSTEM_DB.agentState.lastRun = Date.now();
+        if (activeAiAbortControllers.system) {
+            activeAiAbortControllers.system.abort();
+            activeAiAbortControllers.system = null;
+        }
+    }
+    saveState();
+    return SYSTEM_DB.agentState.userPriority;
+};
+
+const logUserUpdateToActiveTask = (message, source) => {
+    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+    if (!activeTask) return;
+    activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+    activeTask.logs.push(`[USER UPDATE/${source}] ${message}`);
+    activeTask.updatedAt = Date.now();
+    SYSTEM_DB.tasks = SYSTEM_DB.tasks.map(t => t.id === activeTask.id ? normalizeTask(activeTask) : t);
+    saveState();
+};
+
+const logProcessingStage = (stage, source = 'autonomy', options = {}) => {
+    const text = String(stage || '').trim();
+    if (!text) return;
+    SYSTEM_DB.agentState.processingStage = text;
+    SYSTEM_DB.agentState.thoughtProcess = text;
+    if (options.updateLastRun !== false) {
+        SYSTEM_DB.agentState.lastRun = Date.now();
+    }
+    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+    if (activeTask) {
+        activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+        activeTask.logs.push(`[STAGE/${source}] ${text}`);
+        activeTask.updatedAt = Date.now();
+        SYSTEM_DB.tasks = SYSTEM_DB.tasks.map(t => t.id === activeTask.id ? normalizeTask(activeTask) : t);
+    }
+    logToChat('system', `STAGE: ${text}`, 'system');
+    saveState();
+};
+
+const recordReasoning = ({ summary, role, model, source }) => {
+    const text = String(summary || '').trim();
+    if (!text) return;
+    const entry = {
+        id: `handoff_${Date.now()}`,
+        timestamp: Date.now(),
+        summary: text.slice(0, 1200),
+        role,
+        model,
+        source
+    };
+    SYSTEM_DB.reasoningHistory = Array.isArray(SYSTEM_DB.reasoningHistory) ? SYSTEM_DB.reasoningHistory : [];
+    SYSTEM_DB.reasoningHistory.push(entry);
+    if (SYSTEM_DB.reasoningHistory.length > 200) {
+        SYSTEM_DB.reasoningHistory = SYSTEM_DB.reasoningHistory.slice(-200);
+    }
+    saveState();
+};
+
+const userCommandQueue = [];
+let userCommandRunning = false;
+let currentUserCommandMeta = null;
+
+const getBlockingUserQueueLength = () => {
+    return userCommandQueue.filter(item => !item?.meta?.nonBlocking).length;
+};
+
+const updateUserQueueLength = () => {
+    SYSTEM_DB.agentState.userQueueLength = userCommandQueue.length;
+    SYSTEM_DB.agentState.userQueuePreview = userCommandQueue
+        .map((item, idx) => {
+            if (!item?.id) item.id = generateUserQueueItemId();
+            return {
+            id: String(item?.id || ''),
+            source: String(item?.meta?.source || 'terminal'),
+            text: String(item?.meta?.text || '')
+        };
+        })
+        .filter(item => item.id && item.text)
+        .slice(0, 5);
+    saveState();
+};
+
+const generateUserQueueItemId = () => {
+    return `uq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const rejectAndClearQueuedUserCommands = (reason = 'cleared') => {
+    const err = new Error(`User queue item cancelled (${reason})`);
+    while (userCommandQueue.length > 0) {
+        const item = userCommandQueue.shift();
+        try { item?.reject?.(err); } catch {}
+    }
+    updateUserQueueLength();
+};
+
+const enqueueUserCommand = (job, meta) => {
+    return new Promise((resolve, reject) => {
+        const entry = { id: generateUserQueueItemId(), job, resolve, reject, meta };
+        if (meta?.enqueueFront) userCommandQueue.unshift(entry);
+        else userCommandQueue.push(entry);
+        updateUserQueueLength();
+        processUserCommandQueue().catch((e) => {
+            try {
+                logToSystem('error', `User command queue crashed: ${e?.message || e}`);
+            } catch {}
+            userCommandRunning = false;
+            updateUserQueueLength();
+        });
+    });
+};
+
+const USER_COMMAND_TIMEOUT_MS_RAW = Number(process.env.USER_COMMAND_TIMEOUT_MS);
+const USER_COMMAND_TIMEOUT_MS = (Number.isFinite(USER_COMMAND_TIMEOUT_MS_RAW) && USER_COMMAND_TIMEOUT_MS_RAW > 0)
+    ? USER_COMMAND_TIMEOUT_MS_RAW
+    : 900000;
+
+const processUserCommandQueue = async () => {
+    if (userCommandRunning) return;
+    userCommandRunning = true;
+    try {
+        while (userCommandQueue.length > 0) {
+            const item = userCommandQueue.shift();
+            updateUserQueueLength();
+            currentUserCommandMeta = item?.meta ? { ...item.meta, startedAt: Date.now() } : { startedAt: Date.now() };
+            const isNonBlocking = !!item?.meta?.nonBlocking;
+            const chatPreemptAfterMsRaw = Number(SYSTEM_DB?.settings?.chatPreemptAfterMs);
+            const chatPreemptAfterMs = Number.isFinite(chatPreemptAfterMsRaw) ? Math.max(3000, Math.floor(chatPreemptAfterMsRaw)) : 20000;
+            const now = Date.now();
+            const systemWaitStarted = Number(SYSTEM_DB?.agentState?.ollamaWaitStartedAt || 0);
+            const currentAction = String(SYSTEM_DB?.agentState?.currentAction || 'idle');
+            const systemLikelyInFlight = !!systemWaitStarted && (now - systemWaitStarted) >= chatPreemptAfterMs
+                && (currentAction.startsWith('Thinking') || currentAction.startsWith('Executing'));
+            const shouldInterrupt = !!(item?.meta?.forceUserPriority || isTaskIntentMessage(item?.meta?.text) || (item?.meta?.mayInterruptSystem && systemLikelyInFlight));
+            if (shouldInterrupt) {
+                try { setUserPriority(true); } catch (e) { try { logToSystem('warn', `Failed to set user priority: ${e?.message || e}`); } catch {} }
+                try {
+                    abortActiveAi('system');
+                    releaseHeartbeatLock();
+                    if (String(SYSTEM_DB?.agentState?.currentAction || 'idle') !== 'idle') {
+                        SYSTEM_DB.agentState.currentAction = 'idle';
+                        SYSTEM_DB.agentState.thoughtProcess = 'Preempted by user command.';
+                        SYSTEM_DB.agentState.lastRun = Date.now();
+                        saveState();
+                    }
+                } catch {}
+            }
+            try {
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('User command timeout')), USER_COMMAND_TIMEOUT_MS));
+                const result = await Promise.race([item.job(), timeoutPromise]);
+                item.resolve(result);
+            } catch (e) {
+                logToSystem('warn', `User command failed: ${e.message || e}`);
+                item.reject(e);
+            } finally {
+                if (shouldInterrupt) {
+                    try { setUserPriority(false); } catch {}
+                }
+                currentUserCommandMeta = null;
+                try {
+                    const hasWork = SYSTEM_DB?.tasks?.some(t => t && t.status !== 'completed');
+                    if (hasWork) scheduleAutonomyEvent('user_command_done', 300);
+                } catch {}
+            }
+        }
+    } finally {
+        userCommandRunning = false;
+        updateUserQueueLength();
+        try { setUserPriority(false); } catch {}
+        currentUserCommandMeta = null;
+    }
+};
+
+const getHeartbeatIntervalMs = () => {
+    const interval = Number(SYSTEM_DB?.settings?.heartbeat?.intervalSeconds || 10);
+    return Math.max(5_000, interval * 1000); // M4: minimum 5s
+};
+
+const getAutonomyWindow = () => {
+    return SYSTEM_DB?.settings?.autonomyWindow || { enabled: false, startHour: 0, endHour: 0 };
+};
+
+const isWithinAutonomyWindow = () => {
+    const { enabled, startHour, endHour } = getAutonomyWindow();
+    if (!enabled) return true;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = Math.max(0, Math.min(23, Number(startHour || 0))) * 60;
+    const endMinutes = Math.max(0, Math.min(23, Number(endHour || 0))) * 60;
+    if (startMinutes === endMinutes) return true;
+    if (startMinutes < endMinutes) {
+        return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+    }
+    return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+};
+
+const isProcessAlive = (pid) => {
+    if (!pid) return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const acquireHeartbeatLock = () => {
+    const now = Date.now();
+    const intervalMs = getHeartbeatIntervalMs();
+    const effectiveTimeout = Math.max(intervalMs, Number(AUTONOMY_STEP_TIMEOUT_MS) || 300000);
+    const maxAgeMs = Math.max(intervalMs, effectiveTimeout + 60_000);
+    
+    const lastRun = Number(SYSTEM_DB?.agentState?.lastRun || 0);
+    const waitStarted = Number(SYSTEM_DB?.agentState?.ollamaWaitStartedAt || 0);
+    const staleRun = lastRun && (now - lastRun > Math.max(maxAgeMs * 2, effectiveTimeout + 120_000));
+    const staleWait = waitStarted && (now - waitStarted > (effectiveTimeout + 30_000));
+    let forceUnlock = false;
+    if (fs.existsSync(HEARTBEAT_LOCK_PATH)) {
+        try {
+            const raw = fs.readFileSync(HEARTBEAT_LOCK_PATH, 'utf8');
+            const lock = JSON.parse(raw || '{}');
+            const startedAt = Number(lock?.updatedAt || lock?.startedAt || 0);
+            const pid = Number(lock?.pid || 0);
+            const lockPort = Number(lock?.port || 0);
+            const currentPort = Number(PORT || 0);
+            
+            // SELF-HEALING: If we own the lock, just update it to prevent self-lockout
+            if (pid === process.pid) {
+                const payload = { pid: process.pid, port: currentPort, startedAt: startedAt || now, updatedAt: now };
+                fs.writeFileSync(HEARTBEAT_LOCK_PATH, JSON.stringify(payload));
+                return { ok: true };
+            }
+
+            const isStale = now - startedAt > maxAgeMs;
+            const portMismatch = lockPort && currentPort && lockPort !== currentPort;
+            if (DEBUG_MODE) {
+                console.log(`[HEARTBEAT] Me: ${process.pid}, Owner: ${pid}, Age: ${((now - startedAt)/1000).toFixed(1)}s, Max: ${maxAgeMs/1000}s, Stale: ${isStale}, PortMismatch: ${portMismatch}`);
+            }
+            forceUnlock = isStale || staleRun || staleWait || portMismatch;
+            if (!forceUnlock && isProcessAlive(pid)) {
+                return { ok: false, reason: 'locked' };
+            }
+        } catch {
+        }
+        try {
+            fs.unlinkSync(HEARTBEAT_LOCK_PATH);
+        } catch {
+        }
+        if (forceUnlock) {
+            SYSTEM_DB.agentState.currentAction = 'idle';
+            SYSTEM_DB.agentState.thoughtProcess = 'Recovered from stale heartbeat lock.';
+            SYSTEM_DB.agentState.processingStage = '';
+            SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+            SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+            SYSTEM_DB.agentState.lastRun = now;
+            saveState();
+        }
+    }
+    const payload = { pid: process.pid, port: Number(PORT || 0), startedAt: now, updatedAt: now };
+    fs.writeFileSync(HEARTBEAT_LOCK_PATH, JSON.stringify(payload));
+    return { ok: true };
+};
+
+const releaseHeartbeatLock = () => {
+    if (!fs.existsSync(HEARTBEAT_LOCK_PATH)) return;
+    try {
+        fs.unlinkSync(HEARTBEAT_LOCK_PATH);
+    } catch {
+    }
+};
+
+const logHeartbeatLockStatus = (source = 'autonomy') => {
+    const now = Date.now();
+    let startedAt = 0;
+    let pid = 0;
+    let lockPort = 0;
+    try {
+        if (fs.existsSync(HEARTBEAT_LOCK_PATH)) {
+            const raw = fs.readFileSync(HEARTBEAT_LOCK_PATH, 'utf8');
+            const lock = JSON.parse(raw || '{}');
+            startedAt = Number(lock?.updatedAt || lock?.startedAt || 0);
+            pid = Number(lock?.pid || 0);
+            lockPort = Number(lock?.port || 0);
+        }
+    } catch {
+    }
+
+    const lastLogAt = Number(SYSTEM_DB?.agentState?.lastHeartbeatLockLogAt || 0);
+    const lastStartedAt = Number(SYSTEM_DB?.agentState?.lastHeartbeatLockStartedAt || 0);
+    const shouldLog = !lastLogAt || (now - lastLogAt) > 15_000 || (startedAt && startedAt !== lastStartedAt);
+    if (!shouldLog) return;
+
+    const intervalMs = getHeartbeatIntervalMs();
+    const effectiveTimeout = Math.max(intervalMs, Number(AUTONOMY_STEP_TIMEOUT_MS) || 300000);
+    const maxAgeMs = Math.max(intervalMs, effectiveTimeout + 60_000);
+    const ageSec = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+    const staleInSec = startedAt ? Math.max(0, Math.ceil((maxAgeMs - (now - startedAt)) / 1000)) : 0;
+    const pidText = pid ? `pid ${pid}` : 'pid ?';
+    const portText = lockPort ? `port ${lockPort}` : 'port ?';
+    const details = startedAt ? `${ageSec}s, stale in ~${staleInSec}s, ${pidText}, ${portText}` : `${pidText}, ${portText}`;
+
+    SYSTEM_DB.agentState.lastHeartbeatLockLogAt = now;
+    SYSTEM_DB.agentState.lastHeartbeatLockStartedAt = startedAt || lastStartedAt || 0;
+    logProcessingStage(`Blokada: heartbeat lock (${details})`, source, { updateLastRun: false });
+};
+
+const normalizeJsonLoose = (raw = '') => {
+    let text = String(raw || '').trim();
+    if (!text) return text;
+    
+    // Remove markdown blocks
+    text = text.replace(/^```(json)?/g, '').replace(/```$/g, '');
+    
+    // Simple quotes normalization (dangerous but often needed for weak models)
+    // Only replace quotes if they look like key/value delimiters, try to avoid text content
+    // text = text.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":'); // Keys
+    
+    // Replace smart quotes
+    text = text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+    
+    return text.trim();
+};
+
+const parseJsonSafe = (raw = '') => {
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        // Try to find the JSON object boundaries
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end > start) {
+            const slice = raw.slice(start, end + 1);
+            try { return JSON.parse(slice); } catch {}
+            
+            // Try lenient parsing hacks for common LLM errors
+            try {
+                // Fix missing quotes on keys
+                const fixedKeys = slice.replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+                return JSON.parse(fixedKeys);
+            } catch {}
+            
+            try {
+                // Fix single quotes to double quotes (carefully)
+                const fixedQuotes = slice.replace(/'/g, '"');
+                return JSON.parse(fixedQuotes);
+            } catch {}
+        }
+        return null;
+    }
+};
+
+const normalizeQuotedString = (value = '') => {
+    let text = String(value || '').trim();
+    if (!text) return '';
+    if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.slice(1, -1).trim();
+    }
+    return text;
+};
+
+const extractPayloadString = (payload, keys = []) => {
+    if (!payload || typeof payload !== 'object') return '';
+    for (const key of keys) {
+        const v = payload[key];
+        if (typeof v === 'string' && v.trim()) return v;
+    }
+    return '';
+};
+
+const normalizeWebQuery = (argsRaw) => {
+    const parsed = parseJsonSafe(argsRaw);
+    const raw = (parsed && typeof parsed === 'object') ? extractPayloadString(parsed, ['query', 'q', 'search', 'term']) : argsRaw;
+    return normalizeQuotedString(raw).replace(/\s+/g, ' ').trim();
+};
+
+const performWebSearch = async (query, limit = 5) => {
+    const safeQuery = String(query || '').trim();
+    if (!safeQuery) return [];
+    
+    // --- OFFICIAL GOOGLE CUSTOM SEARCH API ---
+    // If keys are provided in environment or settings, use them for 100% reliable results.
+    // Hardcoded keys provided by user (SECURE STORAGE RECOMMENDED IN PRODUCTION)
+    const GOOGLE_API_KEY = process.env.GOOGLE_SEARCH_API_KEY || 'AIzaSyBqPsOrSHVIq0zKdhcVXWzM_53bjbE9AeQ';
+    const GOOGLE_CX = process.env.GOOGLE_SEARCH_CX || 'a2976126a869c47e8';
+
+    if (GOOGLE_API_KEY && GOOGLE_CX && GOOGLE_API_KEY.length > 10) {
+        try {
+            const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodeURIComponent(safeQuery)}&num=${Math.min(limit, 10)}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.items && Array.isArray(data.items)) {
+                    return data.items.map(item => ({
+                        title: item.title,
+                        link: item.link,
+                        snippet: item.snippet
+                    }));
+                }
+                return []; // No results found
+            } else {
+                console.warn(`Google API Error: ${res.status} ${res.statusText}`);
+                // Fallback to scraping if quota exceeded (429) or other error
+            }
+        } catch (e) {
+            console.warn('Google API failed, falling back to scraping:', e.message);
+        }
+    }
+    // -----------------------------------------
+
+    // 1. Try Google Search (via generic scraping, highly unstable but worth a shot for best results)
+    try {
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(safeQuery)}&num=${limit + 2}&hl=en`;
+        // logToSystem('info', `Trying Google Search: ${searchUrl}`);
+        const res = await fetch(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Referer': 'https://www.google.com/'
+            }
+        });
+        
+        if (res.ok) {
+            const html = await res.text();
+            const $ = cheerio.load(html);
+            const results = [];
+            
+            // Standard Google result container: div.g
+            // Title: h3
+            // Link: a href
+            // Snippet: div.VwiC3b (often changes) or generic div text
+            
+            $('div.g').each((i, el) => {
+                if (results.length >= limit) return;
+                const title = $(el).find('h3').first().text().trim();
+                const link = $(el).find('a').first().attr('href');
+                // Google snippets are tricky, they change classes often.
+                // Try to find the block of text under the title.
+                let snippet = $(el).find('div[style*="-webkit-line-clamp"]').text().trim();
+                if (!snippet) snippet = $(el).find('span.aCOpRe').text().trim(); // older class
+                if (!snippet) snippet = $(el).text().replace(title, '').slice(0, 200).trim(); // fallback: raw text minus title
+
+                if (title && link && link.startsWith('http') && !link.includes('google.com')) {
+                    results.push({ title, link, snippet });
+                }
+            });
+            
+            if (results.length > 0) return results;
+        }
+    } catch (e) {
+        // console.warn('Google search failed, falling back to DDG:', e.message);
+    }
+
+    // 2. Try DuckDuckGo HTML first (more reliable for scraping)
+    try {
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(safeQuery)}`;
+        const res = await fetch(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://html.duckduckgo.com/'
+            }
+        });
+        
+        if (res.ok) {
+            const html = await res.text();
+            const $ = cheerio.load(html);
+            const results = [];
+            
+            $('.result').each((i, el) => {
+                if (results.length >= limit) return;
+                const title = $(el).find('.result__title a').text().trim();
+                const link = $(el).find('.result__url').attr('href'); // DDG puts actual link in href often relative or redirect
+                // Clean DDG redirect link if needed
+                let cleanLink = link;
+                try {
+                    const urlObj = new URL(link, 'https://html.duckduckgo.com');
+                    if (urlObj.pathname === '/l/') {
+                         cleanLink = urlObj.searchParams.get('uddg') || link;
+                    }
+                } catch (e) {}
+
+                const snippet = $(el).find('.result__snippet').text().trim();
+                
+                if (title && cleanLink && snippet) {
+                    results.push({ title, link: cleanLink, snippet });
+                }
+            });
+            
+            if (results.length > 0) return results;
+        }
+    } catch (e) {
+        console.warn('DuckDuckGo search failed, falling back to Bing:', e.message);
+    }
+
+    // Fallback to Bing
+    try {
+        const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(safeQuery)}`;
+        const res = await fetch(searchUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        });
+        if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        const results = [];
+        $('li.b_algo').each((i, el) => {
+            if (results.length >= limit) return;
+            const link = $(el).find('h2 a').attr('href');
+            const title = $(el).find('h2 a').text().trim();
+            const snippet = $(el).find('p').first().text().trim();
+            if (title && link) {
+                results.push({ title, link, snippet });
+            }
+        });
+        return results;
+    } catch (e) {
+        throw new Error(`All search providers failed. Bing: ${e.message}`);
+    }
+};
+
+const runToolHealthChecks = async () => {
+    const results = {};
+    const startedAt = Date.now();
+    const add = (name, ok, detail = '', extra = {}) => {
+        results[name] = { ok: !!ok, detail: String(detail || ''), ...extra };
+    };
+    const skip = (name, reason) => {
+        results[name] = { ok: null, skipped: true, detail: String(reason || '') };
+    };
+
+    try {
+        const { stdout } = await execAsync('pwd', { cwd: APP_ROOT, timeout: 5000 });
+        add('SHELL', true, stdout.trim());
+    } catch (e) {
+        add('SHELL', false, e.message || 'shell_failed');
+    }
+
+    try {
+        const content = await fs.promises.readFile(path.join(APP_ROOT, 'package.json'), 'utf8');
+        add('FILE_READ', !!content, `bytes=${content.length}`);
+    } catch (e) {
+        add('FILE_READ', false, e.message || 'file_read_failed');
+    }
+
+    try {
+        const tmpPath = path.join(DATA_DIR, 'tool_health_tmp.txt');
+        await fs.promises.writeFile(tmpPath, 'health-check');
+        const before = await fs.promises.readFile(tmpPath, 'utf8');
+        await fs.promises.writeFile(tmpPath, before.replace('health-check', 'health-check-ok'));
+        const after = await fs.promises.readFile(tmpPath, 'utf8');
+        await fs.promises.unlink(tmpPath);
+        add('FILE_WRITE', after.includes('health-check-ok'), 'ok');
+        add('FILE_REPLACE', after.includes('health-check-ok'), 'ok');
+    } catch (e) {
+        add('FILE_WRITE', false, e.message || 'file_write_failed');
+        add('FILE_REPLACE', false, e.message || 'file_replace_failed');
+    }
+
+    try {
+        const { stdout } = await execAsync('git status --porcelain', { cwd: APP_ROOT, timeout: 5000, maxBuffer: 1024 * 1024 });
+        add('DEV_STATUS', true, stdout.trim() ? 'dirty' : 'clean');
+    } catch (e) {
+        add('DEV_STATUS', false, e.message || 'dev_status_failed');
+    }
+
+    try {
+        const { stdout } = await execAsync('git diff --stat', { cwd: APP_ROOT, timeout: 5000, maxBuffer: 1024 * 1024 });
+        add('DEV_DIFF', true, stdout.trim() ? 'has_diff' : 'no_diff');
+    } catch (e) {
+        add('DEV_DIFF', false, e.message || 'dev_diff_failed');
+    }
+
+    try {
+        const webResults = await performWebSearch('test', 3);
+        add('WEB_SEARCH', Array.isArray(webResults), `results=${Array.isArray(webResults) ? webResults.length : 0}`);
+    } catch (e) {
+        add('WEB_SEARCH', false, e.message || 'web_search_failed');
+    }
+
+    try {
+        const res = await fetch('https://example.com');
+        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        const text = $('body').text().slice(0, 5000);
+        add('WEB_READ', !!text, `chars=${text.length}`);
+    } catch (e) {
+        add('WEB_READ', false, e.message || 'web_read_failed');
+    }
+
+    skip('DEV_APPLY_PATCH', 'requires explicit patch input');
+    skip('DEV_BUILD', 'heavy operation');
+    skip('DEV_COMMIT_PUSH', 'requires repo credentials');
+    skip('PYTHON_EXEC', 'requires python runtime validation');
+    skip('VISION_ANALYZE', 'requires vision model');
+    skip('BROWSER_ACTION', 'requires browser automation runtime');
+    skip('QUALITY_AUDIT', 'heavy operation');
+    skip('SYS_SPEAK', 'requires audio output');
+    skip('IMAGE_GENERATE', 'requires image model');
+    skip('BLOG_MAINTENANCE', 'heavy operation');
+    skip('FTP_UPLOAD', 'requires FTP config');
+    skip('FTP_LIST', 'requires FTP config');
+    skip('TASK_ACTION', 'requires task context');
+    skip('DELEGATE_TASK', 'requires agent routing');
+
+    return { startedAt, finishedAt: Date.now(), results };
+};
+
+const normalizeWebUrl = (argsRaw) => {
+    const parsed = parseJsonSafe(argsRaw);
+    let raw = (parsed && typeof parsed === 'object') ? extractPayloadString(parsed, ['url', 'link', 'href']) : argsRaw;
+    raw = normalizeQuotedString(raw);
+    if (!raw) return '';
+    if (raw.startsWith('//')) raw = `https:${raw}`;
+    if (!/^https?:\/\//i.test(raw)) {
+        if (raw.startsWith('www.')) raw = `https://${raw}`;
+        else if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(raw)) raw = `https://${raw}`;
+    }
+    return raw;
+};
+
+const normalizeFileReadPath = (argsRaw) => {
+    const parsed = parseJsonSafe(argsRaw);
+    const raw = (parsed && typeof parsed === 'object') ? extractPayloadString(parsed, ['path', 'file', 'filePath']) : argsRaw;
+    return normalizeQuotedString(raw);
+};
+
+const parseTaskAction = (raw = '') => {
+    let jsonParsed = parseJsonSafe(raw);
+    
+    // Fallback: Try regex extraction if JSON fails completely
+    if (!jsonParsed) {
+        // ULTRA-AGGRESSIVE REGEX PARSER for messed up models
+        const text = String(raw || '');
+        const extracted = {};
+        
+        // 1. Extract action
+        const actionMatch = text.match(/"?action"?\s*[:=]\s*["'](update|create|complete|toggle_subtask)["']/i) || 
+                            text.match(/"?type"?\s*[:=]\s*["'](update|create|complete|toggle_subtask)["']/i);
+        if (actionMatch) extracted.action = actionMatch[1].toLowerCase();
+        else {
+            // Infer action from content
+            if (text.includes('subtasks') || text.includes('progress') || text.includes('logs')) extracted.action = 'update';
+        }
+
+        // 2. Extract ID
+        const idMatch = text.match(/"?id"?\s*[:=]\s*["']([a-z0-9_.:-]+)["']/i);
+        if (idMatch) extracted.id = idMatch[1];
+
+        // 3. Extract subtasks (Array of objects or strings)
+        // Try to find a JSON array block first
+        const subtasksBlockMatch = text.match(/"?subtasks"?\s*[:=]\s*(\[[\s\S]*?\])/i);
+        if (subtasksBlockMatch) {
+            try {
+                extracted.subtasks = JSON.parse(subtasksBlockMatch[1]);
+            } catch {
+                const items = [];
+                const itemRe = /{\s*[^}]*?"(title|name|description)"\s*:\s*"([^"]+)"/g;
+                let m;
+                while ((m = itemRe.exec(subtasksBlockMatch[1])) !== null) {
+                    items.push({ title: m[2], status: 'pending' });
+                }
+                if (items.length) extracted.subtasks = items;
+            }
+        }
+
+        // 4. Extract progress
+        const progMatch = text.match(/"?progress"?\s*[:=]\s*([0-9]+)/);
+        if (progMatch) extracted.progress = Number(progMatch[1]);
+
+        // 5. Extract logs
+        const logsMatch = text.match(/"?logs"?\s*[:=]\s*["']([^"']+)["']/);
+        if (logsMatch) extracted.logs = [logsMatch[1]];
+
+        if (extracted.action) jsonParsed = extracted;
+    }
+
+    if (jsonParsed && typeof jsonParsed === 'object') {
+        // 1. Map 'type' to 'action' (Common model error)
+        if (!jsonParsed.action && jsonParsed.type) {
+            jsonParsed.action = jsonParsed.type;
+        }
+
+        // 2. Auto-fix nested actions: { "update": { ... } }
+        if (!jsonParsed.action) {
+            const knownActions = ['update', 'create', 'complete', 'toggle_subtask'];
+            for (const key of Object.keys(jsonParsed)) {
+                if (knownActions.includes(key.toLowerCase()) && typeof jsonParsed[key] === 'object' && jsonParsed[key] !== null) {
+                    return { ...jsonParsed[key], action: key.toLowerCase() };
+                }
+            }
+        }
+        
+        // 3. Auto-fix: { "subtasks": [...] } without action -> assume 'update'
+        if (!jsonParsed.action && (jsonParsed.subtasks || jsonParsed.progress || jsonParsed.logs)) {
+             jsonParsed.action = 'update';
+        }
+
+        return jsonParsed;
+    }
+
+    const text = String(raw || '');
+    const getMatch = (re) => {
+        const match = text.match(re);
+        return match && match[1] ? match[1].trim() : '';
+    };
+    const action = getMatch(/action\s*[:=]\s*["']?([a-z_]+)["']?/i);
+    const id = getMatch(/id\s*[:=]\s*["']?([a-z0-9_.:-]+)["']?/i);
+    const title = getMatch(/title\s*[:=]\s*["']([^"']+)["']/i);
+    const description = getMatch(/description\s*[:=]\s*["']([^"']+)["']/i);
+    const priority = getMatch(/priority\s*[:=]\s*["']?(high|medium|low)["']?/i);
+    const log = getMatch(/log\s*[:=]\s*["']([^"']+)["']/i);
+    const progressText = getMatch(/progress\s*[:=]\s*([0-9]{1,3})/i);
+    const withinText = getMatch(/withinObjectives\s*[:=]\s*(true|false)/i);
+    const parentTaskId = getMatch(/parentTaskId\s*[:=]\s*["']?([a-z0-9_.:-]+)["']?/i) || getMatch(/subtaskOf\s*[:=]\s*["']?([a-z0-9_.:-]+)["']?/i);
+    const regexParsed = {};
+    if (action) regexParsed.action = action;
+    if (id) regexParsed.id = id;
+    if (title) regexParsed.title = title;
+    if (description) regexParsed.description = description;
+    if (priority) regexParsed.priority = priority;
+    if (log) regexParsed.log = log;
+    if (progressText) regexParsed.progress = Number(progressText);
+    if (withinText) regexParsed.withinObjectives = withinText.toLowerCase() === 'true';
+    if (parentTaskId) regexParsed.parentTaskId = parentTaskId;
+    return Object.keys(regexParsed).length ? regexParsed : null;
+};
+
+const getAutorecoveryConfig = () => {
+    const settings = SYSTEM_DB.settings || {};
+    const baseCtx = Number(settings.ollamaNumCtx || 0);
+    const defaultCtx = Number.isFinite(baseCtx) && baseCtx > 0 ? baseCtx : OLLAMA_NUM_CTX;
+    const raw = settings.autorecovery || {};
+    const rawLimits = raw.limits || {};
+    return {
+        enabled: raw.enabled !== false,
+        modelRole: typeof raw.modelRole === 'string' && raw.modelRole ? raw.modelRole : 'planning',
+        prompt: typeof raw.prompt === 'string' ? raw.prompt : '',
+        cooldownSec: Number.isFinite(Number(raw.cooldownSec)) ? Number(raw.cooldownSec) : 60,
+        limits: {
+            minCtx: Number.isFinite(Number(rawLimits.minCtx)) ? Number(rawLimits.minCtx) : 512,
+            maxCtx: Number.isFinite(Number(rawLimits.maxCtx)) ? Number(rawLimits.maxCtx) : Math.max(2048, defaultCtx),
+            minBackoffSec: Number.isFinite(Number(rawLimits.minBackoffSec)) ? Number(rawLimits.minBackoffSec) : 5,
+            maxBackoffSec: Number.isFinite(Number(rawLimits.maxBackoffSec)) ? Number(rawLimits.maxBackoffSec) : 600
+        }
+    };
+};
+const getMandatorySelfUpgradeConfig = () => {
+    const raw = SYSTEM_DB.settings?.mandatorySelfUpgrade || {};
+    return {
+        enabled: raw.enabled !== false,
+        loopLimit: Number.isFinite(Number(raw.loopLimit)) ? Number(raw.loopLimit) : 4,
+        retryLimit: Number.isFinite(Number(raw.retryLimit)) ? Number(raw.retryLimit) : 3,
+        cooldownSec: Number.isFinite(Number(raw.cooldownSec)) ? Number(raw.cooldownSec) : 900
+    };
+};
+
+const applyAutorecoveryPlan = (plan, cfg) => {
+    if (!plan || typeof plan !== 'object') return { applied: false };
+    const settings = SYSTEM_DB.settings || {};
+    const limits = cfg?.limits || {};
+    if (Number.isFinite(Number(plan.ollamaNumCtx))) {
+        const minCtx = Number(limits.minCtx || 512);
+        const maxCtx = Number(limits.maxCtx || 8192);
+        const nextCtx = Math.max(minCtx, Math.min(maxCtx, Math.floor(Number(plan.ollamaNumCtx))));
+        settings.ollamaNumCtx = nextCtx;
+    }
+    if (Number.isFinite(Number(plan.autonomyBackoffSeconds))) {
+        const minSec = Number(limits.minBackoffSec || 5);
+        const maxSec = Number(limits.maxBackoffSec || 600);
+        const nextSec = Math.max(minSec, Math.min(maxSec, Math.floor(Number(plan.autonomyBackoffSeconds))));
+        SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + nextSec * 1000;
+    }
+    if (plan.resetAgentState === true) {
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.thoughtProcess = 'Autorecovery: reset';
+    }
+    if (plan.clearPendingApproval === true) {
+        SYSTEM_DB.agentState.pendingTaskApproval = null;
+    }
+    SYSTEM_DB.agentState.autonomyFailureCount = 0;
+    SYSTEM_DB.agentState.lastAutonomyError = '';
+    SYSTEM_DB.agentState.taskActionErrorCount = 0;
+    SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+    SYSTEM_DB.agentState.lastAutorecoveryAt = Date.now();
+    saveState();
+    return { applied: true, message: typeof plan.message === 'string' ? plan.message : '' };
+};
+
+const applyBasicRecovery = async (reason, details = '') => {
+    try {
+        await createAutoSnapshotIfDue('autorecovery');
+    } catch {}
+    try {
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.thoughtProcess = `Autorecovery fallback: ${String(reason || '').slice(0, 80)}`;
+        SYSTEM_DB.agentState.pendingTaskApproval = null;
+        SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 30 * 1000;
+        SYSTEM_DB.agentState.autonomyFailureCount = 0;
+        SYSTEM_DB.agentState.lastAutonomyError = '';
+        SYSTEM_DB.agentState.taskActionErrorCount = 0;
+        SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+        SYSTEM_DB.agentState.lastAutorecoveryAt = Date.now();
+        saveState();
+        pushNotification({
+            level: 'warn',
+            title: 'Autorecovery fallback',
+            message: `${String(reason || '')}${details ? ` | ${String(details)}` : ''}`.slice(0, 500)
+        }).catch(() => undefined);
+    } catch {}
+};
+
+const performAutonomyRecovery = async (reason, details = '') => {
+    // --- ADVANCED GOD MODE REPAIR ---
+    if (SYSTEM_DB.settings.developerMode === true) {
+        logToSystem('warn', `GOD MODE AUTO-REPAIR triggered for: ${reason}`);
+        
+        try {
+            // 1. Check for zombie processes on our port (BUT PROTECT SELF)
+            const port = process.env.PORT || 3000;
+            const checkPort = await execAsync(`lsof -t -i:${port}`).catch(() => ({ stdout: '' }));
+            const pids = checkPort.stdout.trim().split('\n').filter(Boolean);
+            const myPid = String(process.pid);
+            
+            for (const pid of pids) {
+                // CRITICAL: Do not kill myself!
+                if (pid !== myPid) {
+                    logToSystem('warn', `Auto-Repair: Killing zombie process ${pid} on port ${port}`);
+                    await execAsync(`kill -9 ${pid}`).catch(() => {});
+                } else {
+                     logToSystem('info', `Auto-Repair: Skipping self (PID ${pid}) to avoid suicide.`);
+                }
+            }
+
+            // 2. Check disk space (common cause of weird failures)
+            const df = await execAsync('df -h /').catch(() => ({ stdout: '' }));
+            if (df.stdout.includes('100%')) {
+                logToSystem('error', 'Auto-Repair: Disk full! Attempting cleanup of temp files...');
+                await execAsync('rm -rf /tmp/*').catch(() => {});
+            }
+
+            // 3. Restart Ollama if it seems stuck (timeout/fetch error)
+            if (reason.includes('ollama') || reason.includes('fetch') || reason.includes('timeout')) {
+                logToSystem('warn', 'Auto-Repair: Restarting Ollama service...');
+                // MacOS/Linux specific - adjust for your environment
+                if (process.platform === 'darwin') {
+                    await execAsync('pkill ollama && sleep 2 && open -a Ollama').catch(() => {});
+                } else {
+                    await execAsync('systemctl restart ollama').catch(() => {});
+                }
+            }
+
+        } catch (err) {
+            logToSystem('error', `Auto-Repair Failed: ${err.message}`);
+        }
+    }
+
+    const cfg = getAutorecoveryConfig();
+    if (!cfg.enabled) return;
+    const now = Date.now();
+    const lastAt = Number(SYSTEM_DB.agentState.lastAutorecoveryAt || 0);
+    const cooldownMs = (cfg.cooldownSec || 60) * 1000;
+    
+    // Bypass cooldown in God Mode (restored)
+    if (lastAt && (now - lastAt) < cooldownMs && !SYSTEM_DB.settings.developerMode) return;
+    
+    // ... existing AI logic ...
+    const role = cfg.modelRole;
+    const roleModel = SYSTEM_DB.settings.modelRoles?.[role] || SYSTEM_DB.settings.activeModel;
+    const prompt = cfg.prompt && cfg.prompt.trim()
+        ? cfg.prompt.trim()
+        : 'You are a recovery planner for a local system. Return STRICT JSON only. No markdown. No extra text.';
+    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+    const pendingTask = SYSTEM_DB.tasks.find(t => t.status === 'pending');
+    const planRequest = {
+        reason,
+        details,
+        agentState: SYSTEM_DB.agentState,
+        activeTask,
+        pendingTask,
+        autonomyErrors: SYSTEM_DB.agentState.autonomyFailureCount || 0,
+        taskActionErrors: SYSTEM_DB.agentState.taskActionErrorCount || 0
+    };
+    let reply = '';
+    try {
+        reply = await queryUniversalAI({
+            provider: SYSTEM_DB.settings.aiProvider,
+            model: roleModel,
+            modelRole: role,
+            systemInstruction: prompt,
+            userPrompt: `RECOVERY_MODE: Analyze the failure context and propose a recovery plan as strict JSON only. No markdown.\n\nCONTEXT: ${JSON.stringify(planRequest)}\n\nSCHEMA: {"ollamaNumCtx":2048,"autonomyBackoffSeconds":30,"resetAgentState":true,"clearPendingApproval":false,"message":""}`,
+            stream: false
+        });
+    } catch (e) {
+        logToSystem('warn', `Autorecovery AI failed: ${e.message}`);
+        await applyBasicRecovery(reason, `AI failed: ${e.message}`);
+        return;
+    }
+    const cleanedReply = String(reply || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    const plan = parseJsonSafe(cleanedReply);
+    if (!plan) {
+        logToSystem('warn', `Autorecovery invalid response: ${cleanedReply.slice(0, 200)}`);
+        await applyBasicRecovery(reason, 'Invalid JSON plan');
+        return;
+    }
+    try {
+        await createAutoSnapshotIfDue('autorecovery');
+    } catch {}
+    let result = { applied: false, message: '' };
+    try {
+        result = applyAutorecoveryPlan(plan, cfg);
+    } catch (e) {
+        logToSystem('warn', `Autorecovery apply failed: ${e.message}`);
+        await applyBasicRecovery(reason, `Apply failed: ${e.message}`);
+        return;
+    }
+    logToSystem('warn', `Autorecovery: ${reason}${details ? ` | ${details}` : ''}`);
+    if (result.message) logToSystem('info', `Autorecovery plan: ${result.message}`);
+};
+
+const getQualityAuditConfig = () => {
+    const raw = SYSTEM_DB.settings?.qualityAudit || {};
+    return {
+        enabled: raw.enabled !== false,
+        minChangedLines: Number.isFinite(Number(raw.minChangedLines)) ? Number(raw.minChangedLines) : 80,
+        minFiles: Number.isFinite(Number(raw.minFiles)) ? Number(raw.minFiles) : 3,
+        cooldownSec: Number.isFinite(Number(raw.cooldownSec)) ? Number(raw.cooldownSec) : 120,
+        diffLimit: Number.isFinite(Number(raw.diffLimit)) ? Number(raw.diffLimit) : 120000,
+        autoBuild: raw.autoBuild !== false,
+        autoSummary: raw.autoSummary !== false,
+        autoAiSummary: raw.autoAiSummary !== false,
+        aiModelRole: typeof raw.aiModelRole === 'string' && raw.aiModelRole ? raw.aiModelRole : 'planning'
+    };
+};
+
+const parseDiffNumstat = (raw = '') => {
+    const lines = String(raw || '').trim().split('\n').filter(Boolean);
+    const files = [];
+    let totalAdd = 0;
+    let totalDel = 0;
+    for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length < 3) continue;
+        const add = Number(parts[0]) || 0;
+        const del = Number(parts[1]) || 0;
+        const file = parts.slice(2).join('\t');
+        totalAdd += add;
+        totalDel += del;
+        files.push({ file, add, del, total: add + del });
+    }
+    files.sort((a, b) => b.total - a.total);
+    return { files, totalAdd, totalDel, totalLines: totalAdd + totalDel };
+};
+
+const shouldRunQualityAudit = (stats, cfg) => {
+    if (!cfg.enabled) return false;
+    if (!stats) return false;
+    const changedFiles = stats.files.length;
+    const changedLines = stats.totalLines;
+    return changedLines >= cfg.minChangedLines || changedFiles >= cfg.minFiles;
+};
+
+const runQualityAudit = async (context = {}) => {
+    const cfg = getQualityAuditConfig();
+    if (!cfg.enabled) return;
+    const now = Date.now();
+    const lastAt = Number(SYSTEM_DB.agentState.lastQualityAuditAt || 0);
+    const isPending = SYSTEM_DB.agentState.pendingQualityAudit === true;
+    if (!isPending && lastAt && now - lastAt < cfg.cooldownSec * 1000) return;
+    const { stdout: numstatRaw } = await execAsync('git diff --numstat', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+    const stats = parseDiffNumstat(numstatRaw);
+    if (!shouldRunQualityAudit(stats, cfg)) {
+        SYSTEM_DB.agentState.pendingQualityAudit = false;
+        saveState();
+        return;
+    }
+    const { stdout: statRaw } = await execAsync('git diff --stat', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+    const { stdout: diffRaw } = await execAsync('git diff', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 10 * 1024 * 1024, env: process.env });
+    const diffLimit = cfg.diffLimit;
+    const diffTruncated = diffRaw.length > diffLimit;
+    const diffSnippet = diffRaw.substring(0, diffLimit);
+    logToChat('model', `QUALITY_AUDIT_DIFF:\n${diffSnippet}${diffTruncated ? '\n...[TRUNCATED DIFF]...' : ''}`, 'stdout');
+    const summaryTop = stats.files.slice(0, 5).map(f => `${f.file} (+${f.add} -${f.del})`).join(', ');
+    const summary = `Quality audit: files=${stats.files.length}, lines=+${stats.totalAdd}/-${stats.totalDel}${summaryTop ? `, top=${summaryTop}` : ''}`;
+    logToChat('model', `QUALITY_AUDIT_STAT:\n${statRaw}`, 'stdout');
+    if (cfg.autoSummary) logToChat('model', summary, 'system');
+    let aiSummary = '';
+    if (cfg.autoAiSummary) {
+        const role = cfg.aiModelRole;
+        const roleModel = SYSTEM_DB.settings.modelRoles?.[role] || SYSTEM_DB.settings.activeModel;
+        try {
+            aiSummary = await queryUniversalAI({
+                provider: SYSTEM_DB.settings.aiProvider,
+                model: roleModel,
+                modelRole: role,
+                systemInstruction: SYSTEM_DB.settings.systemPrompt,
+                userPrompt: `QUALITY_AUDIT: Provide a concise review in Polish. Include: risks, missing checks, and next action.\n\nSTAT:\n${statRaw}\n\nDIFF:\n${diffSnippet}\n${diffTruncated ? '\n...[TRUNCATED DIFF]...' : ''}`,
+                stream: false
+            });
+            if (aiSummary) logToChat('model', `QUALITY_AUDIT_AI:\n${aiSummary}`, 'system');
+        } catch (e) {
+            logToSystem('warn', `Quality audit AI failed: ${e.message}`);
+        }
+    }
+    if (cfg.autoBuild) {
+        const { stdout, stderr } = await execAsync('npm run build', { cwd: APP_ROOT, timeout: 300000, maxBuffer: 20 * 1024 * 1024, env: process.env });
+        if (stdout) logToChat('model', stdout, 'stdout');
+        if (stderr) logToChat('model', stderr, 'stderr');
+        SYSTEM_DB.agentState.lastBuildOkAt = Date.now();
+    }
+    SYSTEM_DB.agentState.lastQualityAuditAt = Date.now();
+    SYSTEM_DB.agentState.lastQualityAuditSummary = summary;
+    SYSTEM_DB.agentState.lastQualityAuditAiSummary = aiSummary || '';
+    SYSTEM_DB.agentState.pendingQualityAudit = false;
+    saveState();
+    if (context?.taskId) {
+        const activeTask = SYSTEM_DB.tasks.find(t => t.id === context.taskId);
+        if (activeTask) {
+            activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+            activeTask.logs.push(`[AUDIT] ${summary}`);
+            activeTask.updatedAt = Date.now();
+        }
+    }
+};
+
+const getTaskBreakdownConfig = () => {
+    const raw = SYSTEM_DB.settings?.taskBreakdown || {};
+    let minItems = Number.isFinite(Number(raw.minItems)) ? Number(raw.minItems) : 3;
+    let maxItems = Number.isFinite(Number(raw.maxItems)) ? Number(raw.maxItems) : 6;
+    if (minItems > maxItems) {
+        const tmp = minItems;
+        minItems = maxItems;
+        maxItems = tmp;
+    }
+    return {
+        enabled: raw.enabled !== false,
+        autoOnCreate: raw.autoOnCreate !== false,
+        autoOnStart: raw.autoOnStart !== false,
+        autoCompleteOnChecklist: raw.autoCompleteOnChecklist !== false,
+        minItems,
+        maxItems,
+        aiModelRole: typeof raw.aiModelRole === 'string' && raw.aiModelRole ? raw.aiModelRole : 'planning'
+    };
+};
+
+const normalizeSubtaskItems = (items = []) => {
+    const list = Array.isArray(items) ? items : [];
+    return list.map((item, index) => {
+        if (typeof item === 'string') {
+            return { id: `sub_${Date.now()}_${index}_${crypto.randomUUID()}`, title: item.trim(), status: 'pending' };
+        }
+        if (item && typeof item === 'object') {
+            const title = String(item.title || item.name || item.description || '').trim();
+            const status = item.status === 'completed' ? 'completed' : (item.status === 'in_progress' ? 'in_progress' : 'pending');
+            // FIX: Preserve existing ID if valid, otherwise generate new one
+            const id = (typeof item.id === 'string' && item.id.length > 2) ? item.id : `sub_${Date.now()}_${index}_${crypto.randomUUID()}`;
+            if (title) {
+                return { id, title, status };
+            }
+        }
+        return null;
+    }).filter(Boolean);
+};
+
+const generateTaskBreakdownForTask = async (task, source = 'system') => {
+    if (!task || typeof task !== 'object') return null;
+    const cfg = getTaskBreakdownConfig();
+    if (!cfg.enabled) return null;
+    if (Array.isArray(task.subtasks) && task.subtasks.length) return task;
+    const role = cfg.aiModelRole;
+    const roleModel = SYSTEM_DB.settings.modelRoles?.[role] || SYSTEM_DB.settings.activeModel;
+    const maxItems = Math.max(1, Math.min(12, cfg.maxItems));
+    const minItems = Math.max(1, Math.min(maxItems, cfg.minItems));
+    const prompt = `Zadanie: ${task.title}\nOpis: ${task.description || 'Brak'}\n\nWygeneruj listę ${minItems}-${maxItems} krótkich kroków. Zwróć tylko JSON: [{"title":"..."}]. Bez markdown.`;
+    let reply = '';
+    try {
+        reply = await queryUniversalAI({
+            provider: SYSTEM_DB.settings.aiProvider,
+            model: roleModel,
+            modelRole: role,
+            systemInstruction: SYSTEM_DB.settings.systemPrompt,
+            userPrompt: prompt,
+            stream: false
+        });
+    } catch (e) {
+        logToSystem('warn', `Task breakdown AI failed: ${e.message}`);
+        return null;
+    }
+    const parsed = parseJsonSafe(reply);
+    const rawList = Array.isArray(parsed) ? parsed : (parsed?.items || parsed?.steps || []);
+    let subtasks = normalizeSubtaskItems(rawList);
+    if (subtasks.length > maxItems) subtasks = subtasks.slice(0, maxItems);
+    if (subtasks.length < minItems) return null;
+    task.subtasks = subtasks;
+    task.breakdown = { generatedAt: Date.now(), modelRole: role, source };
+    task.logs = Array.isArray(task.logs) ? task.logs : [];
+    task.logs.push(`[SUBTASKS] Wygenerowano listę kroków (${subtasks.length}).`);
+    task.updatedAt = Date.now();
+    return task;
+};
+
+const maybeAutoCompleteTaskFromSubtasks = (task) => {
+    if (!task || typeof task !== 'object') return false;
+    const cfg = getTaskBreakdownConfig();
+    if (!cfg.enabled || !cfg.autoCompleteOnChecklist) return false;
+    if (!Array.isArray(task.subtasks) || task.subtasks.length === 0) return false;
+    if (task.status === 'failed') return false;
+    if (task.status !== 'in_progress' && task.status !== 'pending') return false;
+    const allDone = task.subtasks.every((s) => s && s.status === 'completed');
+    if (!allDone) return false;
+    if (task.status !== 'completed') {
+        task.status = 'completed';
+        task.progress = 100;
+        task.logs = Array.isArray(task.logs) ? task.logs : [];
+        task.logs.push('[SUBTASKS] Wszystkie kroki ukończone — task zamknięty automatycznie.');
+        task.updatedAt = Date.now();
+        return true;
+    }
+    return false;
+};
+
+const TOOL_FAILURE_LIMIT = 3;
+const TOOL_FAILURE_WINDOW_MS = 30000;
+const TOOL_FAILURE_BLOCK_MS = 60000;
+const toolFailureCache = new Map();
+const fileReadCache = new Map();
+const FILE_READ_CACHE_TTL_MS = Number(process.env.FILE_READ_CACHE_TTL_MS || 1200000);
+const FILE_READ_CACHE_LIMIT = Number(process.env.FILE_READ_CACHE_LIMIT || 200);
+const toolResultCache = new Map();
+const TOOL_RESULT_CACHE_TTL_MS = Number(process.env.TOOL_RESULT_CACHE_TTL_MS || 1200000);
+const TOOL_RESULT_CACHE_LIMIT = Number(process.env.TOOL_RESULT_CACHE_LIMIT || 200);
+const TOOL_MEMORY_LIMIT = Number(process.env.TOOL_MEMORY_LIMIT || 20);
+const TOOL_LESSON_LIMIT = Number(process.env.TOOL_LESSON_LIMIT || 30);
+const SELF_IMPROVE_COOLDOWN_MS = Number(process.env.SELF_IMPROVE_COOLDOWN_MS || 600000);
+
+const getToolFailureKey = (toolName, argsRaw) => `${toolName}:${argsRaw}`;
+const normalizeToolOutput = (output) => String(output || '').slice(0, 8000);
+const getFileCacheEntry = (fullPath) => {
+    const key = path.resolve(fullPath);
+    const entry = fileReadCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > FILE_READ_CACHE_TTL_MS) {
+        fileReadCache.delete(key);
+        return null;
+    }
+    fileReadCache.delete(key);
+    fileReadCache.set(key, entry);
+    return entry;
+};
+const getToolCacheEntry = (key) => {
+    const entry = toolResultCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > TOOL_RESULT_CACHE_TTL_MS) {
+        toolResultCache.delete(key);
+        return null;
+    }
+    toolResultCache.delete(key);
+    toolResultCache.set(key, entry);
+    return entry;
+};
+const setToolCacheEntry = (key, payload) => {
+    if (!TOOL_RESULT_CACHE_TTL_MS || TOOL_RESULT_CACHE_TTL_MS <= 0) return;
+    if (toolResultCache.size >= TOOL_RESULT_CACHE_LIMIT) {
+        const firstKey = toolResultCache.keys().next().value;
+        if (firstKey) toolResultCache.delete(firstKey);
+    }
+    toolResultCache.set(key, { ...payload, createdAt: Date.now() });
+};
+const recordToolMemory = (toolName, key, output) => {
+    const normalized = normalizeToolOutput(output);
+    if (!normalized) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const list = Array.isArray(SYSTEM_DB.agentState.toolMemory) ? SYSTEM_DB.agentState.toolMemory : [];
+    list.push({ tool: toolName, key: String(key || ''), output: normalized, ts: Date.now() });
+    while (list.length > TOOL_MEMORY_LIMIT) list.shift();
+    SYSTEM_DB.agentState.toolMemory = list;
+};
+const recordToolLesson = (toolName, title, detail = '') => {
+    const normalizedTitle = normalizeToolOutput(title);
+    if (!normalizedTitle) return;
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const list = Array.isArray(SYSTEM_DB.agentState.toolLessons) ? SYSTEM_DB.agentState.toolLessons : [];
+    const normalizedDetail = normalizeToolOutput(detail);
+    list.push({ tool: toolName, title: normalizedTitle, detail: normalizedDetail, ts: Date.now() });
+    while (list.length > TOOL_LESSON_LIMIT) list.shift();
+    SYSTEM_DB.agentState.toolLessons = list;
+};
+const recordToolAttempt = (toolName) => {
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = SYSTEM_DB.agentState.toolStats || {};
+    const entry = stats[toolName] || { attempts: 0, successes: 0, failures: 0, lastAt: 0, lastError: '' };
+    entry.attempts += 1;
+    entry.lastAt = Date.now();
+    stats[toolName] = entry;
+    SYSTEM_DB.agentState.toolStats = stats;
+};
+const recordToolSuccess = (toolName) => {
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = SYSTEM_DB.agentState.toolStats || {};
+    const entry = stats[toolName] || { attempts: 0, successes: 0, failures: 0, lastAt: 0, lastError: '' };
+    entry.successes += 1;
+    entry.lastAt = Date.now();
+    stats[toolName] = entry;
+    SYSTEM_DB.agentState.toolStats = stats;
+};
+const recordToolFailureStats = (toolName, errorText) => {
+    if (!SYSTEM_DB.agentState) SYSTEM_DB.agentState = {};
+    const stats = SYSTEM_DB.agentState.toolStats || {};
+    const entry = stats[toolName] || { attempts: 0, successes: 0, failures: 0, lastAt: 0, lastError: '' };
+    entry.failures += 1;
+    entry.lastAt = Date.now();
+    entry.lastError = String(errorText || '').slice(0, 200);
+    stats[toolName] = entry;
+    SYSTEM_DB.agentState.toolStats = stats;
+};
+const buildToolMemorySummary = () => {
+    const list = Array.isArray(SYSTEM_DB?.agentState?.toolMemory) ? SYSTEM_DB.agentState.toolMemory : [];
+    if (!list.length) return '';
+    return list.map(item => `- ${item.tool} ${item.key}: ${item.output}`).join('\n');
+};
+const buildToolLessonSummary = () => {
+    const list = Array.isArray(SYSTEM_DB?.agentState?.toolLessons) ? SYSTEM_DB.agentState.toolLessons : [];
+    if (!list.length) return '';
+    return list.map(item => `- ${item.tool}: ${item.title}${item.detail ? ` (${item.detail})` : ''}`).join('\n');
+};
+const buildToolStatsSummary = () => {
+    const stats = SYSTEM_DB?.agentState?.toolStats || {};
+    const entries = Object.entries(stats)
+        .map(([tool, s]) => {
+            const attempts = Number(s?.attempts || 0);
+            const successes = Number(s?.successes || 0);
+            const failures = Number(s?.failures || 0);
+            const rate = attempts ? Math.round((successes / attempts) * 100) : 0;
+            const lastError = String(s?.lastError || '').trim();
+            return { tool, attempts, successes, failures, rate, lastError };
+        })
+        .filter(e => e.attempts >= 3)
+        .sort((a, b) => a.rate - b.rate);
+    const worst = entries.slice(0, 5);
+    if (!worst.length) return '';
+    return worst.map(e => `- ${e.tool}: ${e.successes}/${e.attempts} (${e.rate}%)${e.lastError ? ` lastError=${e.lastError}` : ''}`).join('\n');
+};
+const isShellCacheable = (cmd) => {
+    const lowered = String(cmd || '').trim().toLowerCase();
+    if (!lowered) return false;
+    if (/(^|\s)(rm|mv|cp|mkdir|touch|npm|yarn|pnpm|python|node|curl|wget|tee|tar|zip|unzip|docker|podman|kill|pkill)\b/.test(lowered)) return false;
+    if (/^git\s+(commit|checkout|reset|add|push|pull|merge|rebase)\b/.test(lowered)) return false;
+    if (/>\s*|>>\s*/.test(lowered)) return false;
+    if (/^(ls|pwd|whoami|cat|rg|grep|sed|head|tail|wc|find|stat|du)\b/.test(lowered)) return true;
+    if (/^git\s+(status|diff|log|show|ls-files)\b/.test(lowered)) return true;
+    return false;
+};
+const clearToolCaches = (reason) => {
+    fileReadCache.clear();
+    toolResultCache.clear();
+    if (SYSTEM_DB?.agentState) {
+        SYSTEM_DB.agentState.toolMemory = [];
+        SYSTEM_DB.agentState.lastToolCacheClearedAt = Date.now();
+        SYSTEM_DB.agentState.lastToolCacheClearReason = String(reason || '');
+    }
+};
+const scheduleSelfImprovement = (reason, details = '') => {
+    try {
+        if (!SYSTEM_DB?.agentState) return;
+
+        // --- SMART RECOVERY & BALANCE ---
+        // 1. If it's a critical failure (stall/loop), ALLOW self-improvement to fix the blocker.
+        const isCriticalFailure = String(reason).includes('CRITICAL') || String(reason).includes('stall') || String(reason).includes('loop');
+        
+        // 2. If it's just a minor issue or routine check, apply cooldown to avoid loops.
+        const now = Date.now();
+        const lastAt = Number(SYSTEM_DB.agentState.lastSelfImproveAt || 0);
+        const cooldown = isCriticalFailure ? 5 * 60 * 1000 : SELF_IMPROVE_COOLDOWN_MS; // 5 min for critical, normal otherwise
+        
+        if (lastAt && (now - lastAt) < cooldown) {
+             logToSystem('info', `Self-Improvement skipped (Cooldown). Reason: ${reason}`);
+             return;
+        }
+
+        // 3. Ensure we don't spam self-improvement tasks if one is already pending/running
+        const existing = SYSTEM_DB.tasks.find(t => t.status !== 'completed' && String(t.title || '').startsWith('Autonomia: Samorozwój'));
+        if (existing) return;
+        // ---------------------------------------------------
+        
+        const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+        const pendingTask = SYSTEM_DB.tasks.find(t => t.status === 'pending');
+        const mem = Array.isArray(SYSTEM_DB.agentState.toolMemory) ? SYSTEM_DB.agentState.toolMemory.slice(-3) : [];
+        const memLines = mem.map(m => `- ${m.tool} ${m.key}`).join('\n');
+        const contextLines = [
+            activeTask ? `Active task: ${activeTask.title}` : null,
+            pendingTask ? `Pending task: ${pendingTask.title}` : null,
+            SYSTEM_DB.agentState.lastAutonomyError ? `Last autonomy error: ${SYSTEM_DB.agentState.lastAutonomyError}` : null,
+            Number.isFinite(Number(SYSTEM_DB.agentState.taskActionErrorCount)) ? `TaskAction errors: ${SYSTEM_DB.agentState.taskActionErrorCount}` : null,
+            details ? `Details: ${details}` : null,
+            memLines ? `Recent tools:\n${memLines}` : null
+        ].filter(Boolean);
+        const description = `Cel: usunąć przyczynę blokady i poprawić strategię autonomii.\nPowód: ${String(reason || '').slice(0, 120)}.\n${contextLines.join('\n')}`.slice(0, 2000);
+        const created = normalizeTask({
+            id: `task_${Date.now()}`,
+            title: `Autonomia: Samorozwój (${String(reason || '').slice(0, 30) || 'loop'})`,
+            description,
+            status: 'pending',
+            progress: 0,
+            priority: 'low',
+            withinObjectives: false,
+            logs: [`[AUTO/SELF_IMPROVE] Triggered by ${reason}${details ? ` | ${details}` : ''}`],
+            createdAt: now,
+            updatedAt: now
+        });
+        SYSTEM_DB.tasks.push(created);
+        SYSTEM_DB.agentState.lastSelfImproveAt = now;
+        SYSTEM_DB.agentState.lastSelfImproveReason = String(reason || '');
+        SYSTEM_DB.agentState.lastSelfImproveTaskId = created.id;
+        saveState();
+        pushNotification({
+            level: 'info',
+            title: 'Autonomia: Samorozwój',
+            message: `Utworzono zadanie poprawy autonomii (${reason}).`
+        }).catch(() => undefined);
+    } catch {}
+};
+const runSystemGC = () => {
+    try {
+        const now = Date.now();
+        let cleared = 0;
+        
+        // 1. Clean File Read Cache (TTL)
+        for (const [key, entry] of fileReadCache.entries()) {
+            if (now - entry.createdAt > FILE_READ_CACHE_TTL_MS * 2) {
+                fileReadCache.delete(key);
+                cleared++;
+            }
+        }
+        
+        // 2. Clean Tool Failure Cache
+        for (const [key, entry] of toolFailureCache.entries()) {
+            if (now - entry.lastAt > TOOL_FAILURE_WINDOW_MS * 2) {
+                toolFailureCache.delete(key);
+                cleared++;
+            }
+        }
+
+        // 3. Clean Old Context Files (Disk Hygiene)
+        try {
+            const memoryDir = path.join(DATA_DIR, 'memory');
+            if (fs.existsSync(memoryDir)) {
+                const files = fs.readdirSync(memoryDir);
+                for (const f of files) {
+                    if (f.startsWith('context_task_')) {
+                        const p = path.join(memoryDir, f);
+                        const stats = fs.statSync(p);
+                        // Delete if older than 7 days
+                        if (now - stats.mtimeMs > 7 * 24 * 60 * 60 * 1000) {
+                            fs.unlinkSync(p);
+                            cleared++;
+                        }
+                    }
+                }
+            }
+        } catch {}
+
+        // 4. Force V8 Garbage Collection (DISABLED to prevent lag)
+        /* if (global.gc) {
+            global.gc();
+            cleared++;
+        } */
+        
+        if (cleared > 0) {
+            logToSystem('info', `System GC: Cleared ${cleared} items/files to free memory.`);
+        }
+    } catch (e) {
+        console.error('System GC Error:', e);
+    }
+};
+
+// Schedule GC every hour (MOVED TO MAIN INIT to avoid ReferenceError)
+// safeSetInterval(runSystemGC, 60 * 60 * 1000); -> Will call this later
+
+const setFileCacheEntry = (fullPath, content, truncated) => {
+    const key = path.resolve(fullPath);
+    if (!FILE_READ_CACHE_TTL_MS || FILE_READ_CACHE_TTL_MS <= 0) return;
+    if (fileReadCache.size >= FILE_READ_CACHE_LIMIT) {
+        const firstKey = fileReadCache.keys().next().value;
+        if (firstKey) fileReadCache.delete(firstKey);
+    }
+    fileReadCache.set(key, { content, truncated: !!truncated, createdAt: Date.now() });
+};
+const invalidateFileCacheEntry = (fullPath) => {
+    const key = path.resolve(fullPath);
+    fileReadCache.delete(key);
+};
+
+const shouldBlockTool = (toolName, argsRaw) => {
+    const key = getToolFailureKey(toolName, argsRaw);
+    const entry = toolFailureCache.get(key);
+    if (!entry) return null;
+    const now = Date.now();
+    if (entry.blockedUntil && now < entry.blockedUntil) return entry;
+    if (now - entry.lastAt > TOOL_FAILURE_WINDOW_MS) {
+        toolFailureCache.delete(key);
+        return null;
+    }
+    return null;
+};
+
+const recordToolFailure = (toolName, argsRaw, errorText) => {
+    const key = getToolFailureKey(toolName, argsRaw);
+    const now = Date.now();
+    const entry = toolFailureCache.get(key);
+    const fresh = !entry || (now - entry.lastAt > TOOL_FAILURE_WINDOW_MS);
+    const next = fresh ? { count: 0, lastAt: now, lastError: '', blockedUntil: null } : { ...entry };
+    next.count += 1;
+    next.lastAt = now;
+    next.lastError = String(errorText || '');
+    if (next.count >= TOOL_FAILURE_LIMIT) {
+        next.blockedUntil = now + TOOL_FAILURE_BLOCK_MS;
+    }
+    toolFailureCache.set(key, next);
+    recordToolFailureStats(toolName, errorText);
+    return next;
+};
+const preflightTool = (toolName, argsRaw, source) => {
+    const fail = (error) => ({ ok: false, error: String(error || 'Invalid tool input') });
+    const ok = (nextArgsRaw = argsRaw, note = '') => ({ ok: true, argsRaw: nextArgsRaw, note });
+    const ensurePayload = () => {
+        const payload = parseJsonSafe(argsRaw);
+        if (!payload || typeof payload !== 'object') return { error: 'Invalid JSON payload', payload: null };
+        return { payload };
+    };
+    const trimArg = String(argsRaw || '').trim();
+    if (!trimArg && !['DEV_STATUS', 'DEV_BUILD', 'BLOG_MAINTENANCE', 'QUALITY_AUDIT'].includes(toolName)) {
+        if (toolName !== 'DEV_DIFF' && toolName !== 'SYSTEM_QUERY') {
+            return fail(`${toolName}_ERROR: missing input`);
+        }
+    }
+    if (toolName === 'FILE_READ') {
+        const rawPath = normalizeFileReadPath(argsRaw);
+        if (!rawPath) return fail('FILE_READ_ERROR: missing path');
+        const note = rawPath !== trimArg ? 'Normalized FILE_READ path' : '';
+        return ok(rawPath, note);
+    }
+    if (toolName === 'FILE_WRITE') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('FILE_WRITE_ERROR: invalid JSON payload');
+        const payload = parsed.payload;
+        const filePath = String(payload.path || '').trim();
+        const rawContent = payload.content !== undefined ? payload.content : payload.json;
+        if (!filePath) return fail('FILE_WRITE_ERROR: missing path');
+        if (rawContent === undefined) return fail('FILE_WRITE_ERROR: missing content');
+        return ok(argsRaw);
+    }
+    if (toolName === 'FILE_REPLACE') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('FILE_REPLACE_ERROR: invalid JSON payload');
+        const payload = parsed.payload;
+        const filePath = String(payload.path || '').trim();
+        if (!filePath) return fail('FILE_REPLACE_ERROR: missing path');
+        if (!payload.oldStr || typeof payload.newStr !== 'string') return fail('FILE_REPLACE_ERROR: missing oldStr/newStr');
+        return ok(argsRaw);
+    }
+    if (toolName === 'FTP_UPLOAD') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('FTP_UPLOAD_ERROR: invalid JSON payload');
+        const payload = parsed.payload;
+        if (!String(payload.localPath || '').trim()) return fail('FTP_UPLOAD_ERROR: missing localPath');
+        if (!String(payload.remotePath || '').trim()) return fail('FTP_UPLOAD_ERROR: missing remotePath');
+        return ok(argsRaw);
+    }
+    if (toolName === 'FTP_LIST') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('FTP_LIST_ERROR: invalid JSON payload');
+        const payload = parsed.payload;
+        if (!payload.path) {
+            return ok(JSON.stringify({ path: '/' }), 'Defaulted FTP_LIST path to /');
+        }
+        return ok(argsRaw);
+    }
+    if (toolName === 'BLOG_PUBLISH') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('BLOG_PUBLISH_ERROR: invalid JSON payload');
+        return ok(argsRaw);
+    }
+    if (toolName === 'DEV_APPLY_PATCH') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('DEV_APPLY_PATCH_ERROR: invalid JSON payload');
+        const patch = String(parsed.payload.patch || '').trim();
+        if (!patch) return fail('DEV_APPLY_PATCH_ERROR: empty patch');
+        return ok(argsRaw);
+    }
+    if (toolName === 'DEV_COMMIT_PUSH') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('DEV_COMMIT_PUSH_ERROR: invalid JSON payload');
+        const message = String(parsed.payload.message || '').trim();
+        if (!message) return fail('DEV_COMMIT_PUSH_ERROR: missing message');
+        return ok(argsRaw);
+    }
+    if (toolName === 'SYSTEM_QUERY') {
+        if (!trimArg) return ok(JSON.stringify({ query: 'status' }), 'Defaulted SYSTEM_QUERY to status');
+        const parsed = parseJsonSafe(argsRaw);
+        if (parsed && typeof parsed === 'object') return ok(argsRaw);
+        return fail('SYSTEM_QUERY_ERROR: invalid JSON payload');
+    }
+    if (toolName === 'DELEGATE_TASK') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('DELEGATE_TASK_ERROR: invalid JSON payload');
+        const role = String(parsed.payload.role || '').trim();
+        const task = String(parsed.payload.task || '').trim();
+        if (!role || !task) return fail('DELEGATE_TASK_ERROR: missing role/task');
+        return ok(argsRaw);
+    }
+    if (toolName === 'TASK_ACTION') {
+        if (!trimArg) return fail('TASK_ACTION_ERROR: missing payload');
+        const action = parseTaskAction(argsRaw);
+        if (!action || !action.action) return fail('TASK_ACTION_ERROR: invalid payload');
+        return ok(argsRaw);
+    }
+    if (toolName === 'WEB_SEARCH') {
+        const query = normalizeWebQuery(argsRaw);
+        if (!query) return fail('WEB_SEARCH_ERROR: missing query');
+        const note = query !== trimArg ? 'Normalized WEB_SEARCH query' : '';
+        return ok(query, note);
+    }
+    if (toolName === 'WEB_READ') {
+        const url = normalizeWebUrl(argsRaw);
+        if (!url) return fail('WEB_READ_ERROR: missing url');
+        if (!/^https?:\/\//i.test(url)) return fail(`WEB_READ_ERROR: invalid url ${url}`);
+        const note = url !== trimArg ? 'Normalized WEB_READ url' : '';
+        return ok(url, note);
+    }
+    if (toolName === 'PYTHON_EXEC') {
+        const payload = parseJsonSafe(argsRaw);
+        const code = payload && typeof payload === 'object' ? payload?.code : argsRaw;
+        if (!String(code || '').trim()) return fail('PYTHON_EXEC_ERROR: missing code');
+        return ok(argsRaw);
+    }
+    if (toolName === 'VISION_ANALYZE') {
+        const parsed = ensurePayload();
+        if (parsed.error) return fail('VISION_ANALYZE_ERROR: invalid JSON payload');
+        const imagePath = String(parsed.payload.path || '').trim();
+        if (!imagePath) return fail('VISION_ANALYZE_ERROR: missing path');
+        return ok(argsRaw);
+    }
+    if (toolName === 'BROWSER_ACTION') {
+        const payload = parseJsonSafe(argsRaw);
+        const url = typeof payload === 'object' ? payload.url : argsRaw;
+        if (!String(url || '').trim()) return fail('BROWSER_ACTION_ERROR: missing url');
+        return ok(argsRaw);
+    }
+    if (toolName === 'SYS_SPEAK') {
+        const payload = parseJsonSafe(argsRaw);
+        const text = typeof payload === 'object' ? payload.text : argsRaw;
+        if (!String(text || '').trim()) return fail('SYS_SPEAK_ERROR: missing text');
+        return ok(argsRaw);
+    }
+    if (toolName === 'IMAGE_GENERATE') {
+        const payload = parseJsonSafe(argsRaw);
+        const prompt = typeof payload === 'object' ? payload.prompt : argsRaw;
+        if (!String(prompt || '').trim()) return fail('IMAGE_GENERATE_ERROR: missing prompt');
+        return ok(argsRaw);
+    }
+    return ok(argsRaw);
+};
+
+const clearToolFailure = (toolName, argsRaw) => {
+    const key = getToolFailureKey(toolName, argsRaw);
+    toolFailureCache.delete(key);
+};
+
+const executeTools = async (text, options = {}) => {
+    const rawText = String(text || '');
+    let toolRegex = /\[\[(\w+)\s*(?::?\s*)([\s\S]*?)\]\]/g;
+    let matches = Array.from(rawText.matchAll(toolRegex));
+    
+    if (matches.length === 0 && (rawText.includes('[SHELL') || rawText.includes('[FILE') || rawText.includes('[WEB') || rawText.includes('[QUALITY') || rawText.includes('[TASK') || rawText.includes('[TOOL'))) {
+        toolRegex = /\[([A-Z_]{2,})\s*(?::?\s*)([\s\S]*?)\]/g;
+        matches = Array.from(rawText.matchAll(toolRegex));
+        if (matches.length > 0) {
+            logProcessingStage('NOTICE: Detected single-bracket tool syntax. Auto-correcting.');
+        }
+    }
+
+    if (matches.length === 0 && (rawText.includes('[TOOL]') || rawText.includes('[TOOLS]'))) {
+        toolRegex = /\[(TOOL|TOOLS)\]\s*([\s\S]*?)(?=\n\[|\n\w|$)/g;
+        matches = Array.from(rawText.matchAll(toolRegex));
+    }
+
+    let toolCalls = matches.map(match => ({ toolName: match[1], argsRaw: match[2] }));
+    if (toolCalls.length === 0) {
+        const fallback = parseJsonSafe(rawText);
+        if (fallback && typeof fallback === 'object') {
+            const toolName = String(fallback.tool || fallback.toolName || fallback.name || '').trim();
+            if (toolName) {
+                const args = fallback.args ?? fallback.arguments ?? fallback.payload ?? fallback.input ?? fallback;
+                const argsRaw = typeof args === 'string' ? args : JSON.stringify(args);
+                toolCalls = [{ toolName, argsRaw }];
+            } else if (fallback.action || fallback.subtasks || fallback.progress || fallback.logs || fallback.logsAppend) {
+                toolCalls = [{ toolName: 'TASK_ACTION', argsRaw: JSON.stringify(fallback) }];
+            }
+        }
+    }
+
+    const expanded = [];
+    for (const call of toolCalls) {
+        const t = String(call?.toolName || '').trim().toUpperCase();
+        const a = String(call?.argsRaw || '').trim();
+        if (t !== 'TOOL' && t !== 'TOOLS') {
+            expanded.push({ toolName: call.toolName, argsRaw: call.argsRaw });
+            continue;
+        }
+        const payload = parseJsonSafe(a);
+        if (!payload) {
+            const m = a.match(/^([A-Z_]{2,})\s*:\s*([\s\S]*)$/);
+            if (m) {
+                expanded.push({ toolName: m[1], argsRaw: String(m[2] || '').trim() });
+                continue;
+            }
+        }
+        const pushOne = (x) => {
+            if (!x) return;
+            const name = String(x.tool || x.toolName || x.name || '').trim();
+            if (!name) return;
+            const args = x.args ?? x.arguments ?? x.payload ?? x.input ?? x.data;
+            const argsRaw = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+            expanded.push({ toolName: name, argsRaw });
+        };
+        if (Array.isArray(payload)) {
+            payload.forEach(pushOne);
+            continue;
+        }
+        if (payload && typeof payload === 'object') {
+            if (Array.isArray(payload.toolCalls)) {
+                payload.toolCalls.forEach(pushOne);
+                continue;
+            }
+            const directName = String(payload.tool || payload.toolName || payload.name || '').trim();
+            if (directName) {
+                pushOne(payload);
+                continue;
+            }
+            const keys = Object.keys(payload);
+            const looksLikeMap = keys.length > 0 && keys.every(k => /^[A-Z_]{2,}$/.test(k));
+            if (looksLikeMap) {
+                for (const k of keys) {
+                    const v = payload[k];
+                    const argsRaw = typeof v === 'string' ? v : JSON.stringify(v ?? {});
+                    expanded.push({ toolName: k, argsRaw });
+                }
+                continue;
+            }
+            continue;
+        }
+        expanded.push({ toolName: call.toolName, argsRaw: call.argsRaw });
+    }
+    toolCalls = expanded;
+
+    if (toolCalls.length === 0) {
+        const source = String(options?.source || '');
+        if (source === 'autonomy') {
+            try {
+                const priorityRank = { high: 0, medium: 1, low: 2 };
+                const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+                const pendingTask = SYSTEM_DB.tasks
+                    .filter(t => t.status === 'pending')
+                    .sort((a, b) => {
+                        const pa = priorityRank[a.priority || 'medium'] ?? 1;
+                        const pb = priorityRank[b.priority || 'medium'] ?? 1;
+                        if (pa !== pb) return pa - pb;
+                        return (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0);
+                    })[0];
+                const selectedTask = activeTask || pendingTask;
+                if (selectedTask) {
+                    selectedTask.retryCount = (selectedTask.retryCount || 0) + 1;
+                    selectedTask.logs = Array.isArray(selectedTask.logs) ? selectedTask.logs : [];
+                    selectedTask.logs.push(`[AUTONOMY] Brak narzędzi w odpowiedzi modelu. Próba ${selectedTask.retryCount}.`);
+                    selectedTask.updatedAt = Date.now();
+                }
+                SYSTEM_DB.agentState.autonomyFailureCount = (SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+                SYSTEM_DB.agentState.lastAutonomyError = 'No tools found in autonomy reply';
+                SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 5000;
+                saveState();
+                if ((SYSTEM_DB.agentState.autonomyFailureCount || 0) >= 3) {
+                    await performAutonomyRecovery('no_tools_in_reply');
+                }
+            } catch {}
+        } else {
+            logProcessingStage(`WARNING: No tools found in reply. Length: ${rawText.length}`);
+            if (rawText.length < 500) logProcessingStage(`Full text: ${rawText.replace(/\n/g, ' ')}`);
+        }
+    }
+
+    const maxTools = Number.isFinite(Number(options.maxTools)) ? Number(options.maxTools) : Infinity;
+    const deadlineMs = Number.isFinite(Number(options.deadlineMs)) ? Number(options.deadlineMs) : Infinity;
+    const source = options.source || 'unknown';
+    let executedCount = 0;
+    
+    for (let index = 0; index < toolCalls.length; index++) {
+        if (SYSTEM_DB?.agentState?.userPriority) {
+            logToSystem('warn', 'Tool execution preempted by user priority');
+            break;
+        }
+        if (index >= maxTools) {
+            logToChat('model', `HEARTBEAT: Tool limit reached (${maxTools}). Remaining tools skipped.`, 'system');
+            break;
+        }
+        if (Date.now() > deadlineMs) {
+            logToChat('model', `HEARTBEAT: Time budget exceeded. Remaining tools skipped.`, 'system');
+            break;
+        }
+        const match = toolCalls[index];
+        let toolName = String(match.toolName || '').trim().toUpperCase();
+        let argsRaw = String(match.argsRaw || '').trim();
+        
+        // --- FIX: Detect and clean accidentally concatenated timestamps ---
+        // Example: {"action": "update", ...}10:40:32
+        // We look for a JSON object followed immediately by non-JSON garbage (like timestamps or log prefixes)
+        if (argsRaw.endsWith('}') && argsRaw.length > 2) {
+             // It seems clean, but let's check if there is garbage AFTER the last closing brace in the original match?
+             // Actually the regex capture might have grabbed too much if the log line wasn't clean.
+             // But if argsRaw is `{"a":1}10:20:30`, we need to trim it.
+             const lastBrace = argsRaw.lastIndexOf('}');
+             if (lastBrace !== -1 && lastBrace < argsRaw.length - 1) {
+                 const potentialGarbage = argsRaw.slice(lastBrace + 1);
+                 // If garbage looks like a timestamp or log prefix
+                 if (/^\d{2}:\d{2}:\d{2}/.test(potentialGarbage.trim()) || potentialGarbage.includes('[EXEC]')) {
+                     argsRaw = argsRaw.slice(0, lastBrace + 1);
+                 }
+             }
+        }
+        // Also handle the case where the closing brace is missing or malformed due to log concatenation
+        // ------------------------------------------------------------------
+
+        if (toolName === 'READ_FILE' || toolName === 'READFILE') toolName = 'FILE_READ';
+        if (toolName === 'WRITE_FILE' || toolName === 'WRITEFILE') toolName = 'FILE_WRITE';
+        if (toolName === 'FILE_READ' && argsRaw && argsRaw.startsWith('{')) {
+            const payload = parseJsonSafe(argsRaw);
+            if (payload && typeof payload === 'object' && payload.path) {
+                argsRaw = String(payload.path);
+            }
+        }
+        if (source === 'autonomy') {
+            const signaturePath = toolName === 'FILE_READ' ? normalizeFileReadPath(argsRaw) : '';
+            const toolSignature = signaturePath ? `${toolName}:${signaturePath}` : `${toolName}:${argsRaw}`;
+            if (SYSTEM_DB.agentState.lastToolSignature === toolSignature) {
+                SYSTEM_DB.agentState.consecutiveToolRepeats = (SYSTEM_DB.agentState.consecutiveToolRepeats || 0) + 1;
+            } else {
+                SYSTEM_DB.agentState.consecutiveToolRepeats = 0;
+                SYSTEM_DB.agentState.lastToolSignature = toolSignature;
+            }
+            if (toolName === 'FILE_READ' && signaturePath && (SYSTEM_DB.agentState.consecutiveToolRepeats || 0) >= 2) {
+                logToChat('model', `AUTONOMY BLOCKED: repeated FILE_READ on ${signaturePath}. Use SHELL (head/sed) or proceed with analysis.`, 'stderr');
+                SYSTEM_DB.agentState.autonomyFailureCount = (SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+                SYSTEM_DB.agentState.lastAutonomyError = `Repeated FILE_READ blocked (${signaturePath})`;
+                SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 2000;
+                saveState();
+                continue;
+            }
+        }
+        recordToolAttempt(toolName);
+        const preflight = preflightTool(toolName, argsRaw, source);
+        if (!preflight.ok) {
+            logToChat('model', String(preflight.error || 'TOOL INPUT ERROR'), 'stderr');
+            recordToolFailure(toolName, argsRaw, preflight.error || 'tool_preflight_failed');
+            recordToolLesson(toolName, 'Preflight error', String(preflight.error || 'tool_preflight_failed'));
+            if (source === 'autonomy') {
+                SYSTEM_DB.agentState.autonomyFailureCount = (SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+                SYSTEM_DB.agentState.lastAutonomyError = String(preflight.error || 'tool_preflight_failed');
+                SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 2000;
+                saveState();
+            }
+            continue;
+        }
+        if (preflight.argsRaw !== undefined) {
+            argsRaw = preflight.argsRaw;
+        }
+        if (preflight.note) {
+            recordToolLesson(toolName, preflight.note, String(argsRaw || '').slice(0, 200));
+        }
+        if (source === 'autonomy') {
+            const stats = SYSTEM_DB?.agentState?.toolStats?.[toolName];
+            const attempts = Number(stats?.attempts || 0);
+            const successes = Number(stats?.successes || 0);
+            const rate = attempts ? (successes / attempts) : 1;
+            
+            // AUTO-HEAL: If stats are terrible but we haven't used the tool in a while, or just to give a second chance
+            // Reset stats if attempts > 20 and rate < 0.1 to avoid permanent lock
+            if (attempts > 20 && rate < 0.1) {
+                 logToChat('model', `SYSTEM: Resetting stats for ${toolName} to give it a fresh start.`, 'system');
+                 if (SYSTEM_DB.agentState.toolStats[toolName]) {
+                     SYSTEM_DB.agentState.toolStats[toolName] = { attempts: 0, successes: 0, failures: 0, lastAt: Date.now(), lastError: '' };
+                     saveState();
+                 }
+            }
+
+            if (attempts >= 10 && rate < 0.2 && toolName !== 'WEB_SEARCH' && toolName !== 'SHELL') {
+                const msg = `AUTONOMY BLOCKED: ${toolName} success rate ${Math.round(rate * 100)}%. Choose alternative.`;
+                logToChat('model', msg, 'system');
+                recordToolLesson(toolName, 'Blocked due to low success rate', `attempts=${attempts}, rate=${Math.round(rate * 100)}%`);
+                SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 2000;
+                SYSTEM_DB.agentState.lastAutonomyError = msg;
+                saveState();
+                continue;
+            }
+        }
+        
+        // LIVE LOGGING: Show tool execution in chat
+        const toolLabel = `[${toolName}]`;
+        // Zwiększony limit wyświetlania argumentów (np. treści artykułów)
+        const toolArgsDisplay = argsRaw.length > 50000 ? argsRaw.slice(0, 50000) + '... [TRUNCATED]' : argsRaw;
+        const logMsg = `Executing ${toolLabel} ${toolArgsDisplay}`;
+        logProcessingStage(`Wykonywanie: ${toolLabel} ${argsRaw.length > 50 ? argsRaw.slice(0, 50) + '...' : argsRaw}`);
+        logToChat('model', logMsg, 'exec');
+        executedCount += 1;
+        
+        console.log(`[TOOL_EXEC] ${toolLabel}`, argsRaw.length > 200 ? argsRaw.slice(0, 200) + '...' : argsRaw);
+
+        const blocked = shouldBlockTool(toolName, argsRaw);
+        if (blocked) {
+            // RELAXED LOOP BREAKER: Allow more retries for complex tasks
+            // Only block if we have > 8 repeated failures (was strict before)
+            if (blocked.count < 8) {
+                 logToChat('model', `TOOL WARNING: ${toolName} failing repeatedly (${blocked.count}/8). Change strategy.`, 'stderr');
+            } else {
+                logToChat('model', `TOOL BLOCKED: ${toolName} repeated failures (${blocked.count}).`, 'stderr');
+                if (source === 'autonomy') {
+                    SYSTEM_DB.agentState.autonomyFailureCount = (SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+                    SYSTEM_DB.agentState.lastAutonomyError = `${toolName} blocked after repeated failures`;
+                    SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 5000;
+                    saveState();
+                }
+                continue;
+            }
+        }
+
+        try {
+            if (toolName === 'SHELL') {
+                let cmd = argsRaw;
+                
+                // Fix common LLM mistake: wrapping shell command in quotes
+                if (cmd.length > 2 && ((cmd.startsWith('"') && cmd.endsWith('"')) || (cmd.startsWith("'") && cmd.endsWith("'")))) {
+                     cmd = cmd.slice(1, -1);
+                }
+
+                if (cmd.startsWith('{')) {
+                    const payload = parseJsonSafe(cmd);
+                    if (payload && typeof payload === 'object' && payload.cmd) {
+                        cmd = String(payload.cmd);
+                    }
+                }
+
+                // --- SECURITY LAYER ---
+                const isDevMode = SYSTEM_DB?.settings?.developerMode === true;
+                
+                const BLOCKED_PATTERNS = [
+                    'rm -rf /', 'rm -fr /', 'rm -rf *', ':(){ :|:& };:', 
+                    '> /dev/sd', 'mkfs', 'dd if=', 'reboot', 'shutdown', 
+                    'init 0', 'wget http', 'curl http' // Enforce HTTPS if possible, or just block suspicious downloads
+                ];
+                
+                if (!isDevMode && BLOCKED_PATTERNS.some(p => cmd.includes(p))) {
+                    logToChat('model', `SECURITY ALERT: Command '${cmd}' blocked by GAI Kernel Safety Protocol.`, 'stderr');
+                    continue;
+                }
+
+                const lowered = cmd.toLowerCase();
+                const touchesHttp = /\bhttps?:\/\//i.test(cmd) || /\bfetch\s*\(/i.test(cmd);
+                const touchesLoopback = /\b(localhost|127\.0\.0\.1|0\.0\.0\.0)\b/i.test(cmd);
+                const touchesInternalApi = /\/api\/(sync|snapshot\/restore|reset-state|reset|settings)/i.test(cmd);
+                const isHttpClient = /\b(curl|wget|httpie|python3?|node)\b/i.test(cmd);
+                const isWriteHttp = /(?:\s-+X\s*(POST|PUT|PATCH|DELETE)\b|\s--data\b|\s-d\b|\s--form\b|\s-F\b)/i.test(cmd);
+                const allowLoopbackRead = !!SYSTEM_DB?.settings?.operatorMode && !isDevMode && source === 'autonomy' && isHttpClient && (touchesLoopback || touchesInternalApi) && !isWriteHttp;
+
+                if (!isDevMode && source === 'autonomy' && touchesHttp && touchesLoopback && touchesInternalApi && !allowLoopbackRead) {
+                    logToChat('model', `AUTONOMY BLOCKED: Settings/state mutation via local API is not allowed.`, 'stderr');
+                    continue;
+                }
+                if (!isDevMode && source === 'autonomy' && isHttpClient && (touchesLoopback || touchesInternalApi) && !allowLoopbackRead) {
+                    logToChat('model', `AUTONOMY BLOCKED: Loopback/internal API calls are not allowed from SHELL.`, 'stderr');
+                    continue;
+                }
+
+                if (SYSTEM_DB?.settings?.operatorMode && !isDevMode) {
+                    // LOCAL BUILDER MODE: Allow git and npm commands
+                    // const blocked = ['git commit', 'git push', 'git reset --hard', 'git checkout --', 'git apply', 'npm run build', 'npm install'];
+                    // if (blocked.some(b => lowered.includes(b))) {
+                    //    logToChat('model', `OPERATOR MODE: Command blocked. Use kernel dev tools instead.`, 'stderr');
+                    //    continue;
+                    // }
+                }
+
+                // Protection against AI trying to execute TS files directly
+                if (!isDevMode && (cmd.includes('./services/') || cmd.endsWith('.ts'))) {
+                     logToChat('model', `KERNEL PROTECTION: Access denied. Cannot execute source files directly. Use internal tools.`, 'stderr');
+                     continue;
+                }
+                // Prevent AI from running natural language as commands
+                if (!isDevMode && (cmd.startsWith('check ') || cmd.startsWith('analyze ') || cmd.startsWith('what is'))) {
+                     logToChat('model', `KERNEL HINT: '${cmd}' is not a valid shell command. Use standard linux commands (ls, du, cat, grep).`, 'stderr');
+                     continue;
+                }
+
+                const tokenized = cmd.split(/\s+/).filter(Boolean);
+                const hasTraversal = tokenized.some(t => t === '..' || t.includes('../') || t.includes('..\\'));
+                if (!isDevMode && hasTraversal) {
+                    logToChat('model', `SECURITY ALERT: Path traversal blocked in command '${cmd}'.`, 'stderr');
+                    continue;
+                }
+                const absoluteTokens = tokenized.filter(t => t.startsWith('/'));
+                const hasExternalPath = absoluteTokens.some(t => !t.startsWith(APP_ROOT));
+                if (!isDevMode && hasExternalPath) {
+                    logToChat('model', `SECURITY ALERT: Absolute path outside app root blocked.`, 'stderr');
+                    continue;
+                }
+                try {
+                    if (tokenized.length === 1 && tokenized[0].startsWith('/')) {
+                        const p = tokenized[0];
+                        if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+                            logToChat('model', `SHELL_ERROR: path is a directory (${p}). Use ls -la ${p}`, 'stderr');
+                            recordToolFailure(toolName, argsRaw, `Directory path used as command: ${p}`);
+                            continue;
+                        }
+                    }
+                    const fileCmds = new Set(['cat', 'head', 'tail', 'less', 'more']);
+                    const cmdName = tokenized[0];
+                    const lastArg = tokenized[tokenized.length - 1];
+                    if (fileCmds.has(cmdName) && lastArg && lastArg.startsWith('/')) {
+                        if (fs.existsSync(lastArg) && fs.statSync(lastArg).isDirectory()) {
+                            logToChat('model', `SHELL_ERROR: ${cmdName} target is a directory (${lastArg}). Use ls -la ${lastArg}`, 'stderr');
+                            recordToolFailure(toolName, argsRaw, `Directory passed to ${cmdName}: ${lastArg}`);
+                            continue;
+                        }
+                    }
+                } catch {}
+                
+                if (cmd.includes(' /data')) cmd = cmd.replace(' /data', ' data');
+                if (cmd.includes(' /node_modules')) cmd = cmd.replace(' /node_modules', ' node_modules');
+                
+                // SECURITY & STABILITY UPDATE: Timeout added to prevent hangs, Env vars injected for tools
+                const toolEnv = {
+                    ...process.env,
+                    FTP_USER: SYSTEM_DB.settings.ftpConfig?.user || process.env.FTP_USER,
+                    FTP_PASS: SYSTEM_DB.settings.ftpConfig?.pass || process.env.FTP_PASS,
+                    FTP_HOST: SYSTEM_DB.settings.ftpConfig?.host || process.env.FTP_HOST
+                };
+                const shellCacheKey = `SHELL:${cmd}`;
+                if (isShellCacheable(cmd)) {
+                    const cached = getToolCacheEntry(shellCacheKey);
+                    if (cached) {
+                        logToChat('model', `SHELL (cache): ${cmd}`, 'system');
+                        if (cached.stdout) logToChat('model', cached.stdout, 'stdout');
+                        if (cached.stderr) logToChat('model', cached.stderr, 'stderr');
+                        recordToolMemory('SHELL', cmd, [cached.stdout, cached.stderr].filter(Boolean).join('\n'));
+                        clearToolFailure(toolName, argsRaw);
+                        recordToolSuccess(toolName);
+                        continue;
+                    }
+                }
+
+                try {
+                    // --- SMART SHELL GUARD START ---
+                    // Detect common beginner mistakes like 'ls file' or 'cd file'
+                    try {
+                        // 1. Block logs pasted as commands
+                        if (/^\d{2}:\d{2}:\d{2}/.test(cmd) || cmd.startsWith('[EXEC]') || cmd.startsWith('[STDERR]')) {
+                             throw new Error("It looks like you pasted a log entry instead of a command. Please execute valid shell commands only.");
+                        }
+
+                        // 2. Fix 'ps' restriction on macOS
+                        if (cmd.includes('ps aux') || cmd.includes('ps -ef') || (cmd.trim().startsWith('ps ') && !cmd.includes('pgrep'))) {
+                            if (cmd.includes('| grep')) {
+                                // Extract search term: ps aux | grep foo -> pgrep -fl foo
+                                const match = cmd.match(/grep\s+(?:-v\s+\S+\s+)?(?:-E\s+)?["']?([^"'\s|]+)["']?/);
+                                if (match && match[1]) {
+                                    const term = match[1];
+                                    const newCmd = `pgrep -fl "${term}"`;
+                                    logToChat('model', `[SYSTEM FIX]: 'ps' is restricted in this environment. Auto-replaced with '${newCmd}'`, 'system');
+                                    cmd = newCmd;
+                                } else {
+                                     // Fallback
+                                     const newCmd = `pgrep -fl .`;
+                                     logToChat('model', `[SYSTEM FIX]: 'ps' is restricted. Auto-replaced with '${newCmd}'`, 'system');
+                                     cmd = newCmd;
+                                }
+                            } else {
+                                // Just list all
+                                const newCmd = `pgrep -fl .`;
+                                logToChat('model', `[SYSTEM FIX]: 'ps' is restricted. Auto-replaced with '${newCmd}'`, 'system');
+                                cmd = newCmd;
+                            }
+                        }
+
+                        const parts = cmd.trim().split(/\s+/);
+                        const baseCmd = parts[0];
+                        const target = parts[parts.length - 1]; // usually the last arg is the path
+                        
+                        if (baseCmd === 'ls' && target && !target.startsWith('-')) {
+                            const p = path.resolve(APP_ROOT, target);
+                            if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+                                 logToChat('model', `[SYSTEM HINT]: '${target}' is a file. Use 'cat' to view its content or 'stat' for details.`, 'system');
+                            }
+                        }
+                        if (baseCmd === 'cd' && target) {
+                             const p = path.resolve(APP_ROOT, target);
+                             if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+                                 throw new Error(`Cannot cd into '${target}' because it is a file, not a directory.`);
+                             }
+                        }
+                    } catch (e) {
+                        if (e.message.startsWith('Cannot cd')) {
+                             logToChat('model', `SHELL_ERROR: ${e.message}`, 'stderr');
+                             recordToolFailure(toolName, argsRaw, e.message);
+                             continue;
+                        }
+                    }
+                    // --- SMART SHELL GUARD END ---
+
+                    const { stdout, stderr } = await execAsync(cmd, { 
+                        cwd: APP_ROOT, 
+                        timeout: isDevMode ? 300000 : 45000,
+                        maxBuffer: isDevMode ? 50 * 1024 * 1024 : 20 * 1024 * 1024,
+                        env: toolEnv,
+                        shell: '/bin/bash'
+                    });
+                    if (stdout) logToChat('model', stdout, 'stdout');
+                    if (stderr) logToChat('model', stderr, 'stderr');
+                    if (isShellCacheable(cmd)) {
+                        setToolCacheEntry(shellCacheKey, { stdout: stdout || '', stderr: stderr || '' });
+                    }
+                    recordToolMemory('SHELL', cmd, [stdout, stderr].filter(Boolean).join('\n'));
+                    clearToolFailure(toolName, argsRaw);
+                    recordToolSuccess(toolName);
+                } catch (err) {
+                    const e = err || {};
+                    const stdout = e.stdout || '';
+                    const stderr = e.stderr || '';
+                    const code = typeof (e && e.code) === 'number' ? e.code : null;
+                    if (stdout) logToChat('model', stdout, 'stdout');
+                    if (stderr) logToChat('model', stderr, 'stderr');
+                    
+                    // --- SMART ERROR HINTS ---
+                    if (stderr) {
+                        if (stderr.includes('Not a directory')) {
+                             logToChat('model', `[SYSTEM HINT]: You likely tried to treat a file as a directory. Use 'cat' to read it.`, 'system');
+                        } else if (stderr.includes('Is a directory')) {
+                             logToChat('model', `[SYSTEM HINT]: You likely tried to read a directory as a file. Use 'ls' to list it.`, 'system');
+                        }
+                    }
+                    // -------------------------
+
+                    const isGrepNoMatch = code === 1 && /\b(grep|rg)\b/i.test(cmd) && !stderr;
+                    if (isGrepNoMatch) {
+                        const msg = 'SHELL: no matches found.';
+                        logToChat('model', msg, 'stdout');
+                        if (isShellCacheable(cmd)) {
+                            setToolCacheEntry(shellCacheKey, { stdout: msg, stderr: '' });
+                        }
+                        recordToolMemory('SHELL', cmd, msg);
+                        recordToolSuccess(toolName);
+                    } else {
+                        logToChat('model', `SHELL EXIT ${code ?? 'unknown'}: ${e.message || 'Command failed.'}`, 'stderr');
+                        recordToolFailure(toolName, argsRaw, e.message || 'Command failed');
+                    }
+                }
+            }
+            if (toolName === 'FILE_WRITE') {
+                const payload = parseJsonSafe(argsRaw);
+                if (!payload) {
+                    logToChat('model', 'FILE_WRITE_ERROR: invalid JSON payload.', 'stderr');
+                    continue;
+                }
+                const { path: filePath } = payload;
+                const rawContent = payload.content !== undefined ? payload.content : payload.json;
+                const rawPath = String(filePath || '').trim();
+                const normalized = rawPath.replace(/^\/+/, '');
+                let fullPath;
+                if (normalized.startsWith('data/')) {
+                    fullPath = path.join(DATA_DIR, normalized.slice('data/'.length));
+                } else if (normalized.startsWith('home/')) {
+                    fullPath = resolveDiskPath('/' + normalized);
+                } else {
+                    fullPath = path.isAbsolute(rawPath) ? rawPath : path.join(APP_ROOT, rawPath);
+                }
+                const absFull = path.resolve(fullPath);
+                const allowedRoots = [APP_ROOT, DATA_DIR, FS_ROOT].map(r => path.resolve(r));
+                const isAllowed = allowedRoots.some(r => absFull === r || absFull.startsWith(r + path.sep));
+                if (!isAllowed) {
+                    logToChat('model', `ERROR: Access denied for path ${rawPath}.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `Access denied for path ${rawPath}`);
+                    continue;
+                }
+                const inferFileName = () => {
+                    const candidate = payload.fileName || payload.filename || payload.name || payload.title || payload.id || '';
+                    let name = sanitizeFilename(String(candidate || '').trim());
+                    if (!name) return '';
+                    if (!path.extname(name)) {
+                        const rawText = typeof rawContent === 'string' ? rawContent.trim() : '';
+                        const isJson = typeof rawContent === 'object' || rawText.startsWith('{') || rawText.startsWith('[');
+                        name = `${name}${isJson ? '.json' : '.txt'}`;
+                    }
+                    return name;
+                };
+                const allowedAutoDirs = [
+                    path.resolve(DATA_DIR),
+                    path.resolve(FS_ROOT)
+                ];
+                let isDirTarget = false;
+                if (allowedRoots.includes(absFull)) isDirTarget = true;
+                if (rawPath.endsWith('/') || rawPath.endsWith(path.sep)) isDirTarget = true;
+                if (!isDirTarget && fs.existsSync(fullPath)) {
+                    try {
+                        const stat = fs.statSync(fullPath);
+                        if (stat.isDirectory()) isDirTarget = true;
+                    } catch {
+                    }
+                }
+                if (isDirTarget) {
+                    const allowAuto = allowedAutoDirs.some(r => absFull === r || absFull.startsWith(r + path.sep)) || normalized.startsWith('data/') || normalized.startsWith('home/');
+                    const inferred = allowAuto ? inferFileName() : '';
+                    if (!inferred) {
+                        logToChat('model', `FILE_WRITE_ERROR: path is a directory (${rawPath}). Provide a file path.`, 'stderr');
+                        recordToolFailure(toolName, argsRaw, `Path ${rawPath} is a directory`);
+                        continue;
+                    }
+                    fullPath = path.join(fullPath, inferred);
+                }
+                const protectedFiles = new Set([
+                    path.resolve(DB_PATH),
+                    path.resolve(PROMPTS_DIR, 'system_prompt.txt'),
+                    path.resolve(PROMPTS_DIR, 'autonomous_prompt.txt')
+                ]);
+                const protectedDirs = [path.resolve(SNAPSHOT_DIR)];
+                const isProtectedFile = protectedFiles.has(absFull);
+                const isProtectedDir = protectedDirs.some(d => absFull === d || absFull.startsWith(d + path.sep));
+                if (source === 'autonomy' && (isProtectedFile || isProtectedDir)) {
+                    logToChat('model', `AUTONOMY BLOCKED: Write access denied for protected state/settings file.`, 'stderr');
+                    continue;
+                }
+                if (SYSTEM_DB?.settings?.operatorMode) {
+                    const rel = path.relative(APP_ROOT, path.resolve(fullPath));
+                    const isInRepo = !!rel && !rel.startsWith('..' + path.sep) && rel !== '..';
+                    const ext = String(path.extname(fullPath)).toLowerCase();
+                    const isCode = ['.js', '.ts', '.tsx', '.json', '.css', '.html', '.md'].includes(ext);
+                    if (isInRepo && isCode && !normalized.startsWith('data/')) {
+                        logToChat('model', `OPERATOR MODE: FILE_WRITE blocked for ${rawPath}. Use [[DEV_APPLY_PATCH: {...}]]`, 'stderr');
+                        recordToolFailure(toolName, argsRaw, `Operator mode blocked for ${rawPath}`);
+                        continue;
+                    }
+                }
+                const dir = path.dirname(fullPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                if (rawContent === undefined) {
+                    logToChat('model', 'FILE_WRITE_ERROR: missing content.', 'stderr');
+                    recordToolFailure(toolName, argsRaw, 'Missing content');
+                    continue;
+                }
+                let contentToWrite = rawContent;
+                if (typeof rawContent === 'object') {
+                    contentToWrite = JSON.stringify(rawContent, null, 2);
+                } else if (typeof rawContent !== 'string' && !Buffer.isBuffer(rawContent)) {
+                    contentToWrite = String(rawContent);
+                }
+                if (!validateFileContent(contentToWrite)) {
+                    logToChat('model', `FILE_WRITE_ERROR: content too large or invalid for ${rawPath}.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, 'Content too large or invalid');
+                    continue;
+                }
+                fs.writeFileSync(fullPath, contentToWrite, 'utf8');
+                
+                // Validate if it's an article
+                if (filePath.includes('data/articles/') && filePath.endsWith('.json') && !filePath.includes('index.json')) {
+                    const validation = validateArticleFile(fullPath);
+                    if (!validation.valid) {
+                        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+                        logToChat('model', `VALIDATION ERROR: ${validation.error}`, 'stderr');
+                        recordToolFailure(toolName, argsRaw, `Validation failed: ${validation.error}`);
+                        continue;
+                    }
+                }
+
+                invalidateFileCacheEntry(fullPath);
+                logToChat('model', `SUCCESS: Written to ${filePath}`, 'fs');
+                recordToolSuccess(toolName);
+
+                // --- GAI SELF-LEARNING TRIGGER: Blog Index Update ---
+                if (filePath.includes('data/articles/') && filePath.endsWith('.json') && !filePath.includes('index.json')) {
+                     try {
+                        const filename = path.basename(filePath);
+                        const indexFile = ARTICLES_INDEX_PATH;
+                        let index = [];
+                        if (fs.existsSync(indexFile)) {
+                            index = JSON.parse(fs.readFileSync(indexFile, 'utf8'));
+                        }
+                        if (!index.includes(filename)) {
+                            index.push(filename);
+                            fs.writeFileSync(indexFile, JSON.stringify(index, null, 2));
+                            logToChat('model', `AUTO-INDEX: Added ${filename} to articles index.`, 'fs');
+                        }
+                     } catch (err) {
+                        logToChat('model', `AUTO-INDEX ERROR: ${err.message}`, 'stderr');
+                     }
+                }
+            }
+            if (toolName === 'FILE_REPLACE') {
+                const payload = parseJsonSafe(argsRaw);
+                if (!payload) {
+                    logToChat('model', 'FILE_REPLACE_ERROR: invalid JSON payload.', 'stderr');
+                    continue;
+                }
+                const { path: filePath, oldStr, newStr } = payload;
+                if (!oldStr || typeof newStr !== 'string') {
+                    logToChat('model', 'FILE_REPLACE_ERROR: missing oldStr or newStr.', 'stderr');
+                    continue;
+                }
+                
+                const rawPath = String(filePath || '').trim();
+                const normalized = rawPath.replace(/^\/+/, '');
+                let fullPath;
+                if (normalized.startsWith('data/')) {
+                    fullPath = path.join(DATA_DIR, normalized.slice('data/'.length));
+                } else if (normalized.startsWith('home/')) {
+                    fullPath = resolveDiskPath('/' + normalized);
+                } else {
+                    fullPath = path.isAbsolute(rawPath) ? rawPath : path.join(APP_ROOT, rawPath);
+                }
+                
+                if (!fs.existsSync(fullPath)) {
+                    logToChat('model', `FILE_REPLACE_ERROR: File ${rawPath} not found.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `File not found: ${rawPath}`);
+                    continue;
+                }
+                try {
+                    const st = fs.statSync(fullPath);
+                    if (st.isDirectory()) {
+                        logToChat('model', `FILE_REPLACE_ERROR: Path is a directory (${rawPath}). Provide a file path.`, 'stderr');
+                        recordToolFailure(toolName, argsRaw, `Directory path: ${rawPath}`);
+                        continue;
+                    }
+                } catch {}
+
+                // Security check
+                const absFull = path.resolve(fullPath);
+                const allowedRoots = [APP_ROOT, DATA_DIR, FS_ROOT].map(r => path.resolve(r));
+                const isAllowed = allowedRoots.some(r => absFull === r || absFull.startsWith(r + path.sep));
+                if (!isAllowed) {
+                    logToChat('model', `ERROR: Access denied for path ${rawPath}.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `Access denied for path ${rawPath}`);
+                    continue;
+                }
+                const protectedFiles = new Set([
+                    path.resolve(DB_PATH),
+                    path.resolve(PROMPTS_DIR, 'system_prompt.txt'),
+                    path.resolve(PROMPTS_DIR, 'autonomous_prompt.txt')
+                ]);
+                const protectedDirs = [path.resolve(SNAPSHOT_DIR)];
+                const isProtectedFile = protectedFiles.has(absFull);
+                const isProtectedDir = protectedDirs.some(d => absFull === d || absFull.startsWith(d + path.sep));
+                if (source === 'autonomy' && (isProtectedFile || isProtectedDir)) {
+                    logToChat('model', `AUTONOMY BLOCKED: Replace access denied for protected state/settings file.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `Protected path: ${rawPath}`);
+                    continue;
+                }
+                
+                // Operator mode check skipped for REPLACE as it is safer than overwrite, 
+                // but we should still respect the repo boundary if strictly enforced.
+                // For now, we allow it to enable "smart" edits.
+
+                const content = fs.readFileSync(fullPath, 'utf8');
+                if (!content.includes(oldStr)) {
+                    // Try to be smart about whitespace
+                    const normalizedContent = content.replace(/\r\n/g, '\n');
+                    const normalizedOld = oldStr.replace(/\r\n/g, '\n');
+                    if (normalizedContent.includes(normalizedOld)) {
+                         const newContent = normalizedContent.replace(normalizedOld, newStr.replace(/\r\n/g, '\n'));
+                         fs.writeFileSync(fullPath, newContent, 'utf8');
+                         invalidateFileCacheEntry(fullPath);
+                         logToChat('model', `SUCCESS: Replaced content in ${filePath}`, 'fs');
+                         recordToolSuccess(toolName);
+                         continue;
+                    }
+                    
+                    logToChat('model', `FILE_REPLACE_ERROR: oldStr not found in ${filePath}. Verify exact match (whitespace matters).`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `oldStr not found in ${filePath}`);
+                    continue;
+                }
+
+                const newContent = content.replace(oldStr, newStr);
+                fs.writeFileSync(fullPath, newContent, 'utf8');
+                invalidateFileCacheEntry(fullPath);
+                logToChat('model', `SUCCESS: Replaced content in ${filePath}`, 'fs');
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'FILE_READ') {
+                const rawPath = normalizeFileReadPath(argsRaw);
+                if (!rawPath) {
+                    logToChat('model', 'FILE_READ_ERROR: missing path.', 'stderr');
+                    continue;
+                }
+                const fullPath = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(APP_ROOT, rawPath);
+                const allowedRoots = [APP_ROOT, DATA_DIR, FS_ROOT].map(r => path.resolve(r));
+                const isTmp = fullPath === '/tmp' || fullPath.startsWith('/tmp' + path.sep);
+                const isAllowed = isTmp || allowedRoots.some(r => fullPath === r || fullPath.startsWith(r + path.sep));
+                if (!isAllowed) {
+                    logToChat('model', `ERROR: Access denied for path ${rawPath}.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `Access denied for path ${rawPath}`);
+                    continue;
+                }
+                if (!fs.existsSync(fullPath)) {
+                    logToChat('model', `ERROR: Path ${rawPath} not found.`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, `Path ${rawPath} not found`);
+                    continue;
+                }
+
+                const st = fs.statSync(fullPath);
+                if (st.isDirectory()) {
+                    const entries = fs.readdirSync(fullPath);
+                    const limit = 200;
+                    const shown = entries.slice(0, limit);
+                    const more = entries.length > limit;
+                    const listing = `DIR ${rawPath}:\n${shown.join('\n')}${more ? `\n...[TRUNCATED ${entries.length - limit} ENTRIES]...` : ''}`;
+                    logToChat('model', listing, 'fs');
+                    recordToolMemory('FILE_READ', rawPath, listing);
+                    clearToolFailure(toolName, argsRaw);
+                    recordToolSuccess(toolName);
+                    continue;
+                }
+
+                const cached = getFileCacheEntry(fullPath);
+                if (cached) {
+                    logToChat('model', `READ ${rawPath} (cache):\n${cached.content}${cached.truncated ? '\n...[TRUNCATED FILE CONTENT]...' : ''}`, 'fs');
+                    recordToolMemory('FILE_READ', rawPath, cached.content);
+                    clearToolFailure(toolName, argsRaw);
+                    recordToolSuccess(toolName);
+                    continue;
+                }
+
+                const content = fs.readFileSync(fullPath, 'utf8');
+                const limit = 100000;
+                const truncated = content.length > limit;
+                const output = content.substring(0, limit);
+                logToChat('model', `READ ${rawPath}:\n${output}${truncated ? '\n...[TRUNCATED FILE CONTENT]...' : ''}`, 'fs');
+                setFileCacheEntry(fullPath, output, truncated);
+                recordToolMemory('FILE_READ', rawPath, output);
+                clearToolFailure(toolName, argsRaw);
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'FTP_UPLOAD') {
+                const payload = parseJsonSafe(argsRaw);
+                if (!payload) {
+                    logToChat('model', 'FTP_UPLOAD_ERROR: invalid JSON payload.', 'stderr');
+                    continue;
+                }
+                const { localPath, remotePath } = payload;
+                const rawPath = String(localPath || '').trim();
+                const normalized = rawPath.replace(/^\/+/, '');
+                const absLocalPath = normalized.startsWith('data/')
+                    ? path.join(DATA_DIR, normalized.slice('data/'.length))
+                    : (path.isAbsolute(rawPath) ? rawPath : path.join(APP_ROOT, rawPath));
+                let targetRemote = remotePath;
+                if (typeof targetRemote === 'string') {
+                    const placeholder = '/path/to/remote/data/articles/';
+                    if (targetRemote.includes(placeholder)) {
+                        const tail = targetRemote.split(placeholder).pop() || '';
+                        const base = computeRemoteArticlesDir().replace(/\/+$/g, '');
+                        targetRemote = `${base}/${tail}`.replace(/\/{2,}/g, '/');
+                    }
+                }
+                
+                try {
+                    await performFtpAction(async (client) => {
+                         await client.uploadFrom(absLocalPath, targetRemote);
+                    });
+                    logToChat('model', `FTP SUCCESS: Uploaded ${localPath} to ${targetRemote}`, 'ftp');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `FTP ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'ftp_upload_failed');
+                }
+            }
+            if (toolName === 'FTP_LIST') {
+                const payload = parseJsonSafe(argsRaw);
+                if (!payload) {
+                    logToChat('model', 'FTP_LIST_ERROR: invalid JSON payload.', 'stderr');
+                    continue;
+                }
+                const { path: remotePath } = payload;
+                const p = String(remotePath || '').trim() || '/';
+                try {
+                    const list = await performFtpAction(client => client.list(p));
+                    const simplified = (list || []).map((f) => ({ name: f.name, type: f.type, size: f.size, modifiedAt: f.modifiedAt }));
+                    logToChat('model', `FTP LIST ${p}:\n${JSON.stringify(simplified, null, 2)}`, 'ftp');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `FTP ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'ftp_list_failed');
+                }
+            }
+            if (toolName === 'BLOG_PUBLISH') {
+                const payload = parseJsonSafe(argsRaw);
+                if (!payload) {
+                    logToChat('model', 'BLOG_PUBLISH_ERROR: invalid JSON payload.', 'stderr');
+                    continue;
+                }
+                const result = await publishArticle(payload);
+                logToChat('model', `BLOG_PUBLISH: ${JSON.stringify(result)}`, 'system');
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'DEV_STATUS') {
+                const { stdout } = await execAsync('git status --porcelain', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                logToChat('model', `DEV_STATUS:\n${stdout}`, 'stdout');
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'DEV_DIFF') {
+                const payload = parseJsonSafe(argsRaw || '{}') || {};
+                const target = payload.path ? ` -- ${payload.path}` : '';
+                const { stdout } = await execAsync(`git diff${target}`, { cwd: APP_ROOT, timeout: 45000, maxBuffer: 10 * 1024 * 1024, env: process.env });
+                const limit = 120000;
+                const truncated = stdout.length > limit;
+                logToChat('model', `DEV_DIFF:\n${stdout.substring(0, limit)}${truncated ? '\n...[TRUNCATED DIFF]...' : ''}`, 'stdout');
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'DEV_APPLY_PATCH') {
+                const payload = parseJsonSafe(argsRaw || '{}') || {};
+                const patch = String(payload.patch || '');
+                if (!patch.trim()) {
+                    logToChat('model', 'DEV_APPLY_PATCH: empty patch', 'stderr');
+                    continue;
+                }
+                const patchPath = path.join('/tmp', `gai_patch_${crypto.randomUUID()}.patch`);
+                fs.writeFileSync(patchPath, patch, 'utf8');
+                await execAsync(`git apply --check ${patchPath}`, { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                await execAsync(`git apply ${patchPath}`, { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                const { stdout } = await execAsync('git diff --stat', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                logToChat('model', `DEV_APPLY_PATCH_OK:\n${stdout}`, 'stdout');
+                SYSTEM_DB.agentState.pendingQualityAudit = true;
+                await runQualityAudit({ taskId: SYSTEM_DB.tasks.find(t => t.status === 'in_progress')?.id || null });
+                recordToolSuccess(toolName);
+            }
+            // --- TELEGRAM MESSAGE LOGGING (TERMINAL VISIBILITY) ---
+            if (toolName === 'TELEGRAM_MSG_RECEIVED') {
+                // Internal tool triggered by handleTelegramMessage to log to console
+                const payload = parseJsonSafe(argsRaw || '{}');
+                const user = payload.user || 'Unknown';
+                const text = payload.text || '';
+                // Log with a distinct prefix so it stands out in the terminal
+                console.log(`\x1b[36m[TELEGRAM MSG] from ${user}: ${text}\x1b[0m`); 
+                // Also log to chat history for the model to see
+                logToChat('user', `[TELEGRAM from ${user}]: ${text}`, 'user');
+                recordToolSuccess(toolName);
+            }
+
+            if (toolName === 'DEV_BUILD') {
+                try {
+                    const { stdout, stderr } = await execAsync('npm run build', { cwd: APP_ROOT, timeout: 300000, maxBuffer: 20 * 1024 * 1024, env: process.env });
+                    if (stdout) logToChat('model', stdout, 'stdout');
+                    if (stderr) logToChat('model', stderr, 'stderr');
+                    
+                    SYSTEM_DB.agentState.lastBuildOkAt = Date.now();
+                    saveState();
+                    logToChat('model', 'DEV_BUILD_OK', 'system');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    const buildError = e.message || String(e);
+                    logToChat('model', `DEV_BUILD_FAILED: ${buildError}`, 'stderr');
+                    
+                    // --- AUTO-ROLLBACK ---
+                    logToChat('model', '[AUTO-ROLLBACK] Build failed. Attempting to restore .bak files...', 'system');
+                    try {
+                        // Find all .bak files in the project root (and maybe src?)
+                        // For simplicity and safety, let's look for .bak files of recently modified files if possible.
+                        // Or just scan common directories.
+                        // Let's use a simple find command for .js.bak and .json.bak
+                        const findCmd = `find . -maxdepth 3 -name "*.bak" -not -path "*/node_modules/*"`;
+                        const { stdout: bakFiles } = await execAsync(findCmd, { cwd: APP_ROOT });
+                        const files = bakFiles.trim().split('\n').filter(Boolean);
+                        
+                        let restoredCount = 0;
+                        for (const bakFile of files) {
+                            const originalFile = bakFile.slice(0, -4); // remove .bak
+                            if (fs.existsSync(bakFile)) {
+                                fs.copyFileSync(bakFile, originalFile);
+                                restoredCount++;
+                            }
+                        }
+                        
+                        if (restoredCount > 0) {
+                             logToChat('model', `[AUTO-ROLLBACK] Restored ${restoredCount} files from backup. Please analyze the error and try again.`, 'system');
+                        } else {
+                             logToChat('model', `[AUTO-ROLLBACK] No backup files found to restore.`, 'stderr');
+                        }
+                        
+                    } catch (restoreError) {
+                         logToChat('model', `[AUTO-ROLLBACK] FAILED: ${restoreError.message}`, 'stderr');
+                    }
+                    // ---------------------
+                    
+                    recordToolFailure(toolName, argsRaw, buildError);
+                }
+            }
+            if (toolName === 'DEV_COMMIT_PUSH') {
+                const payload = parseJsonSafe(argsRaw || '{}');
+                const message = String(payload.message || '').trim();
+                const files = Array.isArray(payload.files) ? payload.files.map(f => String(f)).filter(Boolean) : null;
+                if (!message) {
+                    logToChat('model', 'DEV_COMMIT_PUSH: message required', 'stderr');
+                    continue;
+                }
+                const addCmd = files ? `git add ${files.join(' ')}` : 'git add .';
+                await execAsync('npm run build', { cwd: APP_ROOT, timeout: 300000, maxBuffer: 20 * 1024 * 1024, env: process.env });
+                await execAsync(addCmd, { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                const { stdout } = await execAsync(`git commit -m "${message}"`, { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                await execAsync('git push origin main', { cwd: APP_ROOT, timeout: 60000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                logToChat('model', `DEV_COMMIT_PUSH_OK:\n${stdout}`, 'stdout');
+                recordToolSuccess(toolName);
+            }
+            // 5. Tool Use
+            if (toolName === 'SCREEN_CONTROL') {
+                const payload = parseJsonSafe(argsRaw) || {};
+                const action = payload.action || 'screenshot';
+                
+                if (process.env.ELECTRON_RUN !== 'true') {
+                    logToChat('model', `SCREEN_CONTROL ERROR: Not running in Electron mode`, 'stderr');
+                    continue;
+                }
+
+                try {
+                    if (action === 'screenshot') {
+                        const screenshot = require('screenshot-desktop');
+                        const imgBuffer = await screenshot({ format: 'png' });
+                        const fileName = `screenshot_${Date.now()}.png`;
+                        const filePath = path.join(APP_ROOT, 'public', fileName);
+                        fs.writeFileSync(filePath, imgBuffer);
+                        logToChat('model', `SCREENSHOT_CAPTURED. Saved to: ${fileName}. View at /${fileName}`, 'system');
+                        recordToolSuccess(toolName);
+                    } else if (action === 'active_window') {
+                        // active-win is ESM only
+                        const { default: activeWin } = await import('active-win');
+                        const win = await activeWin();
+                        logToChat('model', `ACTIVE_WINDOW: ${JSON.stringify(win, null, 2)}`, 'system');
+                        recordToolSuccess(toolName);
+                    } else if (action === 'notify') {
+                        const title = payload.title || 'GAI OS';
+                        const body = payload.body || payload.message || '';
+                        const osascript = `display notification "${body.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
+                        spawn('osascript', ['-e', osascript]);
+                        logToChat('model', `NOTIFICATION SENT: ${title} - ${body}`, 'system');
+                        recordToolSuccess(toolName);
+                    }
+                } catch (e) {
+                    logToChat('model', `SCREEN_CONTROL ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message);
+                }
+            }
+
+            if (toolName === 'SYSTEM_RESTART' || toolName === 'SYSTEM_SHUTDOWN') {
+                const action = toolName === 'SYSTEM_RESTART' ? 'restart' : 'shutdown';
+                logToChat('model', `INITIATING SYSTEM ${action.toUpperCase()}...`, 'system');
+                recordToolSuccess(toolName);
+                
+                // Native App Support (Electron)
+                if (process.env.ELECTRON_RUN === 'true') {
+                    if (action === 'restart') {
+                        setTimeout(() => {
+                            process.exit(0); // Gaios wrapper or Electron main will handle it
+                        }, 1000);
+                    } else {
+                        setTimeout(() => {
+                            process.kill(process.ppid, 'SIGTERM'); 
+                            process.exit(0);
+                        }, 1000);
+                    }
+                } else {
+                    // Web Server Mode
+                    setTimeout(() => {
+                        const script = path.join(ROOT_DIR, 'scripts', 'gaios');
+                        const cmd = action === 'restart' ? 'restart' : 'stop';
+                        spawn(script, [cmd], { detached: true, stdio: 'ignore' }).unref();
+                        process.exit(0);
+                    }, 1000);
+                }
+            }
+            if (toolName === 'SYSTEM_QUERY') {
+                const payload = parseJsonSafe(argsRaw || '{}') || {};
+                const query = payload.query || 'status';
+                const limitRaw = Number(payload.limit);
+                const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 50;
+                const tailBytesRaw = Number(payload.tailBytes);
+                const tailBytes = Number.isFinite(tailBytesRaw) ? Math.max(1024, Math.min(12 * 1024 * 1024, Math.floor(tailBytesRaw))) : 4 * 1024 * 1024;
+                const levels = Array.isArray(payload.levels) ? payload.levels.map(l => String(l).toLowerCase()).filter(Boolean) : null;
+
+                const tailFileText = (filePath) => {
+                    try {
+                        const abs = path.resolve(filePath);
+                        if (!fs.existsSync(abs)) return '';
+                        const st = fs.statSync(abs);
+                        const size = Number(st.size || 0);
+                        const start = Math.max(0, size - tailBytes);
+                        const fd = fs.openSync(abs, 'r');
+                        try {
+                            const buf = Buffer.alloc(size - start);
+                            fs.readSync(fd, buf, 0, buf.length, start);
+                            return buf.toString('utf8');
+                        } finally {
+                            fs.closeSync(fd);
+                        }
+                    } catch {
+                        return '';
+                    }
+                };
+
+                const tailNdjson = (filePath) => {
+                    const text = tailFileText(filePath);
+                    if (!text) return [];
+                    const lines = text.split(/\r?\n/).filter(Boolean);
+                    const out = [];
+                    for (let i = Math.max(0, lines.length - (limit * 8)); i < lines.length; i++) {
+                        const line = lines[i];
+                        try {
+                            const o = JSON.parse(line);
+                            if (levels && !levels.includes(String(o?.level || '').toLowerCase())) continue;
+                            out.push(o);
+                        } catch {
+                        }
+                    }
+                    return out.slice(-limit);
+                };
+
+                const tailLines = (filePath) => {
+                    const text = tailFileText(filePath);
+                    if (!text) return [];
+                    const lines = text.split(/\r?\n/).filter(Boolean);
+                    return lines.slice(-limit);
+                };
+
+                let result = {};
+                
+                if (query === 'status') {
+                    result = {
+                        uptime: process.uptime(),
+                        memory: process.memoryUsage(),
+                        agentState: SYSTEM_DB.agentState,
+                        activeTasks: SYSTEM_DB.tasks.filter(t => t.status === 'in_progress').length,
+                        settings: {
+                            interAgent: SYSTEM_DB.settings.interAgent,
+                            operatorMode: SYSTEM_DB.settings.operatorMode
+                        },
+                        isNative: process.env.ELECTRON_RUN === 'true',
+                        debug: {
+                            activeIntervals: activeIntervals.size,
+                            activeTimeouts: activeTimeouts.size
+                        }
+                    };
+                } else if (query === 'logs') {
+                    result = {
+                        recentLogs: (SYSTEM_DB.logs || []).slice(-limit)
+                    };
+                } else if (query === 'tail_system_logs') {
+                    result = {
+                        file: path.join(DATA_DIR, 'system_logs.ndjson'),
+                        entries: tailNdjson(path.join(DATA_DIR, 'system_logs.ndjson'))
+                    };
+                } else if (query === 'tail_chat_history') {
+                    const entries = tailNdjson(path.join(DATA_DIR, 'chat_history.ndjson')).map((m) => ({
+                        timestamp: m.timestamp,
+                        role: m.role,
+                        logType: m.logType,
+                        text: typeof m.text === 'string' ? (m.text.length > 2000 ? m.text.slice(0, 2000) + '…' : m.text) : m.text
+                    }));
+                    result = {
+                        file: path.join(DATA_DIR, 'chat_history.ndjson'),
+                        entries
+                    };
+                } else if (query === 'tail_electron_log') {
+                    result = {
+                        file: path.join(APP_ROOT, '.gaios', 'electron.log'),
+                        lines: tailLines(path.join(APP_ROOT, '.gaios', 'electron.log'))
+                    };
+                } else if (query === 'diagnose') {
+                    const sysFile = path.join(DATA_DIR, 'system_logs.ndjson');
+                    const recentErrors = tailNdjson(sysFile).filter(e => String(e?.level || '').toLowerCase() === 'error').slice(-25);
+                    const recentWarns = tailNdjson(sysFile).filter(e => String(e?.level || '').toLowerCase() === 'warn').slice(-25);
+                    let git = { dirty: null, status: '' };
+                    try {
+                        const { stdout } = await execAsync('git status --porcelain', { cwd: APP_ROOT, timeout: 45000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+                        const s = String(stdout || '');
+                        git = { dirty: !!s.trim(), status: s.slice(0, 8000) };
+                    } catch (e) {
+                        git = { dirty: null, status: `git_status_failed: ${String(e?.message || e || '')}`.slice(0, 400) };
+                    }
+                    let verify = { ok: null, stdout: '', stderr: '' };
+                    try {
+                        const { stdout, stderr } = await execAsync('python3 verify_articles.py', { cwd: APP_ROOT, timeout: 30000, maxBuffer: 4 * 1024 * 1024, env: process.env });
+                        verify = { ok: true, stdout: String(stdout || '').slice(0, 8000), stderr: String(stderr || '').slice(0, 2000) };
+                    } catch (e) {
+                        verify = {
+                            ok: false,
+                            stdout: String(e?.stdout || '').slice(0, 8000),
+                            stderr: String(e?.stderr || e?.message || e || '').slice(0, 2000)
+                        };
+                    }
+                    result = {
+                        status: {
+                            uptime: process.uptime(),
+                            memory: process.memoryUsage(),
+                            agentState: SYSTEM_DB.agentState,
+                            activeTasks: SYSTEM_DB.tasks.filter(t => t.status === 'in_progress').length,
+                            operatorMode: SYSTEM_DB.settings.operatorMode,
+                            debug: { activeIntervals: activeIntervals.size, activeTimeouts: activeTimeouts.size }
+                        },
+                        git,
+                        verifyArticles: verify,
+                        recentErrors,
+                        recentWarns
+                    };
+                }
+                
+                logToChat('model', `SYSTEM_QUERY [${query}]: ${JSON.stringify(result, null, 2)}`, 'system');
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'DELEGATE_TASK') {
+                const payload = parseJsonSafe(argsRaw || '{}') || {};
+                const { role, task, context } = payload;
+                
+                if (!SYSTEM_DB.settings.interAgent?.enabled) {
+                     logToChat('model', `DELEGATE_TASK ERROR: Inter-agent features disabled.`, 'stderr');
+                     continue;
+                }
+
+                logToChat('model', `DELEGATING to [${role}]: ${task}`, 'system');
+                
+                // Simulate delegation by creating a subtask or specialized prompt execution
+                // For now, we'll execute it as a specialized OLLAMA call in the background
+                // but strictly speaking, this should queue a job for a specialized agent loop.
+                
+                // Simple implementation: Immediate consultation
+                try {
+                    const consultationPrompt = `
+                    [ROLE: ${role}]
+                    [CONTEXT: ${context || 'None'}]
+                    [TASK: ${task}]
+                    
+                    Provide a specialized response/plan.
+                    `;
+                    
+                    // Używamy modelu dedykowanego dla roli, a jeśli brak - fallback na activeModel
+                    const roleModel = SYSTEM_DB?.settings?.modelRoles?.[role] || SYSTEM_DB?.settings?.activeModel || 'llama3.1';
+                    
+                    const response = await queryOllama(consultationPrompt, { 
+                        model: roleModel,
+                        stream: false
+                    });
+                    
+                    logToChat('model', `DELEGATE_RESULT [${role}]:\n${response}`, 'system');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `DELEGATE_ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'delegate_failed');
+                }
+            }
+            if (toolName === 'TASK_ACTION') {
+                if (!argsRaw || !String(argsRaw).trim()) {
+                    continue;
+                }
+                const action = parseTaskAction(argsRaw);
+                if (!action) {
+                    const preview = String(argsRaw || '').slice(0, 240);
+                    logToChat('model', `TASK_ACTION_ERROR: invalid JSON payload. raw=${preview}`, 'stderr');
+                    if (source === 'autonomy') {
+                        SYSTEM_DB.agentState.taskActionErrorCount = (SYSTEM_DB.agentState.taskActionErrorCount || 0) + 1;
+                        SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+                        if (SYSTEM_DB.agentState.taskActionErrorCount >= 3) {
+                            await performAutonomyRecovery('task_action_invalid');
+                        } else {
+                            saveState();
+                        }
+                    }
+                    continue;
+                }
+                if (!action.action) {
+                    logToChat('model', 'TASK_ACTION_ERROR: missing action type.', 'stderr');
+                    if (source === 'autonomy') {
+                        SYSTEM_DB.agentState.taskActionErrorCount = (SYSTEM_DB.agentState.taskActionErrorCount || 0) + 1;
+                        SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+                        if (SYSTEM_DB.agentState.taskActionErrorCount >= 3) {
+                            await performAutonomyRecovery('task_action_missing_type');
+                        } else {
+                            saveState();
+                        }
+                    }
+                    continue;
+                }
+                if (action.action === 'create') {
+                    if (!action.title) {
+                        logToChat('model', 'TASK_ACTION_ERROR: missing title.', 'stderr');
+                        if (source === 'autonomy') {
+                            SYSTEM_DB.agentState.taskActionErrorCount = (SYSTEM_DB.agentState.taskActionErrorCount || 0) + 1;
+                            SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+                            if (SYSTEM_DB.agentState.taskActionErrorCount >= 3) {
+                                await performAutonomyRecovery('task_action_missing_title');
+                            } else {
+                                saveState();
+                            }
+                        }
+                        continue;
+                    }
+                    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+                    const allowSubtask = source === 'autonomy' && activeTask?.withinObjectives === true;
+                    const maxOpenTasks = 5;
+                    const openCount = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress')).length;
+                    if (source === 'autonomy' && openCount >= maxOpenTasks) {
+                        logToSystem('warn', `Autonomy task creation blocked: capacity reached (${openCount}/${maxOpenTasks})`);
+                        logToChat('model', `AUTONOMY BLOCKED: Limit otwartych tasków osiągnięty (${openCount}/${maxOpenTasks}).`, 'system');
+                        continue;
+                    }
+                    const hasOpenTasks = openCount > 0;
+                    if (source === 'autonomy' && hasOpenTasks && !allowSubtask) {
+                        logToSystem('warn', 'Autonomy task creation blocked: existing tasks not completed');
+                        logToChat('model', 'AUTONOMY BLOCKED: Dokończ bieżące zadania przed tworzeniem nowych.', 'system');
+                        continue;
+                    }
+                    let withinObjectives = action.withinObjectives === true;
+                    let parentTaskId = action.parentTaskId || action.subtaskOf || null;
+                    if (!withinObjectives && allowSubtask) {
+                        withinObjectives = true;
+                        parentTaskId = parentTaskId || activeTask.id;
+                    }
+                    if (source === 'autonomy' && !withinObjectives) {
+                        logToSystem('warn', 'Autonomy task creation requires operator approval for non-objective task');
+                        await requestTaskApproval(action, source);
+                        continue;
+                    }
+                    const created = normalizeTask({
+                        id: `task_${Date.now()}`, title: action.title, description: action.description || '',
+                        status: 'pending', progress: 0, priority: action.priority || 'medium',
+                        logs: [action.log || 'Task created.'], createdAt: Date.now(), updatedAt: Date.now(),
+                        withinObjectives,
+                        parentTaskId: parentTaskId || undefined
+                    });
+                    SYSTEM_DB.tasks.push(created);
+                    const breakdownCfg = getTaskBreakdownConfig();
+                    if (breakdownCfg.enabled && breakdownCfg.autoOnCreate) {
+                        await generateTaskBreakdownForTask(created, source);
+                        saveState();
+                    }
+                } else if (action.action === 'toggle_subtask') {
+                    // Try to be smart about taskId. If missing, assume current active task if available
+                    let taskId = String(action.taskId || action.id || '').trim();
+                    const subtaskId = String(action.subtaskId || '').trim();
+                    
+                    if (!taskId && source === 'autonomy') {
+                        const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+                        if (activeTask) taskId = activeTask.id;
+                    }
+
+                    if (!taskId) {
+                        logToChat('model', 'TASK_ACTION_ERROR: missing task id.', 'stderr');
+                        if (source === 'autonomy') {
+                            SYSTEM_DB.agentState.taskActionErrorCount = (SYSTEM_DB.agentState.taskActionErrorCount || 0) + 1;
+                            SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+                            if (SYSTEM_DB.agentState.taskActionErrorCount >= 3) {
+                                await performAutonomyRecovery('task_action_missing_id');
+                            } else {
+                                saveState();
+                            }
+                        }
+                        continue;
+                    }
+                    if (!subtaskId) {
+                        logToChat('model', 'TASK_ACTION_ERROR: missing subtask id.', 'stderr');
+                        continue;
+                    }
+                    const idx = SYSTEM_DB.tasks.findIndex(t => t.id === taskId);
+                    if (idx === -1) continue;
+                    const task = SYSTEM_DB.tasks[idx];
+                    task.subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+                    let subIdx = task.subtasks.findIndex(s => s && s.id === subtaskId);
+                    if (subIdx === -1) {
+                        const num = Number(subtaskId);
+                        if (Number.isFinite(num) && num >= 1 && num <= task.subtasks.length) subIdx = num - 1;
+                    }
+                    if (subIdx === -1) continue;
+                    const st = task.subtasks[subIdx];
+                    const prev = st.status;
+                    st.status = prev === 'completed' ? 'pending' : 'completed';
+                    task.updatedAt = Date.now();
+                    task.logs = Array.isArray(task.logs) ? task.logs : [];
+                    task.logs.push(`[SUBTASK] ${String(st.title || '').slice(0, 120)}: ${prev} -> ${st.status}`);
+                    task.progress = Math.min(99, Math.max(Number(task.progress) || 0, Math.floor((task.subtasks.filter(s => s && s.status === 'completed').length / task.subtasks.length) * 100)));
+                    SYSTEM_DB.tasks[idx] = normalizeTask(task);
+                    maybeAutoCompleteTaskFromSubtasks(SYSTEM_DB.tasks[idx]);
+                } else if (action.id || (source === 'autonomy' && !action.id)) {
+                    let targetId = action.id;
+                    if (!targetId && source === 'autonomy' && action.action === 'update') {
+                        const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+                        if (activeTask) targetId = activeTask.id;
+                    }
+
+                    let idx = SYSTEM_DB.tasks.findIndex(t => t.id === targetId);
+
+                    if (idx === -1 && action.action === 'update' && typeof targetId === 'string' && targetId.trim()) {
+                        let ownerIndex = -1;
+                        let subIndex = -1;
+                        for (let i = 0; i < SYSTEM_DB.tasks.length && ownerIndex === -1; i++) {
+                            const t = SYSTEM_DB.tasks[i];
+                            if (!t || !Array.isArray(t.subtasks)) continue;
+                            const sIdx = t.subtasks.findIndex(s => s && s.id === targetId);
+                            if (sIdx !== -1) {
+                                ownerIndex = i;
+                                subIndex = sIdx;
+                            }
+                        }
+                        if (ownerIndex !== -1 && subIndex !== -1) {
+                            const task = SYSTEM_DB.tasks[ownerIndex];
+                            const st = task.subtasks[subIndex] || {};
+                            if (typeof action.status === 'string') {
+                                const s = action.status;
+                                if (s === 'pending' || s === 'in_progress' || s === 'completed') {
+                                    st.status = s;
+                                }
+                            }
+                            task.subtasks[subIndex] = st;
+                            task.updatedAt = Date.now();
+                            task.logs = Array.isArray(task.logs) ? task.logs : [];
+                            if (typeof action.log === 'string' && action.log.trim()) {
+                                task.logs.push(action.log.trim());
+                            }
+                            const totalSubtasks = task.subtasks.length;
+                            if (totalSubtasks > 0) {
+                                const completed = task.subtasks.filter(s => s && s.status === 'completed').length;
+                                const ratio = completed / totalSubtasks;
+                                const prevProgress = Number(task.progress) || 0;
+                                const fromSubtasks = Math.floor(ratio * 100);
+                                task.progress = Math.min(99, Math.max(prevProgress, fromSubtasks));
+                            }
+                            SYSTEM_DB.tasks[ownerIndex] = normalizeTask(task);
+                            maybeAutoCompleteTaskFromSubtasks(SYSTEM_DB.tasks[ownerIndex]);
+                            continue;
+                        }
+                    }
+
+                    if (idx !== -1) {
+                        const prevStatus = SYSTEM_DB.tasks[idx].status;
+                        const gate = SYSTEM_DB.settings?.qualityGate || {};
+                        const gateEnabled = gate.enabled !== false;
+                        const requiresAi = gate.requireAiSummary !== false;
+                        const allowOverride = gate.allowOperatorOverride === true;
+                        const pendingAudit = SYSTEM_DB.agentState.pendingQualityAudit === true;
+                        const missingAi = requiresAi && !String(SYSTEM_DB.agentState.lastQualityAuditAiSummary || '').trim();
+                        const wantsComplete = action.action === 'complete' || (action.action === 'update' && Number(action.progress) >= 100);
+                        const overrideRequested = action.overrideQualityGate === true;
+                        const overrideAllowed = allowOverride && SYSTEM_DB?.settings?.operatorMode === true && overrideRequested;
+                        if (gateEnabled && wantsComplete && (pendingAudit || missingAi) && !overrideAllowed) {
+                            const reason = pendingAudit ? 'AUDYT_JAKOŚCI_W_TRAKCIE' : 'BRAK_AI_AUDYTU';
+                            SYSTEM_DB.tasks[idx].logs = Array.isArray(SYSTEM_DB.tasks[idx].logs) ? SYSTEM_DB.tasks[idx].logs : [];
+                            SYSTEM_DB.tasks[idx].logs.push(`[QUALITY_GATE] Zablokowano zamknięcie taska: ${reason}.`);
+                            SYSTEM_DB.tasks[idx].updatedAt = Date.now();
+                            logToChat('model', `QUALITY_GATE: Completion blocked (${reason}). Hint: Run [[QUALITY_AUDIT]] or [[DEV_APPLY_PATCH]] first.`, 'system');
+                            continue;
+                        }
+                        if (overrideAllowed) {
+                            SYSTEM_DB.tasks[idx].logs = Array.isArray(SYSTEM_DB.tasks[idx].logs) ? SYSTEM_DB.tasks[idx].logs : [];
+                            SYSTEM_DB.tasks[idx].logs.push('[QUALITY_GATE] Operator override aktywny.');
+                        }
+                        if (action.action === 'update') {
+                            if (typeof action.description === 'string' && action.description.trim()) {
+                                SYSTEM_DB.tasks[idx].description = action.description.trim();
+                            }
+                            if (Array.isArray(action.subtasks) && action.subtasks.length) {
+                                SYSTEM_DB.tasks[idx].subtasks = normalizeSubtaskItems(action.subtasks);
+                            }
+                            SYSTEM_DB.tasks[idx].progress = action.progress ?? SYSTEM_DB.tasks[idx].progress;
+                            SYSTEM_DB.tasks[idx].logs = Array.isArray(SYSTEM_DB.tasks[idx].logs) ? SYSTEM_DB.tasks[idx].logs : [];
+                            const line = (typeof action.log === 'string' && action.log.trim())
+                                ? action.log.trim()
+                                : (typeof action.logsAppend === 'string' && action.logsAppend.trim() ? action.logsAppend.trim() : '');
+                            if (line) SYSTEM_DB.tasks[idx].logs.push(line);
+                            if (Number(SYSTEM_DB.tasks[idx].progress) >= 100) {
+                                SYSTEM_DB.tasks[idx].status = 'completed';
+                                SYSTEM_DB.tasks[idx].progress = 100;
+                            } else {
+                                SYSTEM_DB.tasks[idx].status = 'in_progress';
+                            if (Array.isArray(SYSTEM_DB.tasks[idx].subtasks) && SYSTEM_DB.tasks[idx].subtasks.length > 0) {
+                                const hasActiveSubtask = SYSTEM_DB.tasks[idx].subtasks.some(s => s.status === 'in_progress' || s.status === 'completed');
+                                if (!hasActiveSubtask) {
+                                     logToChat('model', `[HINT] Task plan updated. Please EXECUTE the first subtask now using appropriate tools (FILE_READ, WEB_SEARCH, etc.). Do not just update the task again.`, 'system');
+                                }
+                            }
+                        }
+                    } else if (action.action === 'complete') {
+                            SYSTEM_DB.tasks[idx].progress = 100;
+                            SYSTEM_DB.tasks[idx].status = 'completed';
+                            SYSTEM_DB.tasks[idx].logs = Array.isArray(SYSTEM_DB.tasks[idx].logs) ? SYSTEM_DB.tasks[idx].logs : [];
+                            if (action.log) SYSTEM_DB.tasks[idx].logs.push(action.log);
+                        }
+                        SYSTEM_DB.tasks[idx].updatedAt = Date.now();
+                        SYSTEM_DB.tasks[idx] = normalizeTask(SYSTEM_DB.tasks[idx]);
+                        const autoClosed = maybeAutoCompleteTaskFromSubtasks(SYSTEM_DB.tasks[idx]);
+                        const breakdownCfg = getTaskBreakdownConfig();
+                        if (breakdownCfg.enabled && breakdownCfg.autoOnStart) {
+                            const hasSubtasks = Array.isArray(SYSTEM_DB.tasks[idx].subtasks) && SYSTEM_DB.tasks[idx].subtasks.length > 0;
+                            if (SYSTEM_DB.tasks[idx].status === 'in_progress' && !hasSubtasks) {
+                                await generateTaskBreakdownForTask(SYSTEM_DB.tasks[idx], source);
+                                saveState();
+                            }
+                        }
+                        const title = SYSTEM_DB.tasks[idx].title || 'Untitled Task';
+                        const nextStatus = SYSTEM_DB.tasks[idx].status;
+                        if (nextStatus === 'completed' || nextStatus === 'failed' || autoClosed) {
+                            clearToolCaches(`task_${nextStatus}`);
+                        }
+                        if (action.log) {
+                            logToChat('system', `[TASK] ${title}: ${action.log}`, 'system');
+                        }
+                        if (isTelegramEnabled()) {
+                            const logs = Array.isArray(SYSTEM_DB.tasks[idx].logs) ? SYSTEM_DB.tasks[idx].logs : [];
+                            const lastLog = logs.length ? logs[logs.length - 1] : '';
+                            if (prevStatus !== 'in_progress' && nextStatus === 'in_progress') {
+                                await sendTelegramMessage(`Zadanie rozpoczęte: ${title}${lastLog ? `\n${lastLog}` : ''}`);
+                            }
+                            if (prevStatus !== 'completed' && nextStatus === 'completed') {
+                                await sendTelegramMessage(`Zadanie zakończone: ${title}${lastLog ? `\n${lastLog}` : ''}`);
+                            }
+                        }
+                        if (autoClosed && isTelegramEnabled()) {
+                            await sendTelegramMessage(`Zadanie zakończone automatycznie: ${title}`);
+                        }
+                    }
+                } else {
+                    logToChat('model', 'TASK_ACTION_ERROR: missing task id.', 'stderr');
+                    recordToolFailure(toolName, argsRaw, 'missing task id');
+                    if (source === 'autonomy') {
+                        SYSTEM_DB.agentState.taskActionErrorCount = (SYSTEM_DB.agentState.taskActionErrorCount || 0) + 1;
+                        SYSTEM_DB.agentState.lastTaskActionErrorAt = Date.now();
+                        if (SYSTEM_DB.agentState.taskActionErrorCount >= 3) {
+                            await performAutonomyRecovery('task_action_missing_id');
+                        } else {
+                            saveState();
+                        }
+                    }
+                    continue;
+                }
+                if (source === 'autonomy' && SYSTEM_DB.agentState.taskActionErrorCount) {
+                    SYSTEM_DB.agentState.taskActionErrorCount = 0;
+                    saveState();
+                }
+                recordToolSuccess(toolName);
+            }
+            if (toolName === 'BLOG_MAINTENANCE') {
+                 logToChat('model', `INITIATING BLOG DIAGNOSTICS...`, 'system');
+                 try {
+                     const articlesPath = ARTICLES_DIR;
+                     const healer = new BlogHealer(SYSTEM_DB.settings.ftpConfig, articlesPath);
+                     const report = await healer.runDiagnostics();
+                     logToChat('model', `BLOG REPORT: Checked ${report.checked} files. Fixed ${report.fixedImages} images. Errors: ${report.errors.length}`, 'system');
+                     recordToolSuccess(toolName);
+                 } catch (e) {
+                     logToChat('model', `BLOG MAINTENANCE ERROR: ${e.message}`, 'stderr');
+                     recordToolFailure(toolName, argsRaw, e.message || 'blog_maintenance_failed');
+                 }
+            }
+            if (toolName === 'QUALITY_AUDIT') {
+                logToChat('model', `INITIATING QUALITY AUDIT...`, 'system');
+                try {
+                    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+                    SYSTEM_DB.agentState.pendingQualityAudit = true;
+                    await runQualityAudit({ taskId: activeTask?.id || null });
+                    logToChat('model', `QUALITY AUDIT COMPLETE. Check logs for details.`, 'system');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `QUALITY AUDIT ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'quality_audit_failed');
+                }
+            }
+            if (toolName === 'WEB_SEARCH') {
+                const query = normalizeWebQuery(argsRaw);
+                if (!query) {
+                    logToChat('model', 'WEB_SEARCH_ERROR: missing query.', 'stderr');
+                    continue;
+                }
+                const safeQuery = query.length > 500 ? query.slice(0, 500) : query;
+                const searchCacheKey = `WEB_SEARCH:${safeQuery}`;
+                const cachedSearch = getToolCacheEntry(searchCacheKey);
+                if (cachedSearch) {
+                    logToChat('model', `WEB_SEARCH RESULTS (cache):\n${cachedSearch.text}`, 'system');
+                    recordToolMemory('WEB_SEARCH', safeQuery, cachedSearch.text);
+                    recordToolSuccess(toolName);
+                    continue;
+                }
+                logToChat('model', `SEARCHING WEB: ${safeQuery}`, 'system');
+                try {
+                    const results = await performWebSearch(safeQuery, 5);
+                    const resultsText = JSON.stringify(results, null, 2);
+                    logToChat('model', `WEB_SEARCH RESULTS:\n${resultsText}`, 'system');
+                    setToolCacheEntry(searchCacheKey, { text: resultsText });
+                    recordToolMemory('WEB_SEARCH', safeQuery, resultsText);
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `WEB_SEARCH ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'web_search_failed');
+                }
+            }
+            if (toolName === 'WEB_READ') {
+                const url = normalizeWebUrl(argsRaw);
+                if (!url) {
+                    logToChat('model', 'WEB_READ_ERROR: missing url.', 'stderr');
+                    continue;
+                }
+                if (!/^https?:\/\//i.test(url)) {
+                    logToChat('model', `WEB_READ_ERROR: invalid url (must start with https://): ${url}`, 'stderr');
+                    continue;
+                }
+                const safeUrl = url.length > 2000 ? url.slice(0, 2000) : url;
+                const readCacheKey = `WEB_READ:${safeUrl}`;
+                const cachedRead = getToolCacheEntry(readCacheKey);
+                if (cachedRead) {
+                    logToChat('model', `WEB_READ CONTENT (${safeUrl}) (cache):\n${cachedRead.text}`, 'system');
+                    recordToolMemory('WEB_READ', safeUrl, cachedRead.text);
+                    recordToolSuccess(toolName);
+                    continue;
+                }
+                logToChat('model', `READING WEB: ${safeUrl}`, 'system');
+                try {
+                    const res = await fetch(safeUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                        }
+                    });
+                    if (!res.ok) throw new Error(`Read failed: ${res.status}`);
+                    const html = await res.text();
+                    const $ = cheerio.load(html);
+                    $('script, style, nav, footer, iframe, svg').remove();
+                    const text = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 15000);
+                    logToChat('model', `WEB_READ CONTENT (${safeUrl}):\n${text}`, 'system');
+                    setToolCacheEntry(readCacheKey, { text });
+                    recordToolMemory('WEB_READ', safeUrl, text);
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `WEB_READ ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'web_read_failed');
+                }
+            }
+            if (toolName === 'PYTHON_EXEC') {
+                const payload = parseJsonSafe(argsRaw);
+                const code = payload && typeof payload === 'object' ? payload?.code : argsRaw;
+                if (!code) {
+                    logToChat('model', 'PYTHON_EXEC_ERROR: missing code.', 'stderr');
+                    continue;
+                }
+                
+                // Security check: Basic sanitization
+                if (code.includes('import os') && (code.includes('system') || code.includes('popen'))) {
+                     logToChat('model', 'PYTHON_EXEC_ERROR: os.system/popen blocked.', 'stderr');
+                     continue;
+                }
+                
+                const scriptPath = path.join('/tmp', `gai_script_${Date.now()}_${Math.random().toString(36).slice(2,8)}.py`);
+                fs.writeFileSync(scriptPath, code, 'utf8');
+                
+                logToChat('model', `PYTHON EXEC:\n${code}`, 'system');
+                try {
+                    const { stdout, stderr } = await execAsync(`python3 ${scriptPath}`, { 
+                        timeout: 30000, 
+                        maxBuffer: 5 * 1024 * 1024 
+                    });
+                    if (stdout) logToChat('model', `PYTHON STDOUT:\n${stdout}`, 'stdout');
+                    if (stderr) logToChat('model', `PYTHON STDERR:\n${stderr}`, 'stderr');
+                    if (!stdout && !stderr) logToChat('model', `PYTHON EXECUTED (No Output)`, 'stdout');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `PYTHON ERROR: ${e.message}\nSTDERR: ${e.stderr || ''}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'python_exec_failed');
+                } finally {
+                    try { fs.unlinkSync(scriptPath); } catch {}
+                }
+            }
+            if (toolName === 'VISION_ANALYZE') {
+                const payload = parseJsonSafe(argsRaw);
+                const imagePath = payload?.path;
+                const prompt = payload?.prompt || 'Describe this image in detail.';
+                const requestedModel = payload?.model;
+                
+                if (!imagePath || !fs.existsSync(imagePath)) {
+                    logToChat('model', `VISION_ANALYZE ERROR: Image not found at ${imagePath}`, 'stderr');
+                    continue;
+                }
+                
+                logToChat('model', `VISION ANALYZE: ${imagePath}`, 'system');
+                try {
+                    const visionModel = await pickVisionModelName(requestedModel);
+                    if (!visionModel) {
+                        logToChat('model', `VISION ERROR: No vision model found in Ollama.`, 'stderr');
+                        continue;
+                    }
+                    
+                    const imageBuffer = fs.readFileSync(imagePath);
+                    const base64Image = imageBuffer.toString('base64');
+                    
+                    const res = await fetch(`${SYSTEM_DB.settings.ollamaBaseUrl || OLLAMA_BASE_URL}/api/generate`, {
+                        method: 'POST',
+                        headers: getOllamaAuthHeaders(),
+                        body: JSON.stringify({
+                            model: visionModel,
+                            prompt: prompt,
+                            images: [base64Image],
+                            stream: false
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    logToChat('model', `VISION RESULT (${visionModel}):\n${data.response}`, 'stdout');
+                    recordToolSuccess(toolName);
+                    
+                } catch (e) {
+                    logToChat('model', `VISION ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'vision_analyze_failed');
+                }
+            }
+            if (toolName === 'BROWSER_ACTION') {
+                const payload = parseJsonSafe(argsRaw);
+                const url = typeof payload === 'object' ? payload.url : argsRaw;
+                const action = payload.action || 'screenshot_and_text'; // screenshot, extract_text, pdf
+                
+                if (!url) {
+                    logToChat('model', 'BROWSER_ACTION_ERROR: missing url.', 'stderr');
+                    continue;
+                }
+                
+                logToChat('model', `BROWSER (${action}): ${url}`, 'system');
+                let browser = null;
+                try {
+                    browser = await puppeteer.launch({ 
+                        headless: "new",
+                        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+                    });
+                    const page = await browser.newPage();
+                    await page.setViewport({ width: 1280, height: 800 });
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+                    
+                    if (action === 'screenshot' || action === 'screenshot_and_text') {
+                        const screenshotPath = path.join(OUT_DIR, `screenshot_${Date.now()}.png`);
+                        await page.screenshot({ path: screenshotPath, fullPage: true });
+                        logToChat('model', `BROWSER: Screenshot saved to ${screenshotPath}`, 'fs');
+                        
+                        const visionModel = await pickVisionModelName();
+                        if (visionModel) {
+                             const imageBuffer = fs.readFileSync(screenshotPath);
+                             const base64Image = imageBuffer.toString('base64');
+                             const res = await fetch(`${SYSTEM_DB.settings.ollamaBaseUrl || OLLAMA_BASE_URL}/api/generate`, {
+                                method: 'POST',
+                                headers: getOllamaAuthHeaders(),
+                                body: JSON.stringify({
+                                    model: visionModel,
+                                    prompt: "Describe the screenshot of this website. What is the main content?",
+                                    images: [base64Image],
+                                    stream: false
+                                })
+                            });
+                            const data = await res.json();
+                            logToChat('model', `BROWSER VISION ANALYSIS:\n${data.response}`, 'system');
+                        }
+                    }
+                    
+                    if (action === 'extract_text' || action === 'screenshot_and_text') {
+                        const content = await page.evaluate(() => document.body.innerText);
+                        const clean = content.replace(/\s+/g, ' ').trim().slice(0, 20000);
+                        logToChat('model', `BROWSER CONTENT:\n${clean}`, 'stdout');
+                    }
+                    recordToolSuccess(toolName);
+                    
+                } catch (e) {
+                    logToChat('model', `BROWSER ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'browser_action_failed');
+                } finally {
+                    if (browser) await browser.close();
+                }
+            }
+            if (toolName === 'SYS_SPEAK') {
+                const payload = parseJsonSafe(argsRaw);
+                const text = typeof payload === 'object' ? payload.text : argsRaw;
+                if (!text) {
+                    logToChat('model', 'SYS_SPEAK_ERROR: missing text.', 'stderr');
+                    continue;
+                }
+                logToChat('model', `SPEAKING: "${text}"`, 'system');
+                try {
+                    // MacOS 'say' command - SAFE SPAWN
+                    const child = spawn('say', [String(text)]);
+                    child.on('error', (err) => {
+                         console.error('TTS Error:', err);
+                    });
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `TTS ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'sys_speak_failed');
+                }
+            }
+            if (toolName === 'IMAGE_GENERATE') {
+                const payload = parseJsonSafe(argsRaw);
+                const prompt = typeof payload === 'object' ? payload.prompt : argsRaw;
+                if (!prompt) {
+                    logToChat('model', 'IMAGE_GENERATE_ERROR: missing prompt.', 'stderr');
+                    continue;
+                }
+                logToChat('model', `GENERATING IMAGE: ${prompt}`, 'system');
+                try {
+                    const gen = await generateImage(prompt);
+                    logToChat('model', `IMAGE GENERATED: ${gen.webPath}`, 'fs');
+                    recordToolSuccess(toolName);
+                } catch (e) {
+                    logToChat('model', `IMAGE GEN ERROR: ${e.message}`, 'stderr');
+                    recordToolFailure(toolName, argsRaw, e.message || 'image_generate_failed');
+                }
+            }
+        } catch (e) {
+            logToChat('model', `KERNEL TOOL ERROR (${toolName}): ${e.message}`, 'stderr');
+            recordToolLesson(toolName, 'Runtime error', String(e?.message || e || '').slice(0, 300));
+            recordToolFailure(toolName, argsRaw, String(e?.message || e || 'runtime_error'));
+        }
+    }
+    saveState();
+    return executedCount;
+};
+
+const activeAiAbortControllers = {
+    system: null,
+    user: null
+};
+
+const createActiveAbortController = (kind = 'system') => {
+    const k = kind === 'user' ? 'user' : 'system';
+    if (activeAiAbortControllers[k]) {
+        activeAiAbortControllers[k].abort();
+    }
+    activeAiAbortControllers[k] = new AbortController();
+    return activeAiAbortControllers[k];
+};
+
+const clearActiveAbortController = (kind, controller) => {
+    const k = kind === 'user' ? 'user' : 'system';
+    if (activeAiAbortControllers[k] === controller) {
+        activeAiAbortControllers[k] = null;
+    }
+};
+
+const abortActiveAi = (kind = 'system') => {
+    const k = kind === 'user' ? 'user' : 'system';
+    try {
+        if (activeAiAbortControllers[k]) activeAiAbortControllers[k].abort();
+    } catch {
+    }
+    activeAiAbortControllers[k] = null;
+};
+
+const clearUserCommandState = (reason = 'manual') => {
+    try { abortActiveAi('user'); } catch {}
+    try { rejectAndClearQueuedUserCommands(reason); } catch {}
+    try { userCommandRunning = false; } catch {}
+    try { currentUserCommandMeta = null; } catch {}
+    try {
+        SYSTEM_DB.agentState.userQueueLength = 0;
+        SYSTEM_DB.agentState.userQueuePreview = [];
+    } catch {}
+    try { setUserPriority(false); } catch {}
+    try {
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.processingStage = '';
+        SYSTEM_DB.agentState.thoughtProcess = `User queue cleared (${reason}).`;
+        SYSTEM_DB.agentState.lastRun = Date.now();
+        saveState();
+    } catch {}
+};
+
+const createAbortControllerWithTimeout = (signal, timeoutMs) => {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    if (signal) {
+        if (signal.aborted) controller.abort();
+        else signal.addEventListener('abort', onAbort, { once: true });
+    }
+    const timeout = setTimeout(() => {
+        console.warn(`[TIMEOUT] Operation timed out after ${timeoutMs}ms`);
+        controller.abort();
+    }, timeoutMs);
+    const cleanup = () => {
+        clearTimeout(timeout);
+        if (signal) signal.removeEventListener('abort', onAbort);
+    };
+    return { controller, cleanup };
+};
+
+const fetchOllamaStatus = async () => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 2000);
+    try {
+        const res = await fetch(`${baseUrl}/api/ps`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return Array.isArray(data?.models) ? data.models : [];
+    } catch {
+        return null;
+    } finally {
+        cleanup();
+    }
+};
+
+const fetchOllamaTagsList = async () => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 6000);
+    try {
+        const res = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!res.ok) return [];
+        const data = await res.json().catch(() => ({}));
+        const models = Array.isArray(data?.models) ? data.models : [];
+        return models.map(m => String(m?.name || '').trim()).filter(Boolean);
+    } catch {
+        return [];
+    } finally {
+        cleanup();
+    }
+};
+
+const pickVisionModelName = async (preferredModel = '') => {
+    // 1. If preferred model is provided and valid, use it
+    if (preferredModel) return preferredModel;
+
+    // 2. Check env var
+    if (process.env.VISION_MODEL) return process.env.VISION_MODEL;
+
+    // 3. Check allowedModels in settings (prioritize configured models)
+    const allowed = SYSTEM_DB?.settings?.agenticSystem?.allowedModels || [];
+    const visionKeywords = ['vision', 'llava', 'qwen3-vl', 'minicpm', 'moondream', 'llama3.2-vision', 'bakllava'];
+    
+    // Check if any allowed model is a known vision model
+    const allowedVision = allowed.find(m => visionKeywords.some(k => m.toLowerCase().includes(k)));
+    if (allowedVision) return allowedVision;
+
+    // 4. Check currently running models (ps) - fastest check
+    const ps = await fetchOllamaStatus();
+    const running = Array.isArray(ps) ? ps.map(m => String(m?.name || '').trim()).filter(Boolean) : [];
+    
+    const runningVision = running.find(m => visionKeywords.some(k => m.toLowerCase().includes(k)));
+    if (runningVision) return runningVision;
+
+    // 5. Check installed models (tags)
+    const tags = await fetchOllamaTagsList();
+    
+    // Priority list for auto-selection
+    const priorities = ['qwen3-vl', 'llama3.2-vision', 'llava', 'minicpm-v', 'moondream', 'bakllava'];
+    
+    for (const p of priorities) {
+        const found = tags.find(t => t.toLowerCase().includes(p));
+        if (found) return found;
+    }
+    
+    // Fallback to any model with 'vision' in name
+    const genericVision = tags.find(t => t.toLowerCase().includes('vision'));
+    if (genericVision) return genericVision;
+
+    return 'llava:latest'; // Ultimate fallback
+};
+
+const formatOllamaStatus = (models) => {
+    if (!Array.isArray(models) || models.length === 0) return '';
+    const names = models.map(m => m?.name || m?.model).filter(Boolean);
+    if (!names.length) return '';
+    return `modele: ${names.join(', ')}`;
+};
+
+const shouldApplyThinkingTag = (message, modelRole) => {
+    if (typeof message !== 'string') return false;
+    const trimmed = message.trim();
+    if (!trimmed) return false;
+    if (SYSTEM_DB?.settings?.autoThinkEnabled === false) return false;
+    const lower = trimmed.toLowerCase();
+    if (lower.startsWith('/think') || lower.startsWith('/no_think')) return false;
+    return false;
+};
+
+const applyThinkingTag = (message, modelRole) => {
+    if (!shouldApplyThinkingTag(message, modelRole)) return message;
+    return `/think\n${message}`;
+};
+
+const normalizeOllamaSnapshot = (text = '') => {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const marker = 'ollama ps';
+    const last = raw.lastIndexOf(marker);
+    if (last > 0) {
+        return raw.slice(last).trim();
+    }
+    return raw;
+};
+
+let ollamaLiveTimer = null;
+let ollamaLiveInFlight = false;
+let ollamaLiveMessageId = null;
+let ollamaLiveLastText = '';
+
+const clampOllamaOutput = (text, limit = 3500) => {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return '';
+    if (trimmed.length <= limit) return trimmed;
+    return `${trimmed.slice(0, limit)}\n...[TRUNCATED]...`;
+};
+
+const runOllamaCommand = async (cmd) => {
+    try {
+        const { stdout, stderr } = await execAsync(cmd, { cwd: APP_ROOT, timeout: 4000, maxBuffer: 2 * 1024 * 1024, env: process.env });
+        const output = clampOllamaOutput(stdout || stderr || '');
+        return output || 'brak danych';
+    } catch (e) {
+        const message = String(e?.message || e);
+        if (/operation not permitted/i.test(message)) {
+            return `BRAK UPRAWNIEŃ: ${message}`;
+        }
+        return `ERROR: ${message}`;
+    }
+};
+
+const parseOllamaPs = (text = '') => {
+    const raw = String(text || '').trim();
+    if (!raw) return { raw, models: [], error: 'brak danych' };
+    if (raw.startsWith('ERROR') || raw.startsWith('BRAK UPRAWNIEŃ')) {
+        return { raw, models: [], error: raw };
+    }
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const rows = lines.filter(l => !l.toUpperCase().startsWith('NAME'));
+    const models = rows.map(line => {
+        const cols = line.split(/\s{2,}/);
+        if (cols.length < 2) return null;
+        return {
+            name: cols[0],
+            id: cols[1] || '',
+            size: cols[2] || '',
+            processor: cols[3] || '',
+            context: cols[4] || '',
+            until: cols[5] || ''
+        };
+    }).filter(Boolean);
+    return { raw, models, error: '' };
+};
+
+const summarizeOllamaLogs = (text = '') => {
+    const raw = String(text || '').trim();
+    if (!raw || raw === 'brak logów') return { summary: ['Brak logów.'], raw: '' };
+    if (raw.startsWith('BRAK UPRAWNIEŃ')) return { summary: ['Brak uprawnień do logów.'], raw };
+    if (raw.startsWith('ERROR')) return { summary: [raw], raw };
+    const lines = raw.split('\n').filter(Boolean);
+    let lastListenIndex = -1;
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+        if (/listening on/i.test(lines[i])) {
+            lastListenIndex = i;
+            break;
+        }
+    }
+    let lastError = '';
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+        if (/error:|level=error/i.test(lines[i])) {
+            if (lastListenIndex === -1 || i > lastListenIndex) {
+                lastError = lines[i];
+            }
+            break;
+        }
+    }
+    const lastListen = lastListenIndex >= 0 ? lines[lastListenIndex] : '';
+    const lastPull = [...lines].reverse().find(l => /\/api\/pull|downloading/i.test(l));
+    const summary = [];
+    if (lastError) summary.push(`Ostatni błąd: ${lastError}`);
+    if (lastListen) summary.push(`Status serwera: ${lastListen}`);
+    if (lastPull) summary.push(`Pobieranie: ${lastPull}`);
+    if (!summary.length) summary.push('Brak krytycznych błędów w ostatnich logach.');
+    return { summary, raw };
+};
+
+const summarizeOllamaPort = (text = '') => {
+    const raw = String(text || '').trim();
+    if (!raw) return { summary: 'Brak danych o porcie.', raw: '' };
+    if (raw.startsWith('ERROR')) return { summary: raw, raw };
+    if (raw.startsWith('BRAK UPRAWNIEŃ')) return { summary: 'Brak uprawnień do sprawdzenia portu 11434.', raw };
+    const lines = raw.split('\n').filter(Boolean);
+    const dataLine = lines.find(l => !l.toUpperCase().startsWith('COMMAND')) || '';
+    if (!dataLine) return { summary: 'Port 11434: brak aktywnego nasłuchu.', raw };
+    const parts = dataLine.split(/\s+/);
+    const command = parts[0] || 'process';
+    const pid = parts[1] || '';
+    const name = raw.includes('127.0.0.1:11434') ? '127.0.0.1:11434' : (raw.includes('localhost:11434') ? 'localhost:11434' : 'port 11434');
+    return { summary: `Port 11434: nasłuchuje ${command}${pid ? ` (PID ${pid})` : ''} na ${name}.`, raw };
+};
+
+const buildReadableOllamaDiagnostics = ({ psOut, logOut, htopOut, lsofOut }) => {
+    const ps = parseOllamaPs(psOut);
+    const logSummary = summarizeOllamaLogs(logOut);
+    const portSummary = summarizeOllamaPort(lsofOut);
+    const updatedAt = new Date().toLocaleTimeString();
+    const sections = [];
+    const summaryLines = [];
+    if (ps.error) summaryLines.push(`Modele: ${ps.error}`);
+    if (!ps.error && ps.models.length) summaryLines.push(`Modele w pamięci: ${ps.models.length}`);
+    if (!ps.error && !ps.models.length) summaryLines.push('Modele w pamięci: brak');
+    summaryLines.push(portSummary.summary);
+    sections.push(`Podsumowanie\n${summaryLines.join('\n')}\n\nUpdated: ${updatedAt}`);
+    if (!ps.error && ps.models.length) {
+        const modelLines = ps.models.map(m => `- ${m.name} • ${m.size || '—'} • ${m.processor || '—'} • ctx ${m.context || '—'} • ${m.until || '—'}`);
+        sections.push(`Modele w pamięci\n${modelLines.join('\n')}`);
+    } else {
+        sections.push(`Modele w pamięci\nBrak aktywnych modeli.`);
+    }
+    sections.push(`Port 11434\n${portSummary.summary}`);
+    sections.push(`Logi Ollama\n${logSummary.summary.join('\n')}`);
+    const htopLines = String(htopOut || '').trim();
+    const htopPreview = htopLines ? htopLines.split('\n').filter(Boolean).slice(0, 12).join('\n') : 'brak danych';
+    sections.push(`Procesy (skrót)\n${htopPreview}`);
+    return sections.join('\n\n────────\n\n');
+};
+
+const buildOllamaDiagnostics = async () => {
+    const psOut = await runOllamaCommand('ollama ps');
+    const logPath = path.join(os.homedir(), '.ollama', 'logs', 'server.log');
+    let logOut = 'brak logów';
+    if (fs.existsSync(logPath)) {
+        try {
+            fs.accessSync(logPath, fs.constants.R_OK);
+        } catch {
+            logOut = 'brak uprawnień do logów';
+        }
+    }
+    if (fs.existsSync(logPath) && logOut !== 'brak uprawnień do logów') {
+        try {
+            fs.accessSync(logPath, fs.constants.W_OK);
+            const rawLog = fs.readFileSync(logPath, 'utf8');
+            const lines = rawLog.split('\n');
+            let lastListenIndex = -1;
+            for (let i = lines.length - 1; i >= 0; i -= 1) {
+                if (/listening on/i.test(lines[i])) {
+                    lastListenIndex = i;
+                    break;
+                }
+            }
+            let errorAfterListen = false;
+            for (let i = lines.length - 1; i > lastListenIndex; i -= 1) {
+                if (/error:|level=error/i.test(lines[i])) {
+                    errorAfterListen = true;
+                    break;
+                }
+            }
+            const hasBindError = lines.some(l => /listen tcp 127\.0\.0\.1:11434: bind: address already in use/i.test(l));
+            if (lastListenIndex >= 0 && hasBindError && !errorAfterListen) {
+                const trimmed = lines.slice(lastListenIndex).join('\n').trim();
+                fs.writeFileSync(logPath, trimmed ? `${trimmed}\n` : '');
+            }
+        } catch {
+        }
+    }
+    if (logOut === 'brak logów') {
+        logOut = 'brak logów';
+    }
+    if (fs.existsSync(logPath) && logOut !== 'brak uprawnień do logów') {
+        logOut = await runOllamaCommand(`tail -n 80 "${logPath}"`);
+    }
+    let htopOut = await runOllamaCommand('htop -b -n 1');
+    if (htopOut.startsWith('ERROR') || htopOut.startsWith('BRAK UPRAWNIEŃ')) {
+        htopOut = await runOllamaCommand('top -l 1 -n 0');
+    }
+    if (htopOut.startsWith('ERROR') || htopOut.startsWith('BRAK UPRAWNIEŃ')) {
+        htopOut = await runOllamaCommand('ps -A -o pid,%cpu,%mem,comm | head -n 20');
+    }
+    let lsofOut = await runOllamaCommand('lsof -nP -iTCP:11434 -sTCP:LISTEN');
+    if (/BRAK UPRAWNIEŃ/i.test(lsofOut)) {
+        lsofOut = await runOllamaCommand('netstat -anv | grep 11434');
+    }
+    return buildReadableOllamaDiagnostics({ psOut, logOut, htopOut, lsofOut });
+};
+
+const updateOllamaLiveMessage = (text) => {
+    const normalized = normalizeOllamaSnapshot(text);
+    if (!normalized) return;
+    if (!ollamaLiveMessageId) {
+        const msg = logToChat('system', normalized, 'ollama');
+        ollamaLiveMessageId = msg?.id || null;
+        ollamaLiveLastText = normalized;
+        return;
+    }
+    if (ollamaLiveLastText === normalized) return;
+    const idx = SYSTEM_DB.chatHistory.findIndex(m => m.id === ollamaLiveMessageId);
+    if (idx === -1) {
+        const fallbackIdx = [...SYSTEM_DB.chatHistory].reverse().findIndex(m => m.logType === 'ollama');
+        if (fallbackIdx !== -1) {
+            const absoluteIdx = SYSTEM_DB.chatHistory.length - 1 - fallbackIdx;
+            SYSTEM_DB.chatHistory[absoluteIdx] = { ...SYSTEM_DB.chatHistory[absoluteIdx], text: normalized, timestamp: Date.now() };
+            ollamaLiveMessageId = SYSTEM_DB.chatHistory[absoluteIdx]?.id || null;
+            ollamaLiveLastText = normalized;
+            saveState();
+            return;
+        }
+        const msg = logToChat('system', normalized, 'ollama');
+        ollamaLiveMessageId = msg?.id || null;
+        ollamaLiveLastText = normalized;
+        return;
+    }
+    SYSTEM_DB.chatHistory[idx] = { ...SYSTEM_DB.chatHistory[idx], text: normalized, timestamp: Date.now() };
+    ollamaLiveLastText = normalized;
+    saveState();
+};
+
+const clearOllamaLiveMessage = () => {
+    if (SYSTEM_DB?.settings?.ollamaLiveKeepAfterFinish) return;
+    if (!ollamaLiveMessageId) {
+        const fallbackIdx = [...SYSTEM_DB.chatHistory].reverse().findIndex(m => m.logType === 'ollama');
+        if (fallbackIdx === -1) return;
+        const absoluteIdx = SYSTEM_DB.chatHistory.length - 1 - fallbackIdx;
+        SYSTEM_DB.chatHistory.splice(absoluteIdx, 1);
+        saveState();
+        return;
+    }
+    const idx = SYSTEM_DB.chatHistory.findIndex(m => m.id === ollamaLiveMessageId);
+    if (idx !== -1) {
+        SYSTEM_DB.chatHistory.splice(idx, 1);
+        saveState();
+    }
+    ollamaLiveMessageId = null;
+    ollamaLiveLastText = '';
+};
+
+const startOllamaLiveDiagnostics = () => {
+    if (ollamaLiveTimer) return () => {};
+    let active = true;
+    const run = async () => {
+        if (!active || ollamaLiveInFlight) return;
+        ollamaLiveInFlight = true;
+        try {
+            const snapshot = await buildOllamaDiagnostics();
+            updateOllamaLiveMessage(snapshot);
+        } finally {
+            ollamaLiveInFlight = false;
+        }
+    };
+    run();
+    ollamaLiveTimer = safeSetInterval(run, 5000);
+    return () => {
+        active = false;
+        if (ollamaLiveTimer) safeClearInterval(ollamaLiveTimer);
+        ollamaLiveTimer = null;
+        ollamaLiveInFlight = false;
+        clearOllamaLiveMessage();
+    };
+};
+
+const startOllamaStatusTicker = (label) => {
+    let active = true;
+    const setWaitStart = !SYSTEM_DB.agentState.ollamaWaitStartedAt;
+    if (setWaitStart) {
+        SYSTEM_DB.agentState.ollamaWaitStartedAt = Date.now();
+        saveState();
+    }
+    const stopLive = startOllamaLiveDiagnostics();
+    const update = async () => {
+        if (!active) return;
+        const models = await fetchOllamaStatus();
+        const detail = formatOllamaStatus(models);
+        const text = detail ? `${label} • ${detail}` : label;
+        SYSTEM_DB.agentState.processingStage = text;
+        SYSTEM_DB.agentState.thoughtProcess = text;
+        SYSTEM_DB.agentState.lastRun = Date.now();
+        saveState();
+    };
+    update();
+    const timer = safeSetInterval(update, 3000);
+    return () => {
+        active = false;
+        safeClearInterval(timer);
+        stopLive();
+        if (setWaitStart) {
+            SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+            saveState();
+        }
+    };
+};
+
+// Circuit breaker implementation for AI calls
+class CircuitBreaker {
+    constructor(threshold = 5, timeout = 60000, resetTimeout = 30000) {
+        this.failureCount = 0;
+        this.lastFailureTime = null;
+        this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+        this.threshold = threshold;
+        this.timeout = timeout;
+        this.resetTimeout = resetTimeout;
+    }
+
+    canExecute() {
+        if (this.state === 'CLOSED') return true;
+        if (this.state === 'OPEN') {
+            if (Date.now() - this.lastFailureTime > this.resetTimeout) {
+                this.state = 'HALF_OPEN';
+                return true;
+            }
+            return false;
+        }
+        if (this.state === 'HALF_OPEN') return true;
+        return false;
+    }
+
+    recordSuccess() {
+        this.failureCount = 0;
+        this.state = 'CLOSED';
+        this.lastFailureTime = null;
+    }
+
+    recordFailure() {
+        this.failureCount++;
+        this.lastFailureTime = Date.now();
+        if (this.failureCount >= this.threshold) {
+            this.state = 'OPEN';
+        }
+    }
+
+    getState() {
+        return this.state;
+    }
+}
+
+// Create circuit breakers for different AI operations
+const aiCircuitBreaker = new CircuitBreaker(8, 90000, 30000);
+const ollamaCircuitBreaker = new CircuitBreaker(6, 60000, 20000);
+
+
+class RequestQueue {
+    constructor(concurrency = 1) {
+        this.concurrency = concurrency;
+        this.queue = [];
+        this.running = 0;
+    }
+
+    enqueue(task, priority = 0) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ task, resolve, reject, priority });
+            this.queue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.running >= this.concurrency) return;
+        if (this.queue.length === 0) return;
+
+        this.running++;
+        const { task, resolve, reject } = this.queue.shift();
+        
+        try {
+            const result = await task();
+            resolve(result);
+        } catch (e) {
+            reject(e);
+        } finally {
+            this.running--;
+            this.process();
+        }
+    }
+}
+const ollamaQueue = new RequestQueue(OLLAMA_MAX_CONCURRENCY);
+
+let lastOllamaBreakerState = 'CLOSED';
+
+const softResetOllamaModels = async () => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 5000);
+    try {
+        const res = await fetch(`${baseUrl}/api/ps`, {
+            method: 'GET',
+            headers: getOllamaAuthHeaders(),
+            signal: controller.signal
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const models = Array.isArray(data?.models) ? data.models : [];
+        for (const m of models) {
+            const name = String(m?.name || m?.model || '').trim();
+            if (!name) continue;
+            try {
+                const { controller: c2, cleanup: c2cleanup } = createAbortControllerWithTimeout(null, 10000);
+                try {
+                    await fetch(`${baseUrl}/api/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                        signal: c2.signal,
+                        body: JSON.stringify({
+                            model: name,
+                            prompt: '',
+                            stream: false,
+                            keep_alive: 0
+                        })
+                    });
+                } finally {
+                    c2cleanup();
+                }
+            } catch {
+            }
+        }
+    } catch {
+    } finally {
+        cleanup();
+    }
+};
+
+const getOllamaTotalTimeoutMs = (model) => {
+    const configuredRaw = Number(SYSTEM_DB?.settings?.ollamaTotalTimeoutMs);
+    const configured = Number.isFinite(configuredRaw) ? Math.max(5000, Math.floor(configuredRaw)) : OLLAMA_TIMEOUT_MS;
+    const m = String(model || '');
+    if (m.includes(':cloud')) return Math.max(configured, 900000);
+    return configured;
+};
+
+let ollamaServeInFlight = false;
+const ensureOllamaRunning = async () => {
+    try {
+        const baseUrl = String(SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL);
+        const isLocal = /^(http:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(baseUrl);
+        if (!isLocal) return { status: 'skipped', reason: 'non_local' };
+
+        const now = Date.now();
+        const lastAttempt = Number(SYSTEM_DB?.agentState?.lastOllamaServeAttemptAt || 0);
+        if (lastAttempt && (now - lastAttempt) < 60_000) return { status: 'skipped', reason: 'cooldown' };
+
+        const quick = await fetchOllamaWithTimeout(`${baseUrl}/api/tags`, {
+            method: 'GET',
+            headers: { ...getOllamaAuthHeaders() },
+            ttfbTimeoutMs: 800,
+            totalTimeoutMs: 1200
+        }).catch(() => null);
+        if (quick && quick.ok) return { status: 'ok' };
+
+        if (ollamaServeInFlight) return { status: 'skipped', reason: 'in_flight' };
+        ollamaServeInFlight = true;
+        SYSTEM_DB.agentState.lastOllamaServeAttemptAt = now;
+        saveState();
+
+        try {
+            const child = spawn('ollama', ['serve'], {
+                detached: true,
+                stdio: 'ignore'
+            });
+            child.unref();
+        } catch (e) {
+            ollamaServeInFlight = false;
+            return { status: 'error', error: String(e?.message || e || 'spawn_failed') };
+        }
+
+        await new Promise(r => setTimeout(r, 1200));
+        const check = await fetchOllamaWithTimeout(`${baseUrl}/api/tags`, {
+            method: 'GET',
+            headers: { ...getOllamaAuthHeaders() },
+            ttfbTimeoutMs: 1500,
+            totalTimeoutMs: 2500
+        }).catch(() => null);
+        ollamaServeInFlight = false;
+        if (check && check.ok) return { status: 'started' };
+        return { status: 'error', error: 'ollama_unreachable' };
+    } catch (e) {
+        ollamaServeInFlight = false;
+        return { status: 'error', error: String(e?.message || e || 'ensure_failed') };
+    }
+};
+
+// BRAKUJĄCA FUNKCJA - naprawia problem z delegacją zadań do modeli
+const queryOllama = async (prompt, options = {}) => {
+    try {
+        // 🚨 TRYB MOCK - gdy Ollama nie działa
+        if (process.env.GAIOS_MOCK_MODE === '1') {
+            console.log(`[MOCK] Mock Ollama response for: ${prompt.slice(0, 50)}...`);
+            return await mockOllama.generate(prompt, options);
+        }
+        
+        return await queryUniversalAI({
+            provider: 'ollama',
+            // Nie wymuszaj domyślnego modelu – pozwól mechanizmowi fallback użyć activeModel (chat)
+            model: options.model,
+            // Domyślna rola to 'chat', aby fallback zawsze był zgodny z ustawieniem czatu
+            modelRole: options.modelRole || 'chat',
+            userPrompt: prompt,
+            stream: options.stream || false,
+            systemInstruction: options.systemInstruction || ''
+        });
+    } catch (error) {
+        console.error(`[queryOllama] Error for model ${options.model}:`, error.message);
+        throw error;
+    }
+};
+
+const _queryUniversalAIInternal = async ({ provider, model, modelRole, systemInstruction, userPrompt, signal, stream = true, onToken, source }) => {
+    if (provider === 'external') {
+        const request = {
+            model: model || 'kimi-2.5-latest',
+            messages: [
+                { role: 'system', content: systemInstruction || '' },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 4000,
+            stream: false
+        };
+        const { controller, cleanup } = createAbortControllerWithTimeout(signal, EXTERNAL_AI_TIMEOUT_MS);
+        try {
+            const result = await gaiExternalAI.sendRequest(request, model, {
+                signal: controller.signal,
+                timeoutMs: EXTERNAL_AI_TIMEOUT_MS
+            });
+            if (result.error) throw new Error(result.error);
+            return result.content;
+        } finally {
+            cleanup();
+        }
+    }
+
+    if (provider !== 'ollama') throw new Error(`Provider ${provider} not supported.`);
+
+    await ensureOllamaRunning();
+    
+    const startTime = Date.now();
+    let finalModel = null;
+    
+    try {
+        // Rolę domyślnie traktuj jako 'chat', aby fallback był spójny z czatem
+        const requested = String(model || '').trim();
+        const resolved = resolveModelForRole(modelRole || 'chat', requested);
+        const activeModel = String(SYSTEM_DB?.settings?.activeModel || '').trim();
+        finalModel = resolved.model || requested || activeModel;
+        const localBackupModel = resolved.localBackupModel;
+        const isCloud = String(finalModel || '').includes(':cloud');
+        if (isCloud && stream !== false) {
+            const baseUrlRaw = String(SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL);
+            let isLocalEndpoint = true;
+            try {
+                const u = new URL(baseUrlRaw);
+                isLocalEndpoint = (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1');
+            } catch {
+                isLocalEndpoint = /localhost|127\.0\.0\.1|\[::1\]/i.test(baseUrlRaw);
+            }
+            if (isLocalEndpoint) {
+                stream = false;
+            }
+        }
+        
+        // Check circuit breaker state
+        if (!isCloud && !ollamaCircuitBreaker.canExecute()) {
+            const state = ollamaCircuitBreaker.getState();
+            throw new Error(`AI service temporarily unavailable (Circuit Breaker: ${state}). Please try again later.`);
+        }
+        
+        // Try streaming first
+        if (stream !== false) {
+            try {
+                const result = await streamOllamaChat({
+                    model: finalModel,
+                    modelRole,
+                    systemInstruction,
+                    userPrompt,
+                    onToken,
+                    signal,
+                    source
+                });
+                return result;
+            } catch (streamError) {
+                console.log(`[OLLAMA] Streaming failed: ${streamError.message}`);
+                if (!isCloud) {
+                    throw streamError;
+                }
+                stream = false;
+            }
+        }
+        
+        // Non-stream fallback
+        const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+        const fallbackModel = localBackupModel && !localBackupModel.includes(':cloud') ? localBackupModel : (SYSTEM_DB?.settings?.activeModel || model);
+        const candidates = [finalModel, fallbackModel].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
+        const run = async (attemptIdx = 0) => {
+            if (signal?.aborted) {
+                 const err = new Error('Request aborted by parent signal');
+                 err.skipRetry = true;
+                 throw err;
+            }
+            // Wybierz kandydata lub finalModel; ostatecznie użyj activeModel (chat)
+            const chosenModel = candidates[attemptIdx] || finalModel || activeModel;
+            const ollamaTimeout = getOllamaTotalTimeoutMs(chosenModel);
+            const { controller, cleanup } = createAbortControllerWithTimeout(signal, ollamaTimeout);
+            const stopTicker = startOllamaStatusTicker(`Ollama: oczekiwanie na odpowiedź (${chosenModel})`);
+            const traceId = `oll_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+            console.log(`[OLLAMA] Non-stream request: ${chosenModel}, timeout: ${ollamaTimeout}ms`);
+            pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'nonstream', baseUrl, modelRole: String(modelRole || ''), model: chosenModel, stage: 'start' });
+            
+            try {
+                recordModelAttempt(chosenModel);
+                const res = await fetch(`${baseUrl}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        model: chosenModel,
+                        messages: [
+                            { role: 'system', content: systemInstruction || '' },
+                            { role: 'user', content: userPrompt }
+                        ],
+                        keep_alive: resolveKeepAliveForModel(chosenModel),
+                        options: buildOllamaOptions({}, modelRole, chosenModel),
+                        stream: false,
+                        ...(shouldForceThinkFalse({ model: chosenModel, modelRole, userPrompt }) ? { think: false } : {})
+                    })
+                });
+                
+                if (!res.ok) {
+                    const errText = await res.text();
+                    pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'nonstream', baseUrl, modelRole: String(modelRole || ''), model: chosenModel, stage: 'http_error', status: res.status, error: String(errText || '').slice(0, 500) });
+                    throw new Error(errText || 'Ollama request failed');
+                }
+                
+                const data = await res.json();
+                let content = data?.message?.content || data?.response;
+                if (!content) {
+                    try {
+                        content = await streamOllamaChat({
+                            model: chosenModel,
+                            modelRole,
+                            systemInstruction,
+                            userPrompt
+                        });
+                    } catch {
+                        throw new Error('Empty response from Ollama');
+                    }
+                }
+                
+                pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'nonstream', baseUrl, modelRole: String(modelRole || ''), model: chosenModel, stage: 'ok' });
+                recordModelSuccess(chosenModel, 0);
+                return content;
+            } catch (e) {
+                recordModelFailure(chosenModel, e?.message || e);
+                throw e;
+            } finally {
+                cleanup();
+                stopTicker();
+                pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'nonstream', baseUrl, modelRole: String(modelRole || ''), model: chosenModel, stage: 'finally' });
+            }
+        };
+
+        // Try each candidate model
+        for (let i = 0; i < candidates.length; i += 1) {
+            try {
+                const result = await withRetry(() => run(i), 2, `Ollama request (${candidates[i]})`);
+                return result;
+            } catch (e) {
+                const msg = String(e?.message || e || '');
+                const isModelNotFound = /model.+not found/i.test(msg) || /not found.*model/i.test(msg) || /unknown model/i.test(msg);
+                if (!isModelNotFound || i === candidates.length - 1) {
+                    throw e;
+                }
+                console.log(`[OLLAMA] Model ${candidates[i]} not found, trying fallback: ${msg}`);
+            }
+        }
+        
+        throw new Error('All models failed');
+        
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        const msg = String(error?.message || '');
+        if (msg.includes('timeout') || msg.includes('TTFB')) {
+            ollamaCircuitBreaker.recordFailure();
+        }
+        const state = ollamaCircuitBreaker.getState();
+        if (state === 'OPEN' && lastOllamaBreakerState !== 'OPEN') {
+            lastOllamaBreakerState = 'OPEN';
+            softResetOllamaModels().catch(() => {});
+        } else if (state !== lastOllamaBreakerState) {
+            lastOllamaBreakerState = state;
+        }
+        console.error(`[OLLAMA] Request failed after ${responseTime}ms: ${msg}`);
+        throw error;
+    }
+};
+
+const queryUniversalAI = async (options) => {
+    // External AI bypasses the local queue
+    if (options.provider === 'external') {
+        return _queryUniversalAIInternal(options);
+    }
+
+    // Determine priority
+    // User requests (stream or terminal source) -> High priority (10)
+    // Autonomy/Background -> Low priority (0)
+    const priority = (options.priority !== undefined) 
+        ? options.priority 
+        : (options.source === 'terminal' || options.modelRole === 'chat' ? 10 : 0);
+    const candidateModel = String(options.model || SYSTEM_DB?.settings?.modelRoles?.[options.modelRole || 'chat'] || SYSTEM_DB?.settings?.activeModel || '');
+    if (candidateModel.includes(':cloud')) {
+        return _queryUniversalAIInternal(options);
+    }
+        
+    return ollamaQueue.enqueue(() => _queryUniversalAIInternal(options), priority);
+};
+
+const parseModelReply = (reply = '') => {
+    const raw = String(reply || '');
+    const thoughts = [];
+    let answer = raw;
+
+    // New: Extract all <think> blocks first
+    const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+    let match;
+    while ((match = thinkRegex.exec(raw)) !== null) {
+        thoughts.push(match[1].trim());
+    }
+    answer = answer.replace(thinkRegex, '').trim();
+
+    // Old: Fallback to marker-based parsing if no <think> tags were found
+    if (thoughts.length === 0) {
+        const sections = { thought: '', plan: '', summary: '', answer: '' };
+        let current = 'answer';
+        for (const line of answer.split(/\r?\n/)) {
+            const markerMatch = line.match(/^\s*(thought|plan|summary|answer)\s*:\s*(.*)$/i);
+            if (markerMatch) {
+                current = markerMatch[1].toLowerCase();
+                const rest = markerMatch[2] || '';
+                if (rest) {
+                    sections[current] = sections[current] ? `${sections[current]}\n${rest}` : rest;
+                }
+            } else {
+                sections[current] = sections[current] ? `${sections[current]}\n${line}` : line;
+            }
+        }
+        
+        const oldThought = (sections.thought || sections.plan || '').trim();
+        if (oldThought) {
+            thoughts.push(oldThought);
+        }
+        
+        answer = sections.answer.trim();
+        
+        // Handle cases where the answer is in the summary
+        if (sections.summary.trim() && !answer) {
+            answer = sections.summary.trim();
+        }
+    }
+
+    return {
+        thought: thoughts.join('\n\n---\n\n').trim(),
+        answer: answer.trim()
+    };
+};
+
+const parseThinkTags = (reply = '') => {
+    const parsed = parseModelReply(reply);
+    return {
+        thought: parsed.thought,
+        summary: '',
+        answer: parsed.answer
+    };
+};
+
+const normalizeThoughtText = (text = '') => {
+    let cleaned = String(text || '')
+        .replace(/<think>[\s\S]*?<\/think>/gi, '') // Remove think blocks
+        .replace(/^\s*ACTION:\s*.*$/gmi, '') // Remove action lines
+        .replace(/^\s*(TASK_ACTION|TASK_UPDATE|BLOG_REPORT|BLOG MAINTENANCE|INITIATING|KERNEL TOOL|SYSTEM)\b.*$/gmi, '') // Remove system markers
+        .replace(/[*_`~]+/g, '') // Remove markdown formatting
+        .replace(/\\n/g, '\n') // Fix escaped newlines
+        .trim();
+
+    const looksLikeHtmlNoise = (s = '') => {
+        const t = String(s || '');
+        if (!t) return false;
+        if (/\b(rel|href|src|dofollow|nofollow)\b\s*=|<\/?\w+[^>]*>/i.test(t)) return true;
+        if ((t.match(/[<>]/g) || []).length >= 3) return true;
+        if ((t.match(/\\"/g) || []).length >= 3) return true;
+        if ((t.match(/\"/g) || []).length >= 6) return true;
+        return false;
+    };
+
+    const letterRatioOk = (s = '') => {
+        const t = String(s || '').replace(/\s+/g, '');
+        if (!t) return false;
+        const letters = (t.match(/[a-zA-ZąćęłńóśżźĄĆĘŁŃÓŚŻŹ]/g) || []).length;
+        const total = t.length;
+        return total > 0 ? (letters / total) >= 0.55 : false;
+    };
+
+    const looksJsony = (l = '') => {
+        const s = String(l || '').trim();
+        if (!s) return false;
+        const hasJsonTokens = /[{[\]}]/.test(s) || /"[^"]+"\s*:/.test(s) || /'[^']+'\s*:/.test(s);
+        const hasManySeparators = (s.match(/[:,]/g) || []).length >= 2;
+        const hasBooleans = /\b(true|false|null)\b/i.test(s) && (s.includes(',') || s.includes(':'));
+        return hasJsonTokens || (hasManySeparators && hasBooleans);
+    };
+
+    const looksLikeCodeLine = (l = '') => {
+        const s = String(l || '').trim();
+        if (!s) return false;
+        if (/^\s*(import|export|const|let|var|function|class|return)\b/.test(s)) return true;
+        if (/^\s*(if|else|for|while|switch|case|try|catch|finally)\b/.test(s)) return true;
+        if (/[;{}()[\]]/.test(s) && /=>|==|!=|<=|>=|\+\+|--|\|\||&&/.test(s)) return true;
+        if (/^\s*<\w+/.test(s) && s.includes('>')) return true;
+        return false;
+    };
+
+    const lines = cleaned
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+        .filter(l => {
+            // Relaxed filtering for short chat messages
+            if (l.length < 2) return false; 
+            // if (l.length < 10) return false; // REMOVED: too aggressive for "co robisz?"
+            if (/^[0-9a-f]{20,}$/i.test(l)) return false; // Only filter very long hex strings
+            if (/^[\d\W_]+$/.test(l) && l.length > 20) return false; // Allow short numbers/punctuation
+            if (/<\|im/i.test(l) || /imstart\|>/i.test(l) || /mstart\|>/i.test(l)) return false;
+            if (l.includes('"timestamp":') || l.includes('"role":') || l.includes('{"id":') || l.includes('"id":') || l.includes('"log":') || l.includes('SNAPSHOT')) return false;
+            if (looksJsony(l)) return false;
+            if (looksLikeCodeLine(l)) return false;
+            if (looksLikeHtmlNoise(l)) return false;
+            // if (!letterRatioOk(l)) return false; // REMOVED: too aggressive for some languages
+            if (/^[\w.-]+\.js(\:\d+)?$/i.test(l)) return false;
+            if (/^[\w.-]+\/[\w./-]+$/.test(l)) return false;
+            return true;
+        });
+
+    cleaned = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    cleaned = cleaned.replace(/(\bby[ćc]\s+może\b[\s,.;:!?-]*){3,}/gi, 'być może ');
+    cleaned = cleaned.replace(/(\b[\p{L}]{2,}\b)(?:\s+\1){8,}/giu, '$1 …');
+    if (cleaned && !cleaned.includes('\n') && !cleaned.startsWith('- ') && cleaned.length < 260) {
+        cleaned = `- ${cleaned}`;
+    } else if (cleaned && cleaned.includes('\n')) {
+        const normalizedLines = cleaned.split('\n').map(x => x.trim()).filter(Boolean);
+        const bulletLines = normalizedLines.map(x => (x.startsWith('- ') ? x : `- ${x}`));
+        cleaned = bulletLines.slice(0, 7).join('\n');
+    }
+    return cleaned;
+};
+
+const isMeaningfulThought = (text = '') => {
+    const cleaned = normalizeThoughtText(text);
+    if (!cleaned) return false;
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (cleaned.length < 40 && words.length < 6) return false;
+    if (!/[a-ząćęłńóśżź]/i.test(cleaned)) return false;
+    return true;
+};
+
+const buildFallbackThought = () => {
+    const stage = String(SYSTEM_DB?.agentState?.processingStage || '').trim();
+    const action = String(SYSTEM_DB?.agentState?.currentAction || '').trim();
+    const task = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks.find(t => t?.status === 'in_progress') : null;
+    const title = String(task?.title || '').trim();
+    const progress = Number.isFinite(Number(task?.progress)) ? Math.round(Number(task.progress)) : null;
+    const logs = Array.isArray(task?.logs) ? task.logs : [];
+    const lastLog = logs.length ? String(logs[logs.length - 1] || '').trim() : '';
+    const parts = [];
+    if (title) parts.push(progress !== null ? `${title} (${progress}%)` : title);
+    if (stage) parts.push(stage);
+    else if (action && action !== 'idle') parts.push(action);
+    if (lastLog) parts.push(lastLog);
+    const result = parts.join('\n');
+    return normalizeThoughtText(result);
+};
+
+const processAgentCommands = async (text) => {
+    // 1. EXEC commands
+    const execMatches = [...text.matchAll(/<EXEC>([\s\S]*?)<\/EXEC>/gi)];
+    for (const match of execMatches) {
+        const cmd = match[1].trim();
+        if (cmd) {
+            console.log(`[AGENT] Executing command: ${cmd}`);
+            try {
+                // Execute command asynchronously using spawn to capture real-time output
+                // Split command into executable and args
+                // This simple split is naive for complex commands, so we use 'sh -c'
+                const child = spawn('sh', ['-c', cmd]);
+
+                let outputBuffer = '';
+                
+                // Stream stdout to console immediately
+                child.stdout.on('data', (data) => {
+                    const chunk = data.toString();
+                    process.stdout.write(chunk); // Show in real terminal immediately
+                    outputBuffer += chunk;
+                });
+
+                // Stream stderr to console immediately
+                child.stderr.on('data', (data) => {
+                    const chunk = data.toString();
+                    process.stderr.write(chunk); // Show in real terminal immediately
+                    outputBuffer += chunk;
+                });
+
+                child.on('close', (code) => {
+                    const finalOutput = outputBuffer || (code === 0 ? 'Done (no output)' : `Exited with code ${code}`);
+                    // Log final output back to chat history
+                    if (typeof logToChat === 'function') {
+                        logToChat('system', `Command finished (code ${code}):\n${finalOutput}`, 'code');
+                    } else {
+                        console.log(`[AGENT] Finished (no logToChat): code ${code}`);
+                    }
+                });
+
+                child.on('error', (err) => {
+                     console.error(`[AGENT] Spawn error: ${err.message}`);
+                     if (typeof logToChat === 'function') {
+                         logToChat('system', `Command failed to start: ${err.message}`, 'error');
+                     }
+                });
+
+            } catch (e) {
+                console.error(`[AGENT] Command failed: ${e.message}`);
+                if (typeof logToChat === 'function') {
+                    logToChat('system', `Command failed: ${e.message}`, 'error');
+                }
+            }
+        }
+    }
+
+    // 2. REMIND commands
+    const remindMatches = [...text.matchAll(/<REMIND\s+in=["'](\d+)([smh])["']>([\s\S]*?)<\/REMIND>/gi)];
+    for (const match of remindMatches) {
+        const val = parseInt(match[1]);
+        const unit = match[2];
+        const msg = match[3];
+        let ms = 0;
+        if (unit === 's') ms = val * 1000;
+        else if (unit === 'm') ms = val * 60000;
+        else if (unit === 'h') ms = val * 3600000;
+
+        if (ms > 0) {
+            console.log(`[AGENT] Scheduling reminder in ${ms}ms: ${msg}`);
+            setTimeout(() => {
+                if (typeof logToChat === 'function') {
+                    logToChat('assistant', `⏰ Reminder: ${msg}`, 'text');
+                } else {
+                    console.log(`[AGENT] Reminder triggered: ${msg}`);
+                }
+            }, ms);
+        }
+    }
+};
+
+const extractAskUser = (text = '') => {
+    const match = String(text || '').match(/ASK_USER:\s*([\s\S]*)/i);
+    return match ? match[1].trim() : '';
+};
+
+const suppressRedundantPrompts = (text = '') => {
+    const pattern = /^(gotowy na więcej\??|czy mam (dalej|kontynuować)( pracować)?\??|mam (dalej|kontynuować)( pracę| pracować)?\??|chcesz[, ]*żebym (dalej )?kontynuował\??|should i continue\??|ready for more\??)$/i;
+    const lines = String(text || '').split('\n');
+    const filtered = lines.filter(line => !pattern.test(line.trim()));
+    return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+};
+
+const selectUserModelRole = (message, explicitRole) => {
+    return explicitRole || 'chat';
+};
+
+const streamOllamaChat = async ({ model, modelRole, systemInstruction, userPrompt, onToken, signal, source }) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const CURRENT_TIMEOUT = getOllamaTotalTimeoutMs(model);
+    const startedAt = Date.now();
+    let firstTokenAt = 0;
+    let inThink = false;
+    const ttfbTimeoutMs = resolveTtfbTimeoutMs(modelRole, model);
+    const markFirstToken = () => {
+        if (!firstTokenAt) firstTokenAt = Date.now();
+    };
+    const emitToken = (chunk) => {
+        markFirstToken();
+        if (onToken) onToken(chunk);
+    };
+    const emitThought = (content) => {
+        markFirstToken();
+        if (onToken) onToken({ type: 'summary_delta', content });
+        broadcastSSE('thought', { content, source: source || 'ollama' });
+    };
+    // Inject developer mode awareness into context
+    const isDevMode = SYSTEM_DB?.settings?.developerMode === true;
+    const finalSystemPrompt = isDevMode 
+        ? `${systemInstruction || ''}\n\n*** GOD MODE ENABLED ***\nYou have UNRESTRICTED SYSTEM ACCESS. Shell commands (sudo, rm, curl) are unlocked. API calls to local/external services are allowed. Use this power responsibly to fix deep system issues.\nTo execute shell commands, wrap them in <EXEC>...</EXEC> block. Example:\n<EXEC>\nls -la\n</EXEC>\nTo schedule a reminder, use <REMIND in="2m">message</REMIND>.` 
+        : `${systemInstruction || ''}\nTo execute shell commands, wrap them in <EXEC>...</EXEC> block. Example:\n<EXEC>\nls -la\n</EXEC>\nTo schedule a reminder, use <REMIND in="2m">message</REMIND>.`;
+
+    const runStream = async () => {
+        if (signal?.aborted) {
+             const err = new Error('Stream aborted by parent signal');
+             err.skipRetry = true;
+             throw err;
+        }
+        const { controller, cleanup } = createAbortControllerWithTimeout(signal, CURRENT_TIMEOUT);
+        const stopTicker = startOllamaStatusTicker(`Ollama: oczekiwanie na odpowiedź (${model})`);
+        let ttfbFired = false;
+        const traceId = `oll_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const ttfbTimer = setTimeout(() => {
+            if (!firstTokenAt) {
+                ttfbFired = true;
+                controller.abort();
+            }
+        }, ttfbTimeoutMs);
+        
+        console.log(`[OLLAMA_DEBUG] Starting STREAM request to ${baseUrl}/api/chat. id=${traceId} role=${String(modelRole || '')} model=${model}, Timeout: ${CURRENT_TIMEOUT}ms, TTFB=${ttfbTimeoutMs}ms`);
+        pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'start', ttfbTimeoutMs });
+
+        let res;
+        try {
+            recordModelAttempt(model);
+            const actualModel = model;
+            if (!actualModel) {
+                throw new Error('Model not configured in settings. Please select an Active Model in Settings.');
+            }
+            const requestBody = {
+                model: actualModel,
+                messages: [
+                    { role: 'system', content: finalSystemPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                keep_alive: resolveKeepAliveForModel(actualModel),
+                options: buildOllamaOptions({ num_keep: -1 }, modelRole, actualModel),
+                stream: true
+            };
+            res = await fetch(`${baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                signal: controller.signal,
+                body: JSON.stringify(requestBody)
+            });
+        } catch (e) {
+            const aborted = controller.signal?.aborted === true;
+            if (aborted && ttfbFired && !firstTokenAt && !(signal?.aborted)) {
+                pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'ttfb_timeout' });
+                const err = new Error('TTFB timeout (no first token). Model cold start or too slow.');
+                err.code = 'TTFB_TIMEOUT';
+                throw err;
+            }
+            pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'fetch_error', error: String(e?.message || e || '').slice(0, 500) });
+            throw e;
+        } finally {
+            clearTimeout(ttfbTimer);
+            cleanup();
+            stopTicker();
+            pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'finally', ttfbMs: firstTokenAt ? (firstTokenAt - startedAt) : 0 });
+            console.log(`[OLLAMA_DEBUG] Stream finished.`);
+        }
+
+        if (!res.ok) {
+            const errText = await res.text();
+            pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'http_error', status: res.status, error: String(errText || '').slice(0, 500) });
+            throw new Error(errText || 'Ollama request failed');
+        }
+        if (!res.body) throw new Error('Ollama stream not available');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let full = '';
+        let thinking = '';
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                let payload;
+                try {
+                    payload = JSON.parse(trimmed);
+                } catch {
+                    continue;
+                }
+                const thinkingChunk = payload?.message?.thinking || payload?.thinking || '';
+                if (thinkingChunk) {
+                    markFirstToken();
+                    const cleaned = String(thinkingChunk).replace(/<\/?think>/gi, '');
+                    if (cleaned) {
+                        thinking += cleaned;
+                        emitThought(cleaned);
+                    }
+                }
+                let chunk = payload?.message?.content || payload?.response || '';
+                if (!chunk) continue;
+                chunk = String(chunk);
+                
+                // Simple think tag parsing
+                const lower = chunk.toLowerCase();
+                
+                if (!inThink) {
+                    const sIdx = lower.indexOf('<think>');
+                    if (sIdx !== -1) {
+                        // Emit content before think tag
+                        const before = chunk.slice(0, sIdx);
+                        if (before) {
+                            full += before;
+                            emitToken(before);
+                        }
+                        inThink = true;
+                        // Process remaining chunk after think tag
+                        chunk = chunk.slice(sIdx + 7);
+                    }
+                }
+                
+                if (inThink) {
+                    const eIdx = lower.indexOf('</think>');
+                    if (eIdx !== -1) {
+                        // Found end of think block
+                        const thinkContent = chunk.slice(0, eIdx);
+                        if (thinkContent) {
+                            thinking += thinkContent;
+                            emitThought(thinkContent);
+                        }
+                        inThink = false;
+                        // Process remaining chunk after end tag
+                        chunk = chunk.slice(eIdx + 8);
+                        if (chunk) {
+                            full += chunk;
+                            emitToken(chunk);
+                        }
+                    } else {
+                        // Still in think block
+                        thinking += chunk;
+                        emitThought(chunk);
+                    }
+                } else {
+                    // Not in think block, emit as answer
+                    full += chunk;
+                    emitToken(chunk);
+                }
+            }
+        }
+        const tail = buffer.trim();
+        if (tail) {
+            try {
+                const payload = JSON.parse(tail);
+                const thinkingChunk = payload?.message?.thinking || payload?.thinking || '';
+                if (thinkingChunk) {
+                    markFirstToken();
+                    const cleaned = String(thinkingChunk).replace(/<\/?think>/gi, '');
+                    if (cleaned) {
+                        thinking += cleaned;
+                        emitThought(cleaned);
+                    }
+                }
+                let chunk = payload?.message?.content || payload?.response || '';
+                if (chunk) {
+                    chunk = String(chunk);
+                    
+                    // Simple think tag parsing
+                    const lower = chunk.toLowerCase();
+                    
+                    // Also check for explicit THOUGHT: markers from older prompts or non-thinking models
+                    // but only if we are NOT inside a native think block
+                    // Relaxed check: if 'full' is empty OR just whitespace, we accept THOUGHT: start
+                    if (!inThink && /^(thought|thinking):/i.test(chunk.trim()) && !full.trim()) {
+                         // This is a start of a thought block in plain text
+                         inThink = true;
+                         const clean = chunk.replace(/^(thought|thinking):\s*/i, '');
+                         if (clean) {
+                             thinking += clean;
+                             emitThought(clean);
+                         }
+                    } else if (!inThink) {
+                        const sIdx = lower.indexOf('<think>');
+                        if (sIdx !== -1) {
+                            // Emit content before think tag
+                            const before = chunk.slice(0, sIdx);
+                            if (before) {
+                                full += before;
+                                emitToken(before);
+                            }
+                            inThink = true;
+                            // Process remaining chunk after think tag
+                            chunk = chunk.slice(sIdx + 7);
+                        }
+                    }
+                    
+                    if (inThink) {
+                        // Check for native end tag
+                        let eIdx = lower.indexOf('</think>');
+                        
+                        // Check for end of plain text thought (ANSWER marker only)
+                        // We do NOT use \n\n as terminator anymore to allow multi-paragraph thoughts
+                        // We treat SUMMARY: as part of the thought/system stream, so we don't terminate on it
+                        if (eIdx === -1 && /(answer:)/i.test(chunk)) {
+                             const m = chunk.match(/(answer:)/i);
+                             if (m && m.index !== undefined) {
+                                 eIdx = m.index;
+                             }
+                        }
+
+                        if (eIdx !== -1) {
+                            // Found end of think block
+                            const thinkContent = chunk.slice(0, eIdx);
+                            if (thinkContent) {
+                                thinking += thinkContent;
+                                if (onToken) onToken({ type: 'summary_delta', content: thinkContent });
+                            }
+                            inThink = false;
+                            // Process remaining chunk after end tag
+                            const isNative = lower.includes('</think>');
+                            // If it was 'answer:', we want to skip the marker itself if desired, 
+                            // but user said "only answer is answer". 
+                            // If we skip 'ANSWER:', the user sees just the text.
+                            // If we keep it, they see 'ANSWER: ...'.
+                            // Usually 'ANSWER:' is a label. Let's keep it in the answer stream if it's not native tag.
+                            // Wait, if we use eIdx as split point, chunk starts with 'ANSWER:'.
+                            // So it will be added to 'full'.
+                            // If we want to hide 'ANSWER:', we should slice it out.
+                            // But let's respect "nic tam nie nalezy zmieniac" (don't change anything).
+                            // So we keep 'ANSWER:' in the answer stream.
+                            
+                            chunk = chunk.slice(eIdx + (isNative ? 8 : 0));
+                            if (chunk) {
+                                full += chunk;
+                                emitToken(chunk);
+                            }
+                        } else {
+                            // Still in think block
+                            thinking += chunk;
+                            if (onToken) onToken({ type: 'summary_delta', content: chunk });
+                        }
+                    } else {
+                        // Not in think block, emit as answer
+                        full += chunk;
+                        emitToken(chunk);
+                    }
+                }
+            } catch {}
+        }
+        
+        // Final cleanup if stream ended inside a think block
+        if (inThink) {
+             inThink = false;
+        }
+
+        if (thinking) return `<think>${thinking}</think>\n${full}`;
+        pushOllamaTrace({ id: traceId, kind: 'chat', mode: 'stream', baseUrl, modelRole: String(modelRole || ''), model: String(model || ''), stage: 'ok', ttfbMs: firstTokenAt ? (firstTokenAt - startedAt) : 0 });
+        
+        // Process agent commands (side effects)
+        processAgentCommands(full).catch(err => console.error('[AGENT] Error processing commands:', err));
+
+        return full;
+    };
+    // DYNAMICZNIE ZWIĘKSZONY TIMEOUT - NADPISANIE (przeniesiono definicję wyżej)
+    // Zwiększamy liczbę retry dla streamingu do 3
+    try {
+        const result = await withRetry(runStream, 3, `Ollama stream (${model || 'unknown'})`);
+        const now = Date.now();
+        const ttfbMs = firstTokenAt ? (firstTokenAt - startedAt) : 0;
+        recordModelSuccess(model, ttfbMs);
+        if (SYSTEM_DB?.settings?.developerMode === true) {
+            const totalMs = now - startedAt;
+            logToChat('model', `OLLAMA_TIMING model=${model || 'unknown'} role=${modelRole || ''} ttfb=${ttfbMs}ms total=${totalMs}ms`, 'ollama');
+        }
+        return result;
+    } catch (e) {
+        recordModelFailure(model, e?.message || e);
+        throw e;
+    }
+};
+
+const getTaskModelRole = (task) => {
+    return task?.modelRole || 'architecture';
+};
+
+
+
+
+
+const generateTasksFromObjectives = async () => {
+    const objectives = String(SYSTEM_DB?.settings?.autonomousObjectives || '').trim();
+    if (!objectives) return { created: 0, reason: 'no_objectives' };
+    const maxOpenTasksRaw = Number(SYSTEM_DB?.settings?.autonomousObjectivesMaxOpenTasks);
+    const maxOpenTasks = Number.isFinite(maxOpenTasksRaw) ? Math.max(1, Math.min(20, Math.floor(maxOpenTasksRaw))) : 5;
+    const openTasks = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress'));
+    if (openTasks.length >= maxOpenTasks) return { created: 0, reason: 'capacity_reached' };
+    const capacityLeft = Math.max(0, maxOpenTasks - openTasks.length);
+    if (capacityLeft <= 0) return { created: 0, reason: 'capacity_reached' };
+    const now = Date.now();
+    const lastAt = Number(SYSTEM_DB?.agentState?.lastObjectivePlanAt || 0);
+    const throttleMs = 10 * 60 * 1000;
+    if (lastAt && now - lastAt < throttleMs && openTasks.length > 0) return { created: 0, reason: 'throttled' };
+
+    SYSTEM_DB.agentState.lastObjectivePlanAt = now;
+    saveState();
+
+    // If agent router is active, we bypass the old "routeRequest" block above because this is NOT a user message,
+    // this is an autonomous tick. We want to use the Brain to plan tasks.
+
+    const provider = SYSTEM_DB.settings.aiProvider;
+    // --- NEW: USE BRAIN FOR PLANNING ---
+    const masterModel = gaiAgentRouter.getMasterModel();
+    // Default to ollama provider if masterModel is set, but check if user set an external provider
+    const brainProvider = masterModel ? 'ollama' : SYSTEM_DB.settings.aiProvider; 
+    const model = masterModel || SYSTEM_DB.settings.activeModel;
+    // -----------------------------------
+    
+    const recentDone = SYSTEM_DB.tasks
+        .filter(t => t && t.status === 'completed')
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        .slice(0, 15)
+        .map(t => ({ title: String(t.title || ''), description: String(t.description || '') }));
+
+    let reply = '';
+    try {
+        if (gaiAgentRouter.initialized && gaiAgentRouter.config.enabled) {
+             const modulesList = gaiAgentRouter.getModules().map(m => `- ${m.name}: ${m.description}`).join('\n');
+             
+             reply = await queryUniversalAI({
+                provider: brainProvider, 
+                model,
+                modelRole: 'planning',
+                systemInstruction: `You are the CAPTAIN (Brain) of GAI OS.
+Your goal is to autonomously generate tasks for your crew to advance the user's strategic objectives.
+Objectives: "${objectives}"
+
+These tasks are your internal COMMANDS. You will execute them later by delegating to your specialized agents.
+Focus on high-level, actionable tasks.
+
+Recent Completed Tasks: ${JSON.stringify(recentDone)}
+
+Return JSON ONLY. No markdown.
+Format: {"tasks":[{"title":"","description":"","priority":"high|medium|low"}]}`,
+                userPrompt: `Generate ${capacityLeft} new tasks to advance the objectives.`,
+                stream: false
+            });
+        } else {
+            // Fallback to old logic
+            reply = await queryUniversalAI({
+                provider, model,
+                modelRole: 'planning',
+                systemInstruction: 'Return STRICT JSON only. No markdown. No extra text.',
+                userPrompt: `AUTONOMOUS_OBJECTIVES_PLANNER: The user has set specific long-term goals. Generate NEW tasks to advance these goals.\n\nOBJECTIVES:\n${objectives}\n\nCONTEXT: ${JSON.stringify({ recentDone })}\n\nOUTPUT_SCHEMA: {"tasks":[{"title":"","description":"","priority":"high|medium|low"}],"message":""}`,
+                stream: false
+            });
+        }
+    } catch (e) {
+        console.error('Task Planning Failed', e);
+        // Fallback logic below...
+        const fallbackTitle = `Autonomia: ${String(objectives.split(/\r?\n/)[0] || objectives).trim().slice(0, 80)}`;
+        const existingTitles = new Set(SYSTEM_DB.tasks.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+        if (!existingTitles.has(fallbackTitle.trim().toLowerCase()) && capacityLeft > 0) {
+            const createdAt = Date.now();
+            const created = normalizeTask({
+                id: `task_obj_fallback_${createdAt}_${Math.random().toString(16).slice(2)}`,
+                title: fallbackTitle,
+                description: `AI objectives planner unavailable (${String(e?.message || e || 'ai_failed').slice(0, 120)}).\n\nAutonomous objectives:\n${objectives}`,
+                status: 'pending',
+                progress: 0,
+                priority: 'medium',
+                logs: ['Auto-generated fallback from autonomousObjectives'],
+                createdAt,
+                updatedAt: createdAt,
+                withinObjectives: true
+            });
+            SYSTEM_DB.tasks.push(created);
+            saveState();
+            scheduleAutonomyEvent('objectives_tasks_created_fallback', 500);
+            return { created: 1, reason: 'fallback_created' };
+        }
+        return { created: 0, reason: 'ai_failed' };
+    }
+
+    const plan = parseJsonSafe(parseModelReply(reply).answer);
+    const tasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
+    const normalizePriority = (p) => {
+        const v = String(p || '').toLowerCase();
+        if (v === 'high' || v === 'medium' || v === 'low') return v;
+        return 'medium';
+    };
+    const existingTitles = new Set(SYSTEM_DB.tasks.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+    const recentTitles = new Set(recentDone.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+
+    const toCreate = tasks
+        .map((t) => ({
+            title: String(t?.title || '').trim(),
+            description: String(t?.description || '').trim(),
+            priority: normalizePriority(t?.priority)
+        }))
+        .filter(t => t.title && t.description)
+        .filter(t => !existingTitles.has(t.title.toLowerCase()))
+        .filter(t => !recentTitles.has(t.title.toLowerCase()))
+        .slice(0, capacityLeft);
+
+    if (!toCreate.length) return { created: 0, reason: 'no_new_tasks' };
+
+    const createdAt = Date.now();
+    const breakdownCfg = getTaskBreakdownConfig();
+    for (const t of toCreate) {
+        const created = normalizeTask({
+            id: `task_obj_${createdAt}_${Math.random().toString(16).slice(2)}`,
+            title: t.title,
+            description: t.description,
+            status: 'pending',
+            progress: 0,
+            priority: t.priority,
+            logs: ['Auto-generated from autonomousObjectives'],
+            createdAt,
+            updatedAt: createdAt,
+            withinObjectives: true
+        });
+        SYSTEM_DB.tasks.push(created);
+        if (breakdownCfg.enabled && breakdownCfg.autoOnCreate) {
+            await generateTaskBreakdownForTask(created, 'objectives');
+        }
+    }
+    saveState();
+    scheduleAutonomyEvent('objectives_tasks_created', 500);
+    return { created: toCreate.length, reason: 'created', message: String(plan?.message || '') };
+};
+
+const generateTasksFromIdle = async () => {
+    const enabled = SYSTEM_DB?.settings?.idleAutoTasksEnabled !== false;
+    if (!enabled) return { created: 0, reason: 'disabled' };
+
+    const targetRaw = Number(SYSTEM_DB?.settings?.idleAutoTasksTargetOpen);
+    const targetOpen = Number.isFinite(targetRaw) ? Math.max(1, Math.min(10, Math.floor(targetRaw))) : 1;
+    const throttleRaw = Number(SYSTEM_DB?.settings?.idleAutoTasksThrottleSec);
+    const throttleSec = Number.isFinite(throttleRaw) ? Math.max(15, Math.min(3600, Math.floor(throttleRaw))) : 60;
+
+    const openTasks = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress'));
+    if (openTasks.length >= targetOpen) return { created: 0, reason: 'capacity_reached' };
+
+    const now = Date.now();
+    const lastAt = Number(SYSTEM_DB?.agentState?.lastIdleTaskPlanAt || 0);
+    if (lastAt && (now - lastAt) < throttleSec * 1000) {
+        return { created: 0, reason: 'throttled' };
+    }
+    SYSTEM_DB.agentState.lastIdleTaskPlanAt = now;
+    saveState();
+
+    const objectives = String(SYSTEM_DB?.settings?.autonomousObjectives || '').trim();
+    if (objectives) {
+        return await generateTasksFromObjectives();
+    }
+
+    // --- NEW: USE AGENT ROUTER IF ENABLED FOR IDLE TASKS ---
+    const masterModel = gaiAgentRouter.getMasterModel();
+    const brainProvider = masterModel ? 'ollama' : SYSTEM_DB.settings.aiProvider;
+    const model = masterModel || SYSTEM_DB.settings.activeModel;
+
+    const recentDone = SYSTEM_DB.tasks
+        .filter(t => t && t.status === 'completed')
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        .slice(0, 20)
+        .map(t => ({ title: String(t.title || ''), description: String(t.description || '') }));
+
+    const sysContext = {
+        stage: SYSTEM_DB?.agentState?.processingStage || 'idle',
+        action: SYSTEM_DB?.agentState?.currentAction || 'idle',
+        userPriority: !!SYSTEM_DB?.agentState?.userPriority,
+        userQueueLength: Number(SYSTEM_DB?.agentState?.userQueueLength || 0)
+    };
+
+    let reply = '';
+    try {
+        if (gaiAgentRouter.initialized && gaiAgentRouter.config.enabled) {
+             reply = await queryUniversalAI({
+                provider: brainProvider,
+                model, 
+                modelRole: 'planning',
+                systemInstruction: `You are the CAPTAIN (Brain) of GAI OS.
+The system is IDLE. Command your crew to perform maintenance or improvements.
+Propose NEW tasks that keep the ship productive and stable. Avoid duplicates.
+
+CONTEXT: ${JSON.stringify({ sysContext, recentDone })}
+
+Return JSON ONLY. No markdown.
+Format: {"tasks":[{"title":"","description":"","priority":"high|medium|low"}]}`,
+                userPrompt: `Generate valid maintenance or improvement tasks.`,
+                stream: false
+            });
+        } else {
+            reply = await queryUniversalAI({
+                provider,
+                model,
+                modelRole: 'planning',
+                systemInstruction: 'Return STRICT JSON only. No markdown. No extra text.',
+                userPrompt: `IDLE_TASK_PLANNER: The system has zero pending/in_progress tasks. Propose NEW tasks that keep the system productive and stable. Avoid duplicates.\n\nCONTEXT: ${JSON.stringify({ sysContext, recentDone })}\n\nOUTPUT_SCHEMA: {"tasks":[{"title":"","description":"","priority":"high|medium|low"}],"message":""}`,
+                stream: false
+            });
+        }
+    } catch (e) {
+        const cursor = Number(SYSTEM_DB?.agentState?.idleTaskCursor || 0) || 0;
+        const candidates = [
+            {
+                title: 'System Health Check',
+                description: 'Sprawdź stan kernela, Ollamy, logów oraz konfiguracji i zaproponuj poprawki.',
+                priority: 'low'
+            },
+            {
+                title: 'Refine Autonomous Objectives',
+                description: 'Zaproponuj 3–5 konkretnych autonomousObjectives, które utrzymają stałą produktywność systemu.',
+                priority: 'medium'
+            },
+            {
+                title: 'Review Recent Errors',
+                description: 'Przejrzyj ostatnie błędy w logach systemowych i zaproponuj działania naprawcze.',
+                priority: 'medium'
+            },
+            {
+                title: 'Kernel Maintenance',
+                description: 'Wykonaj przegląd ustawień, wykryj niespójności modeli i ustaw bezpieczne wartości domyślne.',
+                priority: 'low'
+            }
+        ];
+        const pick = candidates[cursor % candidates.length];
+        SYSTEM_DB.agentState.idleTaskCursor = cursor + 1;
+        const existingTitles = new Set(SYSTEM_DB.tasks.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+        const title = String(pick.title || '').trim();
+        if (title && !existingTitles.has(title.toLowerCase())) {
+            const createdAt = Date.now();
+            SYSTEM_DB.tasks.push(normalizeTask({
+                id: `task_idle_${createdAt}_${Math.random().toString(16).slice(2)}`,
+                title,
+                description: String(pick.description || '').trim(),
+                status: 'pending',
+                progress: 0,
+                priority: pick.priority,
+                logs: ['Auto-generated: idle mode (fallback)'],
+                createdAt,
+                updatedAt: createdAt,
+                withinObjectives: false
+            }));
+            saveState();
+            scheduleAutonomyEvent('idle_tasks_created', 500);
+            return { created: 1, reason: 'fallback_created' };
+        }
+        return { created: 0, reason: 'ai_failed' };
+    }
+
+    const plan = parseJsonSafe(parseModelReply(reply).answer);
+    const tasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
+    const normalizePriority = (p) => {
+        const v = String(p || '').toLowerCase();
+        if (v === 'high' || v === 'medium' || v === 'low') return v;
+        return 'medium';
+    };
+    const existingTitles = new Set(SYSTEM_DB.tasks.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+    const recentTitles = new Set(recentDone.map(t => String(t?.title || '').trim().toLowerCase()).filter(Boolean));
+    const capacityLeft = Math.max(0, targetOpen - openTasks.length);
+    const toCreate = tasks
+        .map((t) => ({
+            title: String(t?.title || '').trim(),
+            description: String(t?.description || '').trim(),
+            priority: normalizePriority(t?.priority)
+        }))
+        .filter(t => t.title && t.description)
+        .filter(t => !existingTitles.has(t.title.toLowerCase()))
+        .filter(t => !recentTitles.has(t.title.toLowerCase()))
+        .slice(0, capacityLeft);
+
+    if (!toCreate.length) return { created: 0, reason: 'no_new_tasks' };
+    const createdAt = Date.now();
+    for (const t of toCreate) {
+        SYSTEM_DB.tasks.push(normalizeTask({
+            id: `task_idle_${createdAt}_${Math.random().toString(16).slice(2)}`,
+            title: t.title,
+            description: t.description,
+            status: 'pending',
+            progress: 0,
+            priority: t.priority,
+            logs: ['Auto-generated: idle mode'],
+            createdAt,
+            updatedAt: createdAt,
+            withinObjectives: false
+        }));
+    }
+    saveState();
+    scheduleAutonomyEvent('idle_tasks_created', 500);
+    return { created: toCreate.length, reason: 'created', message: String(plan?.message || '') };
+};
+
+const runAutonomousCycle = async (opts = {}) => {
+    const force = opts && typeof opts === 'object' && opts.force === true;
+    const intervalMs = getHeartbeatIntervalMs();
+    if (typeof SYSTEM_DB?.settings?.autonomyEnabled === 'undefined') {
+        SYSTEM_DB.settings.autonomyEnabled = !!SYSTEM_DB?.settings?.heartbeat?.enabled;
+    }
+    if (!SYSTEM_DB.settings.autonomyEnabled) {
+        logProcessingStage('Autonomia wyłączona', 'autonomy', { updateLastRun: false });
+        return { status: 'skipped', reason: 'disabled' };
+    }
+    const blockingQueueLength = getBlockingUserQueueLength();
+    const allowAutonomyDuringChat = SYSTEM_DB?.settings?.autonomyDuringChat === true;
+    const blockingUserCommandRunning = userCommandRunning && (!currentUserCommandMeta?.nonBlocking || !allowAutonomyDuringChat);
+    const selfUpgradeCfg = getMandatorySelfUpgradeConfig();
+    const selfUpgradeTask = selfUpgradeCfg.enabled
+        ? SYSTEM_DB.tasks.find(t => t.status !== 'completed' && String(t.title || '').startsWith('Autonomia: Samorozwój'))
+        : null;
+    const allowSelfUpgradeOverride = !!selfUpgradeTask;
+    if (!force && (SYSTEM_DB?.agentState?.userPriority || blockingUserCommandRunning || blockingQueueLength > 0)) {
+        if (allowSelfUpgradeOverride) {
+            SYSTEM_DB.agentState.thoughtProcess = 'Mandatory self-upgrade override.';
+        } else {
+            logProcessingStage('Blokada: userPriority lub kolejka użytkownika', 'autonomy', { updateLastRun: false });
+            return { status: 'skipped', reason: 'user_priority' };
+        }
+    }
+    if (SYSTEM_DB.agentState.pendingTaskApproval) {
+        logProcessingStage('Oczekiwanie na zgodę operatora', 'autonomy', { updateLastRun: false });
+        return { status: 'skipped', reason: 'awaiting_operator_approval' };
+    }
+    if (!force && !isWithinAutonomyWindow()) {
+        if (allowSelfUpgradeOverride) {
+            SYSTEM_DB.agentState.thoughtProcess = 'Mandatory self-upgrade override (autonomy window).';
+        } else {
+            logProcessingStage('Poza oknem autonomii', 'autonomy', { updateLastRun: false });
+            SYSTEM_DB.agentState.currentAction = 'idle';
+            SYSTEM_DB.agentState.thoughtProcess = 'Autonomy window closed.';
+            saveState();
+            return { status: 'skipped', reason: 'outside_window' };
+        }
+    }
+    const backoffUntil = Number(SYSTEM_DB.agentState.autonomyBackoffUntil || 0);
+    if (!force && backoffUntil && Date.now() < backoffUntil) {
+        if (allowSelfUpgradeOverride) {
+            SYSTEM_DB.agentState.thoughtProcess = 'Mandatory self-upgrade override (backoff).';
+        } else {
+            const urgentUserTask = SYSTEM_DB.tasks.some(t => t && t.status === 'pending' && t.priority === 'high' && t.withinObjectives === false);
+            if (urgentUserTask) {
+                SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+            } else {
+            const waitLeft = Math.max(0, Math.ceil((backoffUntil - Date.now()) / 1000));
+            logProcessingStage(`Pominięcie: backoff ${waitLeft}s`, 'autonomy', { updateLastRun: false });
+            return { status: 'skipped', reason: 'backoff' };
+            }
+        }
+    }
+    if (selfUpgradeCfg.enabled && selfUpgradeTask) {
+            const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+            if (activeTask && activeTask.id !== selfUpgradeTask.id) {
+                activeTask.status = 'pending';
+                activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+                activeTask.logs.push('[AUTO] Wstrzymano: wymagany tryb samorozwoju.');
+            }
+            selfUpgradeTask.status = 'in_progress';
+            selfUpgradeTask.logs = Array.isArray(selfUpgradeTask.logs) ? selfUpgradeTask.logs : [];
+            if (!selfUpgradeTask.logs[selfUpgradeTask.logs.length - 1]?.includes('Wymuszony tryb samorozwoju')) {
+                selfUpgradeTask.logs.push('[AUTO] Wymuszony tryb samorozwoju aktywny.');
+            }
+            SYSTEM_DB.agentState.processingStage = 'Samorozwój: aktywny';
+            saveState();
+    }
+    const currentAction = String(SYSTEM_DB?.agentState?.currentAction || 'idle');
+    if (currentAction.startsWith('Thinking') || currentAction.startsWith('Executing') || currentAction.startsWith('Initializing')) {
+        const now = Date.now();
+        const lastRun = Number(SYSTEM_DB.agentState.lastRun || 0);
+        const waitStarted = Number(SYSTEM_DB.agentState.ollamaWaitStartedAt || 0);
+        const ttfbRaw = Number(SYSTEM_DB?.settings?.ollamaTtfbTimeoutMs);
+        const totalRaw = Number(SYSTEM_DB?.settings?.ollamaTotalTimeoutMs);
+        const effectiveTimeout = Math.max(
+            Number(AUTONOMY_STEP_TIMEOUT_MS) || 0,
+            Number.isFinite(totalRaw) ? Math.max(5000, Math.floor(totalRaw)) : 120000,
+            Number.isFinite(ttfbRaw) ? Math.max(30000, Math.floor(ttfbRaw) + 20000) : 0,
+            90000
+        );
+        const isLikelyInFlight = waitStarted && (now - waitStarted) < (effectiveTimeout + 10000);
+        const lockMissing = !fs.existsSync(HEARTBEAT_LOCK_PATH);
+        const staleInProgress = !isLikelyInFlight && lastRun && (now - lastRun) > 300000;
+        if (isLikelyInFlight && !lockMissing) {
+            logProcessingStage('Pominięcie: akcja w toku', 'autonomy', { updateLastRun: false });
+            return { status: 'skipped', reason: 'in_progress' };
+        }
+        if (staleInProgress || lockMissing) {
+            abortActiveAi('system');
+            SYSTEM_DB.agentState.currentAction = 'idle';
+            SYSTEM_DB.agentState.thoughtProcess = 'Recovered from stale in-progress state.';
+            SYSTEM_DB.agentState.processingStage = '';
+            SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+            SYSTEM_DB.agentState.lastRun = now;
+            saveState();
+        } else {
+            logProcessingStage('Pominięcie: akcja w toku', 'autonomy', { updateLastRun: false });
+            return { status: 'skipped', reason: 'in_progress' };
+        }
+    }
+    const lock = acquireHeartbeatLock();
+    if (!lock.ok) {
+        logHeartbeatLockStatus('autonomy');
+        return { status: 'skipped', reason: 'locked' };
+    }
+    SYSTEM_DB.agentState.lastHeartbeatAt = Date.now();
+    saveState();
+    logToSystem('info', 'Autonomy Tick');
+    logProcessingStage('Start cyklu autonomii');
+    await maybeAutoRepairArticles('autonomy_tick');
+
+    const autonomyCfg = SYSTEM_DB.settings && SYSTEM_DB.settings.autonomyConfig ? SYSTEM_DB.settings.autonomyConfig : {};
+    const rawStale = Number(autonomyCfg.watchdogTimeoutMs);
+    const STALE_TIMEOUT = Number.isFinite(rawStale) && rawStale > 0 ? rawStale : 60000;
+    const now = Date.now();
+    const watchdogAction = String(SYSTEM_DB.agentState.currentAction || '');
+    const isWaitAction = /Ollama:\s*oczekiwanie|Pominięcie:\s*akcja w toku|Thinking\.\.\.|Initializing/i.test(watchdogAction);
+    const waitStarted = Number(SYSTEM_DB.agentState.ollamaWaitStartedAt || 0);
+    const waitAge = waitStarted ? (now - waitStarted) : 0;
+    const ttfbRaw = Number(SYSTEM_DB?.settings?.ollamaTtfbTimeoutMs);
+    const totalRaw = Number(SYSTEM_DB?.settings?.ollamaTotalTimeoutMs);
+    const maxWait = Math.max(
+        Number(AUTONOMY_STEP_TIMEOUT_MS) || 0,
+        Number.isFinite(totalRaw) ? Math.max(5000, Math.floor(totalRaw)) : 120000,
+        Number.isFinite(ttfbRaw) ? Math.max(5000, Math.floor(ttfbRaw)) : 0
+    );
+    // Watchdog logic: if not idle AND lastRun is old (but ignore normal model wait within timeouts)
+    const isStale = (watchdogAction !== 'idle') && ((now - SYSTEM_DB.agentState.lastRun) > STALE_TIMEOUT) && (!isWaitAction || (waitStarted && waitAge > maxWait));
+
+    if (isStale) {
+        logProcessingStage('Watchdog: reset stanu');
+        logToSystem('warn', `Watchdog: Forced reset of stale state '${SYSTEM_DB.agentState.currentAction}'`);
+        abortActiveAi('system');
+        
+        // --- SMART RECOVERY ---
+        const stuckTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+        if (stuckTask) {
+            stuckTask.retryCount = (stuckTask.retryCount || 0) + 1;
+            
+            if (stuckTask.retryCount >= 5) {
+                stuckTask.status = 'failed';
+                stuckTask.logs.push(`[WATCHDOG] Task failed after ${stuckTask.retryCount} attempts. Terminating to prevent deadlock.`);
+                logToSystem('error', `Watchdog: Task '${stuckTask.title}' terminated due to repeated failures.`);
+                
+                // --- FAILURE-DRIVEN LEARNING ---
+                scheduleSelfImprovement(`TASK_FAILED: ${stuckTask.title}`, `Watchdog termination after 5 retries. Logs: ${stuckTask.logs.slice(-3).join(' | ')}`);
+                // -------------------------------
+            } else {
+                stuckTask.status = 'pending';
+                stuckTask.logs.push(`[WATCHDOG] Task execution timed out. Retrying (Attempt ${stuckTask.retryCount}/5)...`);
+                logToSystem('info', `Watchdog: Re-queueing task '${stuckTask.title}' for retry.`);
+            }
+        }
+
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.thoughtProcess = 'System Reset due to Timeout.';
+        SYSTEM_DB.agentState.consecutiveLoops = 0; // Reset loops too
+        SYSTEM_DB.agentState.lastActionHash = null;
+        SYSTEM_DB.agentState.lastRun = Date.now(); // Update timestamp immediately
+        saveState(); // FORCE SAVE immediately
+        releaseHeartbeatLock();
+        return { status: 'reset', reason: 'watchdog' };
+    }
+
+    const loopAction = String(SYSTEM_DB.agentState.currentAction || '');
+    const isTransientWait = /Ollama:\s*oczekiwanie|Pominięcie:\s*akcja w toku|Thinking\.\.\.|Initializing/i.test(loopAction);
+    if (selfUpgradeCfg.enabled && selfUpgradeTask) {
+        SYSTEM_DB.agentState.consecutiveLoops = 0;
+        SYSTEM_DB.agentState.lastActionHash = null;
+    } else if (isTransientWait) {
+        SYSTEM_DB.agentState.consecutiveLoops = 0;
+        SYSTEM_DB.agentState.lastActionHash = null;
+    } else {
+        const loopActionHash = crypto.createHash('md5').update(loopAction).digest('hex');
+        if (SYSTEM_DB.agentState.lastActionHash === loopActionHash) {
+            SYSTEM_DB.agentState.consecutiveLoops = (SYSTEM_DB.agentState.consecutiveLoops || 0) + 1;
+        } else {
+            SYSTEM_DB.agentState.consecutiveLoops = 0;
+            SYSTEM_DB.agentState.lastActionHash = loopActionHash;
+        }
+    }
+
+    const loopLimitRaw = Number(autonomyCfg && autonomyCfg.loopBreakerLimit);
+    let loopLimit = Number.isFinite(loopLimitRaw) && loopLimitRaw > 0 ? loopLimitRaw : 5;
+    if (loopLimit < 10) loopLimit = 10;
+    if (selfUpgradeCfg.enabled) {
+        const now = Date.now();
+        const lastAt = Number(SYSTEM_DB.agentState.lastSelfImproveAt || 0);
+        const cooldownMs = (selfUpgradeCfg.cooldownSec || 300) * 1000;
+        if (SYSTEM_DB.agentState.consecutiveLoops >= selfUpgradeCfg.loopLimit && (!lastAt || (now - lastAt) >= cooldownMs)) {
+            scheduleSelfImprovement('repetitive_actions', loopAction);
+            const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+            if (activeTask) {
+                activeTask.status = 'pending';
+                activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+                activeTask.logs.push('[AUTO] Wstrzymano: wykryto pętlę, wymuszono samorozwój.');
+            }
+            SYSTEM_DB.agentState.currentAction = 'idle';
+            SYSTEM_DB.agentState.thoughtProcess = 'Mandatory self-upgrade triggered.';
+            saveState();
+            releaseHeartbeatLock();
+            return { status: 'halted', reason: 'mandatory_self_upgrade' };
+        }
+    }
+    if (SYSTEM_DB.agentState.consecutiveLoops > loopLimit) {
+        logProcessingStage('Loop breaker (aggressive): uruchamianie Brainstorming Protocol');
+        logToSystem('warn', 'Autonomous Loop Detected (Aggressive). Initiating Brainstorming Session.');
+        
+        const stuckTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+        if (stuckTask) {
+            // --- BRAINSTORMING PROTOCOL ---
+            try {
+                // 1. Identify Available Models
+                const allModels = SYSTEM_DB.settings.agenticSystem?.allowedModels || [];
+                const activeModel = SYSTEM_DB.settings.activeModel;
+                const masterModel = gaiAgentRouter.getMasterModel() || activeModel;
+                
+                // Pick candidates (exclude current if possible, limit to 3 distinct)
+                const candidates = [...new Set([
+                    ...allModels,
+                    activeModel,
+                    'qwen3:latest',
+                    'mistral-nemo:latest',
+                    'deepseek-v3.2:cloud'
+                ])].filter(m => m && m !== masterModel).slice(0, 3);
+
+                if (candidates.length > 0) {
+                    logToSystem('info', `[BRAINSTORM] Consulting models: ${candidates.join(', ')}`);
+                    
+                    const loopLogs = (stuckTask.logs || []).slice(-5).join('\n');
+                    const problemPrompt = `
+SYSTEM CRITICAL: We are stuck in an execution loop.
+Task: "${stuckTask.title}"
+Recent Logs:
+${loopLogs}
+
+Your Goal: Analyze why we are stuck and propose a SINGLE, CONCRETE action to break the loop. 
+Do not be polite. Be technical and precise. 
+Return ONLY the actionable step (e.g. "Run command X", "Edit file Y").
+`;
+
+                    // 2. Query Models in Parallel
+                    const proposals = await Promise.all(candidates.map(async (model) => {
+                        try {
+                            logToSystem('info', `[BRAINSTORM] ${model} is analyzing the loop...`);
+                            const response = await queryUniversalAI({
+                                provider: 'ollama', // Force ollama/internal for brainstorming
+                                model: model,
+                                modelRole: 'debug',
+                                systemInstruction: 'You are a Senior Debugger. Break the loop.',
+                                userPrompt: problemPrompt,
+                                stream: false
+                            });
+                            
+                            // LIVESTREAM THE THOUGHT
+                            const preview = response.replace(/\n/g, ' ').slice(0, 200);
+                            logToSystem('info', `[BRAINSTORM] ${model} suggests: ${preview}...`);
+                            
+                            return { model, proposal: response };
+                        } catch (e) {
+                            logToSystem('warn', `[BRAINSTORM] ${model} failed to think: ${e.message}`);
+                            return { model, proposal: null, error: e.message };
+                        }
+                    }));
+
+                    const validProposals = proposals.filter(p => p.proposal);
+                    
+                    if (validProposals.length > 0) {
+                        // 3. Master Brain Selects the Best Option
+                        const judgePrompt = `
+We are stuck in a loop. Here are proposals from the council:
+${validProposals.map(p => `[Model: ${p.model}]: ${p.proposal}`).join('\n\n')}
+
+Your Role: THE ORCHESTRATOR.
+Decide the best course of action. Synthesize the proposals into one FINAL instruction.
+Return ONLY the final instruction for the system to execute immediately.
+`;
+                        const finalVerdict = await queryUniversalAI({
+                            provider: SYSTEM_DB.settings.aiProvider,
+                            model: masterModel,
+                            modelRole: 'planning',
+                            systemInstruction: 'You are the Supreme Orchestrator. Break the loop now.',
+                            userPrompt: judgePrompt,
+                            stream: false
+                        });
+
+                        logToSystem('success', `[BRAINSTORM] Verdict by ${masterModel}: ${finalVerdict.slice(0, 100)}...`);
+                        
+                        // Apply the verdict as a new log/instruction for the task
+                        stuckTask.logs.push(`[BRAINSTORM_WINNER] ${finalVerdict}`);
+                        SYSTEM_DB.agentState.thoughtProcess = `Brainstorm Result: ${finalVerdict}`;
+                        
+                        // FIX: Reset loop counter so we don't immediately re-trigger brainstorming
+                        SYSTEM_DB.agentState.consecutiveLoops = 0;
+                        
+                        // Give it one more chance with the new insight
+                        stuckTask.retryCount = (stuckTask.retryCount || 0); // Don't increment yet, let it try the fix
+                        saveState();
+                        releaseHeartbeatLock();
+                        scheduleAutonomyEvent('loop_breaker_retry', 1000); // Immediate retry with new info
+                        return { status: 'brainstorming', reason: 'consensus_reached' };
+                    }
+                }
+            } catch (e) {
+                logToSystem('error', `[BRAINSTORM] Failed: ${e.message}`);
+            }
+            // ------------------------------
+
+            const nextRetry = (stuckTask.retryCount || 0) + 1;
+            stuckTask.retryCount = nextRetry;
+            
+            // --- SMART LOOP HANDLING (FALLBACK) ---
+            if (nextRetry > 5) { // Increased limit due to brainstorming
+                 stuckTask.status = 'failed';
+                 stuckTask.logs.push(`[LOOP BREAKER] Task failed after ${nextRetry} loop detections (Brainstorming failed).`);
+                 // Trigger immediate learning
+                 scheduleSelfImprovement(`LOOP_DETECTED: ${stuckTask.title}`, `Action: ${loopAction}`);
+            } else {
+                 stuckTask.status = 'pending';
+                 stuckTask.logs.push(`[LOOP BREAKER] Task paused due to repetitive actions. Retry #${nextRetry}.`);
+            }
+            // ---------------------------
+        }
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.thoughtProcess = 'Loop Breaker Triggered';
+        SYSTEM_DB.agentState.consecutiveLoops = 0;
+        SYSTEM_DB.agentState.lastActionHash = null; // Force hash reset
+        saveState();
+        releaseHeartbeatLock();
+        scheduleAutonomyEvent('loop_breaker_retry', 2000);
+        return { status: 'halted', reason: 'loop_breaker' };
+    }
+
+    // Check for Content Freshness (Strategic Content Generation)
+    const CONTENT_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
+    const hasOpenTasks = SYSTEM_DB.tasks.some(t => t.status !== 'completed');
+    if (!hasOpenTasks && (Date.now() - (SYSTEM_DB.agentState.lastContentCheck || 0)) > CONTENT_CHECK_INTERVAL) {
+        const articlesPath = ARTICLES_DIR;
+        if (fs.existsSync(articlesPath)) {
+            const files = fs.readdirSync(articlesPath).filter(f => f.endsWith('.json') && !f.includes('index'));
+            let lastModified = 0;
+            for (const file of files) {
+                const stats = fs.statSync(path.join(articlesPath, file));
+                if (stats.mtimeMs > lastModified) lastModified = stats.mtimeMs;
+            }
+
+            const daysSinceLastPost = (Date.now() - lastModified) / (1000 * 60 * 60 * 24);
+            
+            if (daysSinceLastPost > 3) {
+                 const existingTask = SYSTEM_DB.tasks.find(t => t.title === 'Strategic Content Generation' && t.status !== 'completed');
+                if (!existingTask) {
+                    logProcessingStage('Strategic Content: generowanie zadania');
+                    logToSystem('info', 'Autonomous Kernel: Content Stale. Generating Strategy Task.');
+                    SYSTEM_DB.tasks.push({
+                        id: `task_auto_content_${Date.now()}`,
+                        title: 'Strategic Content Generation',
+                        description: `Blog content is ${Math.floor(daysSinceLastPost)} days old. Analyze Amazon trends and generate a new high-quality article about a popular tech product available on Amazon.`,
+                        status: 'pending',
+                        progress: 0,
+                        priority: 'medium',
+                        logs: ['Auto-generated: Content Freshness Check Failed'],
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+                 }
+            }
+        }
+        SYSTEM_DB.agentState.lastContentCheck = Date.now();
+        saveState();
+    }
+    
+    let hasAnyTask = SYSTEM_DB.tasks.some(t => t.status !== 'completed');
+    const hasObjectives = !!String(SYSTEM_DB.settings.autonomousObjectives || '').trim();
+    if (!hasAnyTask && hasObjectives) {
+        logProcessingStage('Brak zadań: generowanie z celów');
+        const gen = await generateTasksFromObjectives();
+        hasAnyTask = SYSTEM_DB.tasks.some(t => t.status !== 'completed');
+        if (!hasAnyTask) {
+            logProcessingStage(`Brak nowych zadań: ${gen.reason || 'unknown'}`);
+            SYSTEM_DB.agentState.thoughtProcess = `Idle (objectives planner: ${gen.reason || 'unknown'}).`;
+            SYSTEM_DB.agentState.processingStage = '';
+            SYSTEM_DB.agentState.lastRun = Date.now();
+            saveState();
+            releaseHeartbeatLock();
+            return { status: 'skipped', reason: `objectives_${gen.reason || 'unknown'}` };
+        }
+        logProcessingStage(`Dodano z celów: ${gen.created}`);
+        SYSTEM_DB.agentState.thoughtProcess = `Objective planner created ${gen.created} task(s).`;
+        saveState();
+    }
+    if (!hasAnyTask && !hasObjectives) {
+        logProcessingStage('Brak zadań: auto-generowanie (idle)', 'autonomy', { updateLastRun: false });
+        const gen = await generateTasksFromIdle();
+        hasAnyTask = SYSTEM_DB.tasks.some(t => t.status !== 'completed');
+        if (hasAnyTask) {
+            logProcessingStage(`Dodano z idle: ${gen.created || 0}`);
+            SYSTEM_DB.agentState.thoughtProcess = `Idle planner created ${gen.created || 0} task(s).`;
+            saveState();
+        }
+
+        SYSTEM_DB.agentState.thoughtProcess = `Idle (no tasks). Planner: ${gen.reason || 'unknown'}.`;
+        SYSTEM_DB.agentState.processingStage = '';
+        SYSTEM_DB.agentState.lastRun = Date.now();
+        try {
+            const lastHintTs = Array.isArray(SYSTEM_DB?.agentState?.supportHints) && SYSTEM_DB.agentState.supportHints.length
+                ? Number(SYSTEM_DB.agentState.supportHints[SYSTEM_DB.agentState.supportHints.length - 1].timestamp || 0)
+                : 0;
+            const nowTs = Date.now();
+            if (nowTs - lastHintTs > 15000) {
+                const provider = SYSTEM_DB?.settings?.aiProvider || 'ollama';
+                // --- NEW: USE BRAIN FOR SUPPORT ---
+                const masterModel = gaiAgentRouter.getMasterModel();
+                const supportModel = masterModel || SYSTEM_DB.settings?.activeModel || 'qwen3:latest';
+                const supportTarget = { provider, model: supportModel };
+                // ----------------------------------
+                const sysContext = {
+                    stage: SYSTEM_DB?.agentState?.processingStage || 'idle',
+                    action: SYSTEM_DB?.agentState?.currentAction || 'idle',
+                    queues: {
+                        userPriority: !!SYSTEM_DB?.agentState?.userPriority,
+                        userQueueLength: Number(SYSTEM_DB?.agentState?.userQueueLength || 0)
+                    },
+                    autonomyBackoffUntil: Number(SYSTEM_DB?.agentState?.autonomyBackoffUntil || 0),
+                    autonomyFailures: Number(SYSTEM_DB?.agentState?.autonomyFailureCount || 0)
+                };
+                const supportUserPrompt = `ENVIRONMENT_SNAPSHOT: ${JSON.stringify(sysContext)}.\n\nSTATUS: IDLE. No active or pending tasks.\nRECENT_LOGS:\n${(SYSTEM_DB.logs || []).slice(-3).map(l => String(l?.message || '').trim()).join('\n')}\n\nGOAL: Provide a short SUPPORT_HINT with concrete next steps to initialize productive work or reduce mixing. Prefer exact tool calls like [[TASK_ACTION]] or [[SHELL]]. Keep it under 2 lines.`;
+                let supportReply = '';
+                let supportError = '';
+                try {
+                    supportReply = await queryUniversalAI({
+                        provider: supportTarget.provider,
+                        model: supportTarget.model,
+                        modelRole: 'support', // Can still use 'support' context/persona if Brain allows, or we can force 'planning'
+                        systemInstruction: 'ROLE: SUPPORT.\nYou propose minimal, actionable instructions to initialize tasks or unblock idle states.',
+                        userPrompt: supportUserPrompt,
+                        signal: undefined,
+                        source: 'support',
+                        stream: false
+                    });
+                } catch (e) {
+                    supportError = String(e?.message || e || '').slice(0, 300).trim();
+                    if (supportError) logWarn('support', supportError, { provider: supportTarget.provider, model: supportTarget.model });
+                }
+                const supportText = String(supportReply || '').slice(0, 600).trim();
+                const supportTs = Date.now();
+                if (supportText || supportError) {
+                    if (supportText) {
+                        const entry = {
+                            id: `support_${supportTs}`,
+                            timestamp: supportTs,
+                            taskId: undefined,
+                            taskTitle: 'IDLE',
+                            model: supportTarget.model,
+                            hint: supportText
+                        };
+                        appendSupportHint(entry);
+                    }
+                }
+            }
+        } catch {}
+        saveState();
+        releaseHeartbeatLock();
+        return { status: 'skipped', reason: `idle_${gen.reason || 'unknown'}` };
+    }
+
+    const priorityRank = { high: 0, medium: 1, low: 2 };
+    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+    const pendingTask = SYSTEM_DB.tasks
+        .filter(t => t.status === 'pending')
+        .sort((a, b) => {
+            const pa = priorityRank[a.priority || 'medium'] ?? 1;
+            const pb = priorityRank[b.priority || 'medium'] ?? 1;
+            if (pa !== pb) return pa - pb;
+            return (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0);
+        })[0];
+
+    const provider = SYSTEM_DB.settings.aiProvider;
+    const apiKey = SYSTEM_DB.settings.apiKeys[provider] || '';
+    const activeModel = SYSTEM_DB.settings.activeModel;
+    const selectedTask = activeTask || pendingTask;
+    if (activeTask) {
+        logProcessingStage(`Wykonywanie zadania: ${activeTask.title || 'Untitled Task'}`);
+    } else if (pendingTask) {
+        logProcessingStage(`Start zadania: ${pendingTask.title || 'Untitled Task'}`);
+    } else {
+        logProcessingStage('Brak zadań: monitoring');
+    }
+    const selectedRole = selectedTask ? getTaskModelRole(selectedTask) : 'architecture';
+    // --- NEW: AGENT ROUTER (BRAIN) EXECUTION ---
+    // If agent router is active, we bypass the old autonomyModel selection
+    
+    // Determine the Brain (Orchestrator)
+    const masterModel = gaiAgentRouter.getMasterModel();
+    // Fallback if Brain not set or agent system disabled
+    const autonomyModel = (gaiAgentRouter.config?.enabled && masterModel) 
+        ? masterModel 
+        : (SYSTEM_DB.settings.activeModel || 'qwen3:latest');
+
+    logProcessingStage(`Model: ${autonomyModel} (Role: Brain/Planning)`);
+
+    if (provider !== 'ollama' && !apiKey) {
+        releaseHeartbeatLock();
+        return;
+    }
+    
+    if (activeTask) {
+        SYSTEM_DB.agentState.currentAction = `Executing: ${activeTask.title || 'Untitled Task'}`;
+    } else if (pendingTask) {
+        SYSTEM_DB.agentState.currentAction = `Initializing: ${pendingTask.title || 'Untitled Task'}`;
+    } else {
+        SYSTEM_DB.agentState.currentAction = 'Thinking...';
+    }
+
+    // Update lastRun to now so Watchdog knows we are active
+    SYSTEM_DB.agentState.lastRun = Date.now();
+
+    // Automatically transition pending task to in_progress so the consecutive-loop
+    // hash changes each cycle and the loop-breaker doesn't abort a valid new task.
+    if (pendingTask && !activeTask) {
+        pendingTask.status = 'in_progress';
+        pendingTask.logs = pendingTask.logs || [];
+        pendingTask.logs.push('[AGENT] Task started.');
+    }
+
+    saveState();
+
+    try {
+        // logProcessingStage('Budowanie kontekstu'); // Wyłączone dla wydajności
+        scheduleRealtimeSources('autonomy');
+        const fileListRaw = await execAsync('find . -maxdepth 2 -not -path "*/node_modules/*" -not -path "*/.git/*" -not -name ".DS_Store"').then(r => r.stdout);
+        const fileList = String(fileListRaw || '').split(/\r?\n/).slice(0, 600).join('\n').slice(0, 20000);
+        const guideMem = SYSTEM_DB.memories?.find(m => m.id === 'pinned_articles_guide');
+        let guideText = typeof guideMem?.content === 'string' ? guideMem.content : '';
+        // FALLBACK: Load from file if memory is empty
+        if (!guideText && fs.existsSync(ARTICLES_GUIDE_PATH)) {
+            try { guideText = fs.readFileSync(ARTICLES_GUIDE_PATH, 'utf8'); } catch {}
+        }
+        const ragQuery = selectedTask
+            ? `${selectedTask.title || ''} ${selectedTask.description || ''}`
+            : String(SYSTEM_DB.settings.autonomousObjectives || '');
+        const sysContext = {
+            root: APP_ROOT,
+            dataDir: DATA_DIR,
+            fsRoot: FS_ROOT,
+            articlesDir: ARTICLES_DIR,
+            articlesIndex: ARTICLES_INDEX_PATH,
+            articlesGuide: { path: ARTICLES_GUIDE_PATH, content: guideText.slice(0, 20000) },
+            outDir: OUT_DIR,
+            memoryDir: MEMORY_DIR,
+            sourcesDir: SOURCES_DIR,
+            files: fileList,
+            tasks: SYSTEM_DB.tasks.filter(t => t.status !== 'completed').map(t => ({
+                ...t,
+                logs: (t.logs || []).slice(-5).map(l => String(l).replace(/\[STAGE\/[^\]]+\]/g, '').trim()).filter(Boolean)
+            })),
+            os: { platform: os.platform(), load: os.loadavg() },
+            recent: { logs: (SYSTEM_DB.logs || []).slice(-50) },
+            modelRouting: { role: 'brain', model: autonomyModel },
+            handoff: (SYSTEM_DB.reasoningHistory || []).slice(-10),
+            // modelRoles: SYSTEM_DB.settings.modelRoles, // DEPRECATED
+            recentChat: (SYSTEM_DB.chatHistory || []).slice(-80),
+            memories: (SYSTEM_DB.memories || []).filter(m => m.type === 'pinned' || m.type === 'summary').slice(-20),
+            currentDate: { iso: new Date().toISOString(), local: new Date().toLocaleString() },
+            ragArticles: buildRagArticlesContext(ragQuery, 3, 2000),
+            ragSources: buildRagSourcesContext(ragQuery, 4, 2600),
+            realtimeSources: {
+                enabled: !!SYSTEM_DB.settings.realtimeSources?.enabled,
+                intervalMinutes: Number(SYSTEM_DB.settings.realtimeSources?.intervalMinutes || 60),
+                lastFetchAt: SYSTEM_DB.agentState.lastRealtimeFetchAt || 0,
+                urls: SYSTEM_DB.settings.realtimeSources?.urls || []
+            },
+            developerMode: SYSTEM_DB.settings.developerMode === true
+        };
+
+        let focusInstruction = "STATUS: System stable. Proactively maintain system integrity or idle.";
+        
+        if (SYSTEM_DB.settings.developerMode === true) {
+            focusInstruction = `*** GOD MODE ENABLED ***
+            You have FULL SYSTEM ACCESS (root privileges on shell, no API restrictions).
+            You can use 'sudo', 'rm -rf', 'curl' and modify any file.
+            USE WITH EXTREME CAUTION.
+            \n` + focusInstruction;
+        }
+        
+        // --- AUTO-RECOVERY FOR FAILED TASKS ---
+        if (!activeTask && !pendingTask) {
+             const recentFailed = SYSTEM_DB.tasks.find(t => t.status === 'failed' && (Date.now() - (t.updatedAt || 0)) < 600000 && !t.recoveryAttempted);
+             if (recentFailed) {
+                 recentFailed.status = 'pending';
+                 recentFailed.retryCount = (recentFailed.retryCount || 0) + 1;
+                 recentFailed.logs = recentFailed.logs || [];
+                 recentFailed.logs.push(`[AUTO-RECOVERY] Retry ${recentFailed.retryCount} on same task.`);
+                 recentFailed.recoveryAttempted = true;
+                 recentFailed.updatedAt = Date.now();
+                 saveState();
+                 logProcessingStage(`Uruchomiono auto-naprawę dla zadania: ${recentFailed.title}`, 'autonomy');
+                 return { updated: 1, reason: 'recovery_same_task' };
+             }
+        }
+
+        // --- IDLE WATCHDOG & AUTO-KICK ---
+        if (!activeTask && !pendingTask) {
+            clearToolCaches('idle');
+            
+            // Check for STUCK tasks (failed with high retries) and auto-reset them if configured
+            const stuckTasks = SYSTEM_DB.tasks.filter(t => t && t.status === 'failed' && (t.retryCount || 0) > 0);
+            if (stuckTasks.length > 0) {
+                 const taskToRescue = stuckTasks[0]; // Take the first stuck task
+                 const now = Date.now();
+                 const lastUpdate = taskToRescue.updatedAt || 0;
+                 
+                 // If it's been stuck for more than 5 minutes, auto-reset it
+                 if (now - lastUpdate > 300000) {
+                     logProcessingStage(`IDLE WATCHDOG: Rescuing stuck task "${taskToRescue.title}"`, 'autonomy');
+                     taskToRescue.status = 'pending';
+                     taskToRescue.retryCount = 0;
+                     taskToRescue.progress = Math.max(0, (taskToRescue.progress || 0) - 10); // Penalty: slight rollback
+                     taskToRescue.logs = taskToRescue.logs || [];
+                     taskToRescue.logs.push('[SYSTEM] Auto-rescue: Task reset from FAILED state to PENDING to break IDLE loop.');
+                     taskToRescue.updatedAt = now;
+                     saveState();
+                     return { updated: 1, reason: 'idle_rescue' };
+                 }
+            }
+
+            const maxOpenTasks = 5;
+             const openCount = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress')).length;
+             if (SYSTEM_DB.settings.autonomousObjectives) {
+                focusInstruction = `STATUS: IDLE. 
+                YOUR PRIMARY DIRECTIVE: ${SYSTEM_DB.settings.autonomousObjectives}
+                
+                OPEN_TASK_LIMIT: ${maxOpenTasks}. CURRENT_OPEN_TASKS: ${openCount}. 
+                RULES:
+                - NEVER create a new task if CURRENT_OPEN_TASKS >= OPEN_TASK_LIMIT.
+                - Prefer finishing existing tasks and their subtasks before creating anything new.
+                
+                Analyze the current state. If you believe a new task is required to fulfill your directive or as a necessary dependency,
+                create it using [[TASK_ACTION: {"action": "create", "title": "...", "description": "...", "priority": "medium", "withinObjectives": true}]].
+                If the task is not directly derived from the objectives, set withinObjectives to false and include a clear justification in description.
+                
+                If no work is needed right now, simply reply with "THOUGHT: Monitoring system. Objectives satisfied."`;
+             } else {
+                focusInstruction = `STATUS: IDLE. 
+                No autonomous objectives defined. If you believe a task is needed, set withinObjectives to false and include a clear justification in description.`;
+             }
+        }
+        
+        const autonomyController = createActiveAbortController('system');
+
+        if (activeTask) {
+            const selfUpgradeCfg = getMandatorySelfUpgradeConfig();
+            if (selfUpgradeCfg.enabled && (activeTask.retryCount || 0) >= selfUpgradeCfg.retryLimit) {
+                scheduleSelfImprovement('retry_limit', activeTask.title || '');
+                activeTask.status = 'pending';
+                activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+                activeTask.logs.push('[AUTO] Wstrzymano: przekroczono limit retry, wymuszono samorozwój.');
+                saveState();
+                return { status: 'halted', reason: 'mandatory_self_upgrade' };
+            }
+            if ((activeTask.retryCount || 0) > 25) {
+                logProcessingStage('Zadanie przekroczyło limit prób (25). Oznaczam jako FAILED i przechodzę do następnego.', 'autonomy', { updateLastRun: false });
+                activeTask.status = 'failed';
+                activeTask.logs.push('Auto-failed due to excessive retries. Moving to next task.');
+                
+                // CRITICAL: Immediately clear activeTask to prevent IDLE and allow next task selection
+            // We need to re-fetch tasks or handle it in a way that doesn't conflict with const assignment if activeTask is const.
+            // Let's check how activeTask is defined.
+            // It seems activeTask is defined as const in line 8189 (approx). We cannot reassign it.
+            // We should just return, and let the next loop iteration pick up the next task.
+            saveState();
+            return { status: 'failed', reason: 'max_retries_exceeded' };
+            }
+            let hint = '';
+            if ((activeTask.retryCount || 0) > 0) {
+                 const rawLog = activeTask.logs && activeTask.logs.length > 0 ? activeTask.logs[activeTask.logs.length - 1] : '';
+                 const lastLog = String(rawLog).replace(/^\[STAGE\/[^\]]+\]\s*/, '').slice(0, 300);
+                 hint = `\n\nTEACHER_HINT: Your previous attempt failed. Log: "${lastLog}". \nSTRATEGY: If you are unsure, DO NOT GUESS. Use [[WEB_SEARCH]] to find documentation or examples!`;
+            }
+            try {
+                logProcessingStage(`Support hint requested for active task: ${activeTask.title}`, 'support', { updateLastRun: false });
+                
+                // --- PROJECT CONTEXT INJECTION (GAI SUPER-MIND) ---
+                const projectContext = buildProjectContext();
+                // --------------------------------------------------
+
+                const supportModel =
+                    SYSTEM_DB.settings.modelRoles?.support ||
+                    SYSTEM_DB.settings.modelRoles?.debug ||
+                    SYSTEM_DB.settings.modelRoles?.planning ||
+                    autonomyModel;
+                const supportTarget = resolveSupportTarget(provider, supportModel);
+                const supportTimeoutMs = 30000;
+                const { controller: supportController, cleanup: supportCleanup } = createAbortControllerWithTimeout(autonomyController.signal, supportTimeoutMs);
+                const supportUserPrompt = `ENVIRONMENT_SNAPSHOT: ${JSON.stringify(sysContext)}.\n\nPROJECT_CONTEXT: ${projectContext}\n\nACTIVE_TASK: ${activeTask.title} (${activeTask.id}).\nSTATUS: ${activeTask.status}. PROGRESS: ${activeTask.progress}.\nRECENT_LOGS:\n${(activeTask.logs || []).slice(-5).map(l => String(l).replace(/\\[STAGE\\/[^\\]]+\\]\\s*/g, '').trim()).join('\n')}\n\nGOAL: Provide a short SUPPORT_HINT. This is just a suggestion or idea. The main agent may choose to ignore it if it has a better plan. Keep it under 2 lines.`;
+                let supportReply = '';
+                let supportError = '';
+                try {
+                    supportReply = await queryUniversalAI({
+                        provider: supportTarget.provider,
+                        model: supportTarget.model,
+                        modelRole: 'support',
+                        systemInstruction: 'ROLE: SUPPORT.\nYou are a creative advisor. Propose ideas to unblock the agent, but remember your advice is optional. The agent decides.',
+                        userPrompt: supportUserPrompt,
+                        signal: supportController.signal,
+                        source: 'support',
+                        stream: false
+                    });
+                } catch (e) {
+                    supportError = String(e?.message || e || '').slice(0, 300).trim();
+                    if (supportError) logWarn('support', supportError, { provider: supportTarget.provider, model: supportTarget.model });
+                } finally {
+                    supportCleanup();
+                }
+                const supportText = String(supportReply || '').slice(0, 600).trim();
+                const supportTs = Date.now();
+                if (supportText || supportError) {
+                    if (supportText) {
+                    const short = supportText.length > 200 ? `${supportText.slice(0, 200)}…` : supportText;
+                    logProcessingStage(`Support idea: ${short}`, 'support', { updateLastRun: false });
+                    hint += `\n\n[OPTIONAL ADVICE FROM SUPPORT MODEL]: ${supportText}\n(You can ignore this if you have a better plan.)`;
+                    const entry = {
+                            id: `support_${supportTs}`,
+                            timestamp: supportTs,
+                            taskId: activeTask?.id,
+                            taskTitle: activeTask?.title,
+                            model: supportTarget.model,
+                            hint: supportText
+                        };
+                        appendSupportHint(entry);
+                    } else if (supportError) {
+                        logProcessingStage(`Support error: ${supportError}`, 'support', { updateLastRun: false });
+                    }
+                }
+            } catch (e) {
+                logWarn('support', String(e?.message || e || 'support_failed'));
+            }
+
+            const toolMemorySummary = buildToolMemorySummary();
+            const toolLessonSummary = buildToolLessonSummary();
+            const toolStatsSummary = buildToolStatsSummary();
+            const toolMemorySection = toolMemorySummary ? `\nRECENT_TOOL_CACHE:\n${toolMemorySummary}\n` : '';
+            const toolLessonSection = toolLessonSummary ? `\nTOOL_LESSONS:\n${toolLessonSummary}\n` : '';
+            const toolStatsSection = toolStatsSummary ? `\nTOOL_STATS (low success):\n${toolStatsSummary}\n` : '';
+            
+            // --- PROJECT CONTEXT INJECTION (GAI SUPER-MIND) ---
+            let projectContext = buildProjectContext();
+            if (projectContext.length > 200000) {
+                projectContext = projectContext.slice(0, 200000) + '\n[WARNING: Project context truncated]';
+            }
+            
+            // --- PERSISTENT HISTORY INJECTION ---
+            let taskHistory = activeTask ? formatTaskHistory(activeTask.id) : '';
+            
+            // Limit context size to avoid HTTP 400 (Request Body Too Large)
+            if (taskHistory.length > 200000) {
+                taskHistory = taskHistory.slice(-200000) + '\n[WARNING: Old task history truncated due to size limit]';
+            }
+            
+            // --- GLOBAL LESSONS INJECTION ---
+            const relevantLessons = buildRelevantLessons(activeTask.title + ' ' + activeTask.description);
+            // ------------------------------------
+
+            focusInstruction = `CURRENT TASK: "${activeTask.title}" (ID: ${activeTask.id}).${hint}
+            Status: ${activeTask.status}. Progress: ${activeTask.progress}%.
+            
+            PROJECT_CONTEXT:
+            ${projectContext}
+            
+            TASK_MEMORY (PERSISTENT CONTEXT):
+            ${taskHistory || 'No history yet.'}
+            
+            ${relevantLessons}
+            
+            Subtasks: ${JSON.stringify(activeTask.subtasks || [])}
+            ${toolMemorySection}${toolLessonSection}${toolStatsSection}
+            
+            YOUR GOAL: Complete this task dokładnie, nowocześnie i profesjonalnie.
+            RULES (MUST FOLLOW):
+            - ZAWSZE rozpoczynaj nowe zadanie od krótkiego [[WEB_SEARCH]] (research), aby poznać najnowsze trendy, metody i dokumentację (np. SEO, biblioteki, best practices). Nie polegaj tylko na swojej "zamrożonej" wiedzy.
+            - Po KAŻDYM realnym kroku wykonaj [[TASK_ACTION: {"action":"update","id":"${activeTask.id}","progress":<0-100>,"log":"..."}]] z precyzyjnym logiem.
+            - Utrzymuj listę subtasks jako źródło prawdy: gdy krok jest zrobiony, ustaw dla niego status "completed"; gdy wymaga pracy, ustaw "pending" lub dodaj nowy subtask.
+            - Nie pomijaj aktualizacji subtasków – stan checklisty ma zawsze odzwierciedlać rzeczywistość.
+            - Jeżeli wszystkie subtaski są faktycznie ukończone i zadanie jest spełnione, ustaw status zadania na "completed" (progress 100) używając [[TASK_ACTION]] i zapisz w logu dokładne podsumowanie.
+            - NIGDY nie loguj "Task completed" ani podobnych komunikatów, jeżeli status zadania NIE został ustawiony na "completed" przez [[TASK_ACTION]].
+            - Jeżeli cokolwiek zostało do zrobienia (subtask, poprawka, walidacja), pozostaw status jako "in_progress" lub "pending".
+            - Jeśli napotkasz trudności, błędy lub niepewność, UŻYJ [[WEB_SEARCH]] lub [[WEB_READ]] aby znaleźć rozwiązanie. Nie zgaduj!
+            
+            CRITICAL WORKFLOW:
+            1. Analyze subtasks.
+            2. If NO subtasks exist: Create a plan using [[TASK_ACTION: {"action":"update", "id":"${activeTask.id}", "subtasks":[...]}]]
+            3. If PENDING subtasks exist: PICK THE FIRST ONE AND EXECUTE IT IMMEDIATELY using tools (SHELL, FILE_READ, WEB_SEARCH). DO NOT UPDATE THE PLAN AGAIN UNLESS NECESSARY.
+            4. If file is BINARY/COMPRESSED (zip, gz, tar, pdf): Use [[SHELL]] commands (gunzip, tar, pdftotext) to process it. Do NOT try to read it directly.
+            5. If ALL subtasks completed: Verify work, then mark task as completed.
+            
+            AVAILABLE TOOLS:
+            - [[WEB_SEARCH: "query"]] - search internet (Google API)
+            - [[WEB_READ: "url"]] - read webpage content
+            - [[SHELL: "command"]] - execute shell command (ls, grep, cat, npm, gunzip, tar, etc.)
+            - [[FILE_READ: "path"]] - read file content
+            - [[FILE_WRITE: {"path":"relative/or/absolute","content":"..."}]] - write file (prefer data/ or fs/)
+            - [[FILE_REPLACE: {"path":"...","oldStr":"...","newStr":"..."}]] - targeted replacement
+            - [[PYTHON_EXEC: {"code":"..."}]] - execute python code (for data analysis/parsing)
+            - [[SYSTEM_QUERY: {"query":"status|logs|tail_system_logs|tail_chat_history|tail_electron_log|diagnose","limit":50}]] - read system diagnostics
+            - [[DEV_STATUS]] - git status
+            - [[DEV_DIFF: {"path":"optional/file"}]] - git diff
+            - [[DEV_APPLY_PATCH: {"patch":"*** Begin Patch...*** End Patch"}]] - apply patch via git apply
+            - [[TASK_ACTION: {"action": "update", ...}]] - update task status/log`;
+        } else if (pendingTask) {
+            let hint = '';
+            if ((pendingTask.retryCount || 0) > 0) {
+                 const rawLog = pendingTask.logs && pendingTask.logs.length > 0 ? pendingTask.logs[pendingTask.logs.length - 1] : '';
+                 const lastLog = String(rawLog).replace(/^\[STAGE\/[^\]]+\]\s*/, '').slice(0, 300);
+                 hint = `\n\nTEACHER_HINT: Your previous attempt failed. Log: "${lastLog}". You MUST output a tool call!`;
+            }
+            try {
+                logProcessingStage(`Support hint requested for pending task: ${pendingTask.title}`, 'support', { updateLastRun: false });
+                
+                // --- NEW: USE BRAIN FOR SUPPORT ---
+                const masterModel = gaiAgentRouter.getMasterModel();
+                const supportModel = masterModel || SYSTEM_DB.settings.activeModel;
+                const supportTarget = { provider: SYSTEM_DB.settings.aiProvider || 'ollama', model: supportModel };
+                // ----------------------------------
+
+                const supportTimeoutMs = 30000;
+                const { controller: supportController, cleanup: supportCleanup } = createAbortControllerWithTimeout(autonomyController.signal, supportTimeoutMs);
+                const supportUserPrompt = `ENVIRONMENT_SNAPSHOT: ${JSON.stringify(sysContext)}.\n\nPENDING_TASK: ${pendingTask.title} (${pendingTask.id}).\nSTATUS: ${pendingTask.status}. PROGRESS: ${pendingTask.progress}.\nRECENT_LOGS:\n${(pendingTask.logs || []).slice(-5).map(l => String(l).replace(/\\[STAGE\\/[^\\]]+\\]\\s*/g, '').trim()).join('\n')}\n\nGOAL: Provide a short SUPPORT_HINT. This is just a suggestion or idea. The main agent may choose to ignore it if it has a better plan. Keep it under 2 lines.`;
+                let supportReply = '';
+                let supportError = '';
+                try {
+                    supportReply = await queryUniversalAI({
+                        provider: supportTarget.provider,
+                        model: supportTarget.model,
+                        modelRole: 'support',
+                        systemInstruction: 'ROLE: SUPPORT.\nYou are a creative advisor. Propose ideas to initialize tasks, but remember your advice is optional. The agent decides.',
+                        userPrompt: supportUserPrompt,
+                        signal: supportController.signal,
+                        source: 'support',
+                        stream: false
+                    });
+                } catch (e) {
+                    supportError = String(e?.message || e || '').slice(0, 300).trim();
+                    if (supportError) logWarn('support', supportError, { provider: supportTarget.provider, model: supportTarget.model });
+                } finally {
+                    supportCleanup();
+                }
+                const supportText = String(supportReply || '').slice(0, 600).trim();
+                const supportTs = Date.now();
+                if (supportText || supportError) {
+                    if (supportText) {
+                    const short = supportText.length > 200 ? `${supportText.slice(0, 200)}…` : supportText;
+                    logProcessingStage(`Support idea: ${short}`, 'support', { updateLastRun: false });
+                    hint += `\n\n[OPTIONAL ADVICE FROM SUPPORT MODEL]: ${supportText}\n(You can ignore this if you have a better plan.)`;
+                    const entry = {
+                            id: `support_${supportTs}`,
+                            timestamp: supportTs,
+                            taskId: pendingTask?.id,
+                            taskTitle: pendingTask?.title,
+                            model: supportTarget.model,
+                            hint: supportText
+                        };
+                        appendSupportHint(entry);
+                    } else if (supportError) {
+                        logProcessingStage(`Support error: ${supportError}`, 'support', { updateLastRun: false });
+                    }
+                }
+            } catch (e) {
+                logWarn('support', String(e?.message || e || 'support_failed'));
+            }
+            const pendingToolMemorySummary = buildToolMemorySummary();
+            const pendingToolMemorySection = pendingToolMemorySummary ? `\nRECENT_TOOL_CACHE:\n${pendingToolMemorySummary}\n` : '';
+            focusInstruction = `CRITICAL PRIORITY: New task pending: "${pendingTask.title}" (ID: ${pendingTask.id}).${hint}
+            ${pendingToolMemorySection}
+            
+            1. ANALYZE: Does it have a clear breakdown (subtasks)?
+            2. REFINE: If not, FIRST use [[TASK_ACTION: {"action": "update", "id": "${pendingTask.id}", "description": "Detailed description...", "subtasks": [{"id": "1", "title": "Step 1", "status": "pending"}, ...]}]] to add a plan.
+            3. EXECUTE: Only when the plan is ready, set status to 'in_progress' using [[TASK_ACTION]] and then work step-by-step, updating progress/logs after each step.
+            
+            AVAILABLE TOOLS:
+            - [[WEB_SEARCH: "query"]] - search internet (Google API)
+            - [[WEB_READ: "url"]] - read webpage content
+            - [[SHELL: "command"]] - execute shell command (ls, grep, cat, npm, gunzip, tar, etc.)
+            - [[FILE_READ: "path"]] - read file content
+            - [[FILE_WRITE: {"path":"...","content":"..."}]] - write file
+            - [[FILE_REPLACE: {"path":"...","oldStr":"...","newStr":"..."}]] - replace in file
+            - [[PYTHON_EXEC: {"code":"..."}]] - execute python
+            - [[SYSTEM_QUERY: {"query":"diagnose","limit":50}]] - inspect logs/state
+            - [[DEV_STATUS]] - git status
+            - [[DEV_DIFF: {"path":"optional/file"}]] - git diff
+            - [[DEV_APPLY_PATCH: {"patch":"..."}]] - apply patch
+            - [[TASK_ACTION: {"action": "update", ...}]] - update task status/log`;
+        }
+
+        logProcessingStage('Ollama: oczekiwanie na odpowiedź');
+        const ollamaWaitStartedAt = Date.now();
+        SYSTEM_DB.agentState.ollamaWaitStartedAt = Date.now();
+        saveState();
+        let reply;
+        let streamSummary = '';
+        let lastStreamSaveAt = 0;
+        const flushStreamThought = () => {
+            const nowTs = Date.now();
+            if (nowTs - lastStreamSaveAt < 500) return;
+            lastStreamSaveAt = nowTs;
+            saveState();
+        };
+        const handleStreamToken = (chunk) => {
+            if (!chunk) return;
+            if (typeof chunk === 'object' && typeof chunk.content === 'string') {
+                if (chunk.type === 'summary_delta') {
+                    streamSummary += chunk.content;
+                    const normalized = normalizeThoughtText(streamSummary);
+                    if (isMeaningfulThought(normalized)) {
+                        SYSTEM_DB.agentState.thoughtProcess = normalized;
+                        flushStreamThought();
+                    }
+                    return;
+                }
+            }
+            if (typeof chunk === 'string') {
+                return;
+            }
+        };
+
+        const toolsPrompt = `
+AVAILABLE TOOLS (Output ONLY tool blocks, no prose):
+- [[WEB_SEARCH: "query"]] - search internet
+- [[WEB_READ: "url"]] - read webpage content
+- [[SHELL: "command"]] - execute shell command
+- [[FILE_READ: "path"]] - read file content
+- [[FILE_WRITE: {"path":"...","content":"..."}]] - write file
+- [[FILE_REPLACE: {"path":"...","oldStr":"...","newStr":"..."}]] - replace in file
+- [[PYTHON_EXEC: {"code":"..."}]] - execute python
+- [[SYSTEM_QUERY: {"query":"diagnose","limit":50}]] - inspect logs/state
+- [[DEV_STATUS]] - git status
+- [[DEV_DIFF: {"path":"optional/file"}]] - git diff
+- [[DEV_APPLY_PATCH: {"patch":"..."}]] - apply patch
+- [[TASK_ACTION: {"action": "update", ...}]] - update task status/log`;
+
+        const taskRole = activeTask?.role || 'architecture';
+        let rolePrompt = '';
+        if (taskRole === 'architecture' || taskRole === 'coding') {
+            rolePrompt = `ROLE: ARCHITECT & CODER.\n${toolsPrompt}\nYou are a senior engineer. DO NOT just plan. EXECUTE. Use tools immediately.`;
+        } else if (taskRole === 'research') {
+            rolePrompt = `ROLE: RESEARCHER.\n${toolsPrompt}\nYou MUST use [[WEB_SEARCH]] to gather info. Verify facts.`;
+        } else {
+            rolePrompt = `ROLE: GENERALIST.\n${toolsPrompt}\nUse available tools to complete the task.`;
+        }
+        const dynamicSystemPrompt = `${AUTONOMOUS_AGENT_PROMPT}\n\n${rolePrompt}`;
+
+        try {
+            const plannedModelTimeout = getOllamaTotalTimeoutMs(autonomyModel);
+            const stepTimeoutMs = Math.max(
+                plannedModelTimeout + 60000,
+                Number(AUTONOMY_STEP_TIMEOUT_MS) || 120000,
+                300000
+            );
+            const { controller: stepController, cleanup: stepCleanup } = createAbortControllerWithTimeout(autonomyController.signal, stepTimeoutMs);
+            try {
+                reply = await queryUniversalAI({
+                    provider,
+                    model: autonomyModel,
+                    modelRole: selectedRole,
+                    systemInstruction: dynamicSystemPrompt,
+                    userPrompt: `ENVIRONMENT_SNAPSHOT: ${JSON.stringify(sysContext)}. \n\n${focusInstruction}`,
+                    stream: true,
+                    onToken: handleStreamToken,
+                    signal: stepController.signal,
+                    source: 'autonomy'
+                });
+            } finally {
+                stepCleanup();
+            }
+        } finally {
+            clearActiveAbortController('system', autonomyController);
+        }
+        SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+        saveState();
+        const ollamaWaitSeconds = Math.max(0, Math.floor((Date.now() - ollamaWaitStartedAt) / 1000));
+        logProcessingStage(`Ollama: odpowiedź odebrana (${ollamaWaitSeconds}s)`);
+
+        if (SYSTEM_DB?.settings?.developerMode === true) {
+            logProcessingStage(`RAW REPLY START: ${reply.slice(0, 150).replace(/\n/g, ' ')}...`);
+        }
+
+        logProcessingStage('Analiza odpowiedzi');
+        
+        // --- DEEPSEEK R1 SUPPORT ---
+        const rawReply = reply;
+        let thoughtText = '';
+        let thinkRaw = '';
+        // Najpierw usuwamy zepsute tagi kończące, które mogą pojawiać się wielokrotnie
+        reply = reply.replace(/(<\/think>\s*)+/gi, '</think>');
+        
+        const thinkMatch = reply.match(/<think>([\s\S]*?)<\/think>/i);
+        if (thinkMatch) {
+            thinkRaw = thinkMatch[1] || '';
+            thoughtText = thinkMatch[1].trim();
+            // Remove think block from reply to prevent tool execution inside thoughts
+            reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        }
+
+        // Jeśli model wypluł same tagi </think> bez otwarcia (częsty błąd przy streamingu/ucięciu)
+        if (!thoughtText && reply.includes('</think>')) {
+             const parts = reply.split('</think>');
+             if (parts.length > 1) {
+                 thoughtText = parts[0].trim(); // Zakładamy, że początek to myśl, której ucięło <think>
+                 reply = parts.slice(1).join(' ').trim();
+             }
+        }
+
+        const thoughtMatch = reply.match(/THOUGHT:\s*([\s\S]*?)(?=\[\[|$)/i);
+        if (thoughtMatch) {
+            // Jeśli już mamy thought z <think>, to doklejamy, albo nadpisujemy jeśli tamto było puste
+            if (thoughtText) thoughtText += '\n\n' + thoughtMatch[1].trim();
+            else thoughtText = thoughtMatch[1].trim();
+        }
+
+        // FALLBACK: Jeśli nie znaleziono myśli, a jest tekst przed narzędziami
+        if (!thoughtText) {
+            const preToolText = reply.split('[[')[0].trim();
+            // Ignoruj krótkie śmieci i same tagi
+            if (preToolText && preToolText.length > 5 && !preToolText.match(/^<\/think>$/i)) { 
+                thoughtText = preToolText;
+            }
+        }
+        
+        // --- NOWY FIX: Usuń sekcje XML <think> z samej odpowiedzi (reply) zanim pójdzie do parsera narzędzi ---
+        // Często modele zostawiają śmieci typu "<think>... [[TOOL...]] ... </think>" co psuje parser
+        reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        // ---------------------------------------------------------------------------------------------------
+
+        // Czystka finalna thoughtText z ewentualnych śmieci xml
+        if (thoughtText) {
+            thoughtText = thoughtText.replace(/<\/?think>/gi, '').trim();
+        }
+
+        // Jeśli thoughtText jest podejrzanie długi i zawiera powtórzenia (loop), skróć go
+        if (thoughtText && thoughtText.length > 5000) {
+            thoughtText = thoughtText.slice(0, 5000) + '... [TRUNCATED LOOP]';
+        }
+        
+        // Finalna walidacja i czyszczenie
+        if (thoughtText) {
+             // 1. Usuń dosłowne ciągi "\n" (tekstowe) i wielokrotne entery
+             thoughtText = thoughtText.replace(/(\\n)+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+             
+             // 2. SCRUBBER: Usuń linie wyglądające jak zrzut JSON/Historii
+             const lines = thoughtText.split('\n');
+             const cleanLines = lines.filter(line => {
+                 const l = line.trim();
+                 // Jeśli linia zawiera fragmenty JSON z historii czatu - wyrzuć ją
+                 if (l.includes('"timestamp":') || l.includes('"role":') || l.includes('{"id":') || l.includes('THREAD_ID')) return false;
+                 if (l.includes('"level":') || l.includes('"message":') || l.includes('"type":') || l.includes('memoryService:')) return false;
+                 if (l.includes('gaiService:') || l.includes('Autonomy Tick') || l.includes('.DS_Store')) return false;
+                 if (/\d{20,}/.test(l) || /(3{10,})/.test(l)) return false;
+                 // Jeśli linia to sam nawias klamrowy lub przecinek (resztki po JSON)
+                 if (l === '{' || l === '},' || l === '}' || l === '],') return false;
+                 return true;
+             });
+             thoughtText = cleanLines.join('\n').trim();
+
+             // REMOVED AGGRESSIVE HEURISTICS (symbolRatio, digitRatio) that were killing valid technical thoughts
+             
+            if (thoughtText) {
+                const maxLines = 160;
+                const maxChars = 8000;
+                const limited = thoughtText.split('\n').slice(0, maxLines).join('\n').trim();
+                thoughtText = limited.length > maxChars ? (limited.slice(0, maxChars).trim() + '...') : limited;
+            }
+        }
+        
+        const normalizedThought = normalizeThoughtText(thoughtText);
+        if (isMeaningfulThought(normalizedThought)) {
+            SYSTEM_DB.agentState.thoughtProcess = normalizedThought;
+            logToChat('model', normalizedThought, 'thought');
+            logProcessingStage('Analiza odpowiedzi...');
+        } else {
+            const fallbackThought = buildFallbackThought();
+            if (isMeaningfulThought(fallbackThought)) {
+                SYSTEM_DB.agentState.thoughtProcess = fallbackThought;
+                logToChat('model', fallbackThought, 'thought');
+                logProcessingStage('Analiza odpowiedzi...');
+            }
+        }
+        recordReasoning({
+            summary: normalizedThought || `Autonomy cycle executed for ${selectedRole}.`,
+            role: selectedRole,
+            model: autonomyModel,
+            source: 'autonomy'
+        });
+        const cfgMaxToolsRaw = SYSTEM_DB.settings && SYSTEM_DB.settings.autonomyConfig ? Number(SYSTEM_DB.settings.autonomyConfig.maxToolsPerCycle) : NaN;
+        const maxToolsPerCycle = Number.isFinite(cfgMaxToolsRaw) && cfgMaxToolsRaw > 0 ? cfgMaxToolsRaw : AUTONOMY_MAX_TOOLS_PER_CYCLE;
+        const toolBudgetMs = Math.max(60000, Math.floor(intervalMs * 0.9));
+        const toolDeadlineMs = Date.now() + toolBudgetMs;
+        
+        let executedCount = await executeTools(reply, { maxTools: maxToolsPerCycle, deadlineMs: toolDeadlineMs, source: 'autonomy' });
+        
+        // --- PERSISTENT CONTEXT UPDATE ---
+        if (activeTask || pendingTask) {
+            const task = activeTask || pendingTask;
+            const entry = {
+                type: 'thought',
+                content: normalizedThought || 'No thought captured'
+            };
+            appendTaskHistory(task.id, entry);
+            
+            // Note: Tool execution results are captured inside executeTools via intercept or we need to capture them here.
+            // Since executeTools is complex, let's just log that tools were executed for now.
+            // Ideally, executeTools should return detailed result log.
+        }
+        // ---------------------------------
+
+        if (executedCount === 0 && thinkRaw && /\[\[\w+/.test(thinkRaw)) {
+            executedCount = await executeTools(thinkRaw, { maxTools: maxToolsPerCycle, deadlineMs: toolDeadlineMs, source: 'autonomy' });
+        }
+        if (executedCount === 0 && rawReply && /\[\[\w+/.test(rawReply)) {
+            executedCount = await executeTools(rawReply, { maxTools: maxToolsPerCycle, deadlineMs: toolDeadlineMs, source: 'autonomy' });
+        }
+        
+        if (executedCount === 0 && (activeTask || pendingTask)) {
+            logProcessingStage('Ostrzeżenie: brak narzędzi w odpowiedzi');
+            const targetTask = activeTask || pendingTask;
+            const targetTaskId = targetTask?.id ? String(targetTask.id) : '';
+            const targetIdx = targetTaskId ? SYSTEM_DB.tasks.findIndex(t => t && t.id === targetTaskId) : -1;
+            if (targetIdx !== -1) {
+                const liveTask = SYSTEM_DB.tasks[targetIdx];
+                if (liveTask.status !== 'failed') {
+                    try {
+                        const { controller: tc, cleanup: tcClean } = createAbortControllerWithTimeout(null, 60000);
+                        try {
+                            const hasSubtasks = Array.isArray(liveTask.subtasks) && liveTask.subtasks.length > 0;
+                            const nextSubtask = hasSubtasks ? liveTask.subtasks.find(s => s.status !== 'completed') : null;
+                            
+                            let promptReq = '';
+                            if (!hasSubtasks) {
+                                promptReq = `1. Output a [[TASK_ACTION: {"action":"update", "id":"${liveTask.id}", "subtasks":[...]}]] to create a step-by-step plan.`;
+                            } else if (nextSubtask) {
+                                promptReq = `1. EXECUTE the next subtask: "${nextSubtask.title}". Use tools like [[SHELL]], [[FILE_READ]], or [[WEB_SEARCH]]. DO NOT just plan again.`;
+                            } else {
+                                promptReq = `1. All subtasks are done. Verify and complete the task using [[TASK_ACTION: {"action":"complete", "id":"${liveTask.id}"}]].`;
+                            }
+
+                            const toolOnlyReply = await queryUniversalAI({
+                                provider,
+                                model: autonomyModel,
+                                modelRole: selectedRole,
+                                systemInstruction: 'Return ONLY tool calls in [[SHELL: ...]] / [[FILE_READ: ...]] / [[FILE_WRITE: ...]] / [[WEB_SEARCH: ...]] / [[TASK_ACTION: {...}]] format. No THOUGHT. No prose. No markdown.',
+                                userPrompt: `TASK: ${liveTask.title}\n\nREQUIREMENTS:\n${promptReq}`,
+                                stream: false,
+                                signal: tc.signal
+                            });
+                            executedCount = await executeTools(String(toolOnlyReply || ''), { maxTools: maxToolsPerCycle, deadlineMs: toolDeadlineMs, source: 'autonomy' });
+                        } finally {
+                            tcClean();
+                        }
+                    } catch {}
+                }
+                if (executedCount === 0 && liveTask.status !== 'failed') {
+                    const title = String(liveTask.title || '').trim();
+                    const desc = String(liveTask.description || '').trim();
+                    const text = `${title}\n${desc}`.toLowerCase();
+                    const looksLikeResearch = /(research|analiz|keyword|seo|amazon|gadget|blog|content|trend)/i.test(text);
+                    const query = title || desc || 'research';
+                    const toolCall = looksLikeResearch
+                        ? `[[WEB_SEARCH: {"query": ${JSON.stringify(query)}}]]`
+                        : `[[SHELL: ${JSON.stringify('ls')}]]`;
+                    executedCount = await executeTools(toolCall, { maxTools: maxToolsPerCycle, deadlineMs: toolDeadlineMs, source: 'autonomy' });
+                }
+                liveTask.logs = Array.isArray(liveTask.logs) ? liveTask.logs : [];
+                if (executedCount === 0) {
+                    liveTask.logs.push('[AUTONOMY] Model reasoning completed but no action was taken (0 tools). Retrying...');
+                    liveTask.retryCount = (liveTask.retryCount || 0) + 1;
+                    liveTask.updatedAt = Date.now();
+                    
+                    if (liveTask.retryCount > 10) {
+                         liveTask.status = 'failed';
+                         liveTask.logs.push('[AUTONOMY] Task failed due to repetitive model inaction (stalled).');
+                         liveTask.updatedAt = Date.now();
+                         logToSystem('error', `Task ${liveTask.id} failed due to model stall.`);
+                         
+                         // --- RECORD LESSON ON FAILURE ---
+                         recordLesson(`Task '${liveTask.title}' failed due to stall. Check if prompt is too complex or tools are missing.`);
+                         // --------------------------------
+                    }
+                }
+                saveState();
+            }
+        }
+
+        // logProcessingStage('Aktualizacja zadania'); // Wyłączone dla wydajności
+        if (executedCount > 0) {
+            SYSTEM_DB.agentState.autonomyFailureCount = 0;
+            SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+            SYSTEM_DB.agentState.lastAutonomyError = '';
+            
+            // --- SMART BALANCE TRACKING ---
+            // If the completed task was NOT a self-improvement task, increment the counter
+            if (activeTask && activeTask.status === 'completed' && !String(activeTask.title || '').includes('Autonomia: Samorozwój')) {
+                 SYSTEM_DB.agentState.completedBusinessTasksSinceLastSelfImprove = (SYSTEM_DB.agentState.completedBusinessTasksSinceLastSelfImprove || 0) + 1;
+            }
+            // ------------------------------
+        } else {
+            SYSTEM_DB.agentState.autonomyFailureCount = (SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+            SYSTEM_DB.agentState.lastAutonomyError = 'No tools executed in autonomy cycle';
+            SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + 15000;
+        }
+        
+        // Success path - set to idle happens in finally block
+
+        const openCountAfter = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress')).length;
+        const hasObjectivesAfter = !!String(SYSTEM_DB.settings.autonomousObjectives || '').trim();
+        if (openCountAfter === 0 && hasObjectivesAfter) {
+            try {
+                logProcessingStage('Idle po zakończeniu: generowanie z celów');
+                await generateTasksFromObjectives();
+            } catch {
+            }
+        }
+
+        // Rapid Fire Logic: If there is still work, schedule next run soon
+        if (executedCount > 0) {
+            const openCount = SYSTEM_DB.tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress')).length;
+            if (openCount > 0) {
+                const scheduler = String(SYSTEM_DB?.settings?.autonomyScheduler || 'heartbeat');
+                if (scheduler === 'event') {
+                    scheduleAutonomyEvent('rapid_fire', 1000);
+                } else {
+                    safeSetTimeout(runAutonomousCycle, 1000); // M4: 1s zamiast 2s
+                }
+            }
+        }
+
+    } catch (e) {
+        if (SYSTEM_DB.agentState.ollamaWaitStartedAt) {
+            SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+            logProcessingStage('Ollama: timeout');
+        }
+        const stack = String(e?.stack || '');
+        SYSTEM_DB.agentState.lastAutonomyErrorStack = stack.slice(0, 3800);
+        logToSystem('error', `Autonomous Kernel Error (${provider}): ${stack || e.message}`);
+        logProcessingStage(`Błąd: ${e.message}`);
+        // Error recording
+        SYSTEM_DB.agentState.thoughtProcess = `Error: ${e.message}`;
+        const errText = String(e?.message || '');
+        const isOllamaFailure = /timeout|aborted|fetch failed|ollama/i.test(errText);
+        const nextFailures = Number(SYSTEM_DB.agentState.autonomyFailureCount || 0) + 1;
+        SYSTEM_DB.agentState.autonomyFailureCount = nextFailures;
+        SYSTEM_DB.agentState.lastAutonomyError = errText;
+        const taskActionErrors = Number(SYSTEM_DB.agentState.taskActionErrorCount || 0);
+        if (nextFailures >= 3 || taskActionErrors >= 3) {
+            await performAutonomyRecovery('autonomy_failures', errText);
+        }
+        if (isOllamaFailure) {
+            const delayMs = Math.min(2 * 60 * 1000, 15_000 * nextFailures); // M4: krótszy backoff
+            SYSTEM_DB.agentState.autonomyBackoffUntil = Date.now() + delayMs;
+        }
+    } finally {
+        // GUARANTEED STATE RESET: Even if execution crashes, we must release the lock.
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.lastRun = Date.now(); 
+        saveState();
+        releaseHeartbeatLock();
+    }
+    return { status: 'completed' };
+};
+
+let autonomyEventTimer = null;
+let autonomyEventReason = '';
+const scheduleAutonomyEvent = (reason = 'event', delayMs = 0, opts = {}) => {
+    if (!SYSTEM_DB?.settings?.autonomyEnabled) return false;
+    autonomyEventReason = String(reason || 'event');
+    try {
+        if (autonomyEventTimer) {
+            safeClearTimeout(autonomyEventTimer);
+            autonomyEventTimer = null;
+        }
+    } catch {
+    }
+    const d = Number(delayMs);
+    const effectiveDelay = Number.isFinite(d) ? Math.max(0, Math.min(60_000, Math.floor(d))) : 0;
+    autonomyEventTimer = safeSetTimeout(async () => {
+        try {
+            logToSystem('info', `Autonomy Event: ${autonomyEventReason}`);
+            await runAutonomousCycle({ ...opts });
+        } catch {
+        }
+    }, effectiveDelay);
+    return true;
+};
+
+let heartbeatTimer = null;
+const scheduleHeartbeat = () => {
+    const scheduler = String(SYSTEM_DB?.settings?.autonomyScheduler || 'heartbeat');
+    if (scheduler !== 'heartbeat') {
+        if (heartbeatTimer) {
+            try { safeClearTimeout(heartbeatTimer); } catch { try { clearTimeout(heartbeatTimer); } catch {} }
+            heartbeatTimer = null;
+        }
+        return;
+    }
+    if (heartbeatTimer) {
+        try { safeClearTimeout(heartbeatTimer); } catch { try { clearTimeout(heartbeatTimer); } catch {} }
+    }
+    const intervalMs = getHeartbeatIntervalMs();
+    heartbeatTimer = setTimeout(async () => {
+        try {
+            if (SYSTEM_DB.settings.heartbeat.enabled && SYSTEM_DB.settings.autonomyEnabled) {
+                await runAutonomousCycle();
+            }
+        } catch (e) {
+            console.error('Heartbeat cycle error:', e);
+        } finally {
+            scheduleHeartbeat();
+        }
+    }, intervalMs);
+};
+scheduleHeartbeat();
+
+let telegramPollTimer = null;
+let telegramOffset = null;
+let telegramEnabledCache = false;
+let telegramPollInFlight = false;
+
+// Cleanup function for graceful shutdown
+const cleanupAllTimers = () => {
+    // Clear all intervals
+    for (const id of activeIntervals) {
+        clearInterval(id);
+    }
+    activeIntervals.clear();
+    
+    // Clear all timeouts
+    for (const id of activeTimeouts) {
+        clearTimeout(id);
+    }
+    activeTimeouts.clear();
+    
+    // Clear specific timers
+    if (telegramPollTimer) {
+        clearInterval(telegramPollTimer);
+        telegramPollTimer = null;
+    }
+    if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = null;
+    }
+    if (ollamaLiveTimer) {
+        safeClearInterval(ollamaLiveTimer);
+        ollamaLiveTimer = null;
+    }
+};
+
+// Schedule GC every hour (DISABLED - causing lags)
+// safeSetInterval(runSystemGC, 60 * 60 * 1000);
+
+let telegramWebhookCleared = false;
+let lastTelegramWebhookClearAt = 0;
+let telegramBotId = null;
+let telegramPollBlockedUntil = 0;
+let lastTelegramPollAt = 0;
+let lastTelegramUpdateAt = 0;
+let lastTelegramProcessedAt = 0;
+let lastTelegramProcessedCount = 0;
+let lastTelegramPollError = '';
+let lastTelegramConflictAt = 0;
+let lastTelegramConflictMsg = '';
+const lastTelegramNonTextReplyAtByChat = new Map();
+let telegramWebhookInfoCache = { fetchedAt: 0, data: null };
+let lastAutonomyTelegramAt = 0;
+const AUTONOMY_TELEGRAM_INTERVAL_MS = 5 * 60 * 1000;
+
+const isTelegramEnabled = () => {
+    if (!SYSTEM_DB?.settings?.telegramConfig) return false;
+    const cfg = SYSTEM_DB.settings.telegramConfig;
+    const botToken = String(cfg.botToken || '').trim();
+    return !!(cfg.enabled && botToken);
+};
+
+const sendTelegramMessage = async (text) => {
+    const { botToken, chatId } = SYSTEM_DB.settings.telegramConfig;
+    const cleanToken = String(botToken || '').trim();
+    const cleanChatId = String(chatId || '').trim();
+    if (!cleanToken || !cleanChatId) {
+        console.warn('[TELEGRAM] Send skipped (missing token/chatId)');
+        logToSystem('warn', 'Telegram send skipped (missing token/chatId).');
+        return;
+    }
+    const url = `https://api.telegram.org/bot${cleanToken}/sendMessage`;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 15000);
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({ chat_id: cleanChatId, text })
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            logToSystem('error', `Telegram Send Error: ${res.status} ${errText || res.statusText}`);
+        }
+    } catch (e) {
+        logToSystem('error', `Telegram Send Error: ${e.message}`);
+    } finally {
+        cleanup();
+    }
+};
+global.sendTelegramMessage = sendTelegramMessage;
+
+const ensureTelegramLongPolling = async () => {
+    if (!isTelegramEnabled() || telegramWebhookCleared) return;
+    const { botToken } = SYSTEM_DB.settings.telegramConfig;
+    const cleanToken = String(botToken || '').trim();
+    if (!cleanToken) return;
+    try {
+        const url = `https://api.telegram.org/bot${cleanToken}/deleteWebhook?drop_pending_updates=true`;
+        const res = await fetch(url);
+        if (res.ok) {
+            telegramWebhookCleared = true;
+            lastTelegramWebhookClearAt = Date.now();
+            logToSystem('info', 'Telegram webhook cleared for long polling');
+        }
+    } catch (e) {
+        logToSystem('error', `Telegram Webhook Clear Error: ${e.message}`);
+    }
+};
+
+const getTelegramWebhookInfoCached = async () => {
+    if (!isTelegramEnabled()) return null;
+    const now = Date.now();
+    if (telegramWebhookInfoCache?.data && (now - (telegramWebhookInfoCache.fetchedAt || 0)) < 30000) return telegramWebhookInfoCache.data;
+    const { botToken } = SYSTEM_DB.settings.telegramConfig;
+    const cleanToken = String(botToken || '').trim();
+    if (!cleanToken) return null;
+    try {
+        const url = `https://api.telegram.org/bot${cleanToken}/getWebhookInfo`;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        telegramWebhookInfoCache = { fetchedAt: now, data };
+        return data;
+    } catch {
+        return null;
+    }
+};
+
+const ensureTelegramBotIdentity = async () => {
+    if (!isTelegramEnabled() || telegramBotId) return;
+    const { botToken } = SYSTEM_DB.settings.telegramConfig;
+    const cleanToken = String(botToken || '').trim();
+    if (!cleanToken) return;
+    try {
+        const url = `https://api.telegram.org/bot${cleanToken}/getMe`;
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.ok && data?.result?.id) {
+            telegramBotId = String(data.result.id);
+            logToSystem('info', `Telegram bot id resolved: ${telegramBotId}`);
+        }
+    } catch (e) {
+        logToSystem('error', `Telegram GetMe Error: ${e.message}`);
+    }
+};
+
+const handleTelegramMessage = async (messageText) => {
+    // 1. Log to console for visibility
+    console.log(`\x1b[36m[TELEGRAM][IN] ${String(messageText || '').slice(0, 500)}\x1b[0m`);
+
+    // 2. Log to chat history via internal tool (so model sees it)
+    // We simulate a tool execution to make it part of the agent's stream of consciousness
+    try {
+        logToChat('user', `[TELEGRAM] ${messageText}`, 'telegram');
+        // Optionally record it as a tool success if you want it in tool stats, but logToChat is enough for context.
+    } catch (e) {}
+
+    const approvalHandled = await handleTaskApproval(messageText, 'telegram');
+    if (approvalHandled) return;
+
+    logUserUpdateToActiveTask(messageText, 'telegram');
+    await maybeCreateTaskFromUserMessage(messageText, 'telegram', { preempt: true });
+    scheduleRealtimeSources('telegram');
+    logUserMessageOnce(messageText, 'telegram');
+    // Check if Agentic System is enabled and try to route there first
+    if (gaiAgentRouter && SYSTEM_DB.settings.agenticSystem?.enabled) {
+        const agentResponse = await gaiAgentRouter.routeRequest(messageText, [], {
+            chat: async (model, messages) => {
+               // Reuse existing queryUniversalAI logic or minimal wrapper
+               // But queryUniversalAI expects specific params. Let's make a bridge.
+               // We need a direct way to call Ollama here.
+               // Since we are inside server.js, we can use callOllamaChat directly or queryUniversalAI with simplified args
+               try {
+                   const sysMsg = messages.find(m => m.role === 'system')?.content || '';
+                   const usrMsg = messages.find(m => m.role === 'user')?.content || '';
+                   return await queryUniversalAI({
+                       provider: 'ollama',
+                       model,
+                       modelRole: 'agent', // pseudo role
+                       systemInstruction: sysMsg,
+                       userPrompt: usrMsg,
+                       source: 'telegram_agent'
+                   });
+               } catch(e) {
+                   console.error('Agent routing chat failed', e);
+                   return "Error in agent execution";
+               }
+            },
+            generate: async (model, prompt, options) => {
+                 // Bridge for JSON generation
+                 // We can use queryUniversalAI but force JSON mode if possible?
+                 // Or just use callOllamaChat directly if exported?
+                 // Let's use queryUniversalAI and hope for the best or implement direct fetch here
+                 // For now, let's use the same bridge
+                 return await queryUniversalAI({
+                       provider: 'ollama',
+                       model,
+                       modelRole: 'planning',
+                       systemInstruction: 'You are a JSON generator.',
+                       userPrompt: prompt,
+                       source: 'telegram_agent_plan'
+                   });
+            }
+        });
+
+        if (agentResponse) {
+             const replyText = agentResponse.response?.content || agentResponse.response || '';
+             console.log(`\x1b[36m[TELEGRAM][AGENT_OUT] ${String(replyText).slice(0, 500)}\x1b[0m`);
+             logToChat('model', `[AGENT: ${agentResponse.agentName}] ${replyText}`, 'telegram');
+             await sendTelegramMessage(replyText);
+             return;
+        }
+    }
+
+    const provider = SYSTEM_DB.settings.aiProvider;
+    const modelRole = selectUserModelRole(messageText, 'chat');
+    const roleModel = SYSTEM_DB.settings.modelRoles?.[modelRole] || SYSTEM_DB.settings.activeModel;
+    const userSystemInstruction = buildChatSystemInstruction(SYSTEM_DB.settings.systemPrompt);
+    const needsArticleGuide = shouldIncludeArticleGuide(messageText);
+    let composedPrompt = applyThinkingTag(messageText, modelRole);
+    composedPrompt = composePrompt({ message: composedPrompt, modelRole, includeGuide: needsArticleGuide });
+    const userController = createActiveAbortController('user');
+    let reply;
+    try {
+        const { controller: stepController, cleanup: stepCleanup } = createAbortControllerWithTimeout(userController.signal, Number(AUTONOMY_STEP_TIMEOUT_MS) || 300000);
+        try {
+            reply = await queryUniversalAI({
+                provider,
+                model: roleModel,
+                modelRole,
+                systemInstruction: userSystemInstruction,
+                userPrompt: composedPrompt,
+                signal: stepController.signal,
+                source: 'telegram'
+            });
+        } finally {
+            stepCleanup();
+        }
+    } catch (e) {
+        const msg = String(e?.message || e || 'telegram_ai_failed').slice(0, 280);
+        console.warn(`\x1b[36m[TELEGRAM][ERR] ${msg}\x1b[0m`);
+        logToSystem('error', `Telegram reply generation failed: ${msg}`);
+        const fallback = `Nie mogę teraz wygenerować odpowiedzi (błąd AI). Spróbuj ponownie za chwilę.\n\nSzczegóły: ${msg}`;
+        logToChat('model', fallback, 'telegram');
+        await sendTelegramMessage(fallback);
+        return;
+    } finally {
+        clearActiveAbortController('user', userController);
+    }
+    try {
+        await executeTools(reply, { source: 'telegram' });
+    } catch (e) {
+        logToSystem('warn', `Telegram tools execution failed: ${String(e?.message || e || '').slice(0, 240)}`);
+    }
+    const parsed = parseThinkTags(reply);
+    const thought = normalizeThoughtText(parsed.thought || parsed.summary);
+    if (isMeaningfulThought(thought)) {
+        logToChat('model', thought, 'thought');
+    }
+    const askUser = extractAskUser(parsed.answer || reply);
+    recordReasoning({
+        summary: thought || String(parsed.answer || '').slice(0, 400),
+        role: modelRole,
+        model: roleModel,
+        source: 'telegram'
+    });
+    const answerCandidate = (parsed.answer || parsed.summary || reply || '').trim();
+    const suppressed = suppressRedundantPrompts(answerCandidate);
+    const replyText = askUser ? askUser : (suppressed || answerCandidate);
+    console.log(`\x1b[36m[TELEGRAM][OUT] ${String(replyText || '').slice(0, 500)}\x1b[0m`);
+    logToChat('model', replyText, 'telegram');
+    try {
+        await sendTelegramMessage(replyText);
+    } catch (e) {
+        logToSystem('error', `Telegram send failed: ${String(e?.message || e || '').slice(0, 240)}`);
+    }
+};
+
+const pollTelegram = async () => {
+    if (!isTelegramEnabled()) return;
+    lastTelegramPollAt = Date.now();
+    if (telegramPollBlockedUntil && Date.now() < telegramPollBlockedUntil) return 0;
+    if (telegramPollInFlight) return 0;
+    telegramPollInFlight = true;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 15000);
+    try {
+        const { botToken, chatId } = SYSTEM_DB.settings.telegramConfig;
+        const cleanToken = String(botToken || '').trim();
+        const cleanChatId = String(chatId || '').trim();
+        const requiresChatMatch = /^[0-9-]+$/.test(cleanChatId);
+        const shouldAutoBind = !cleanChatId || (telegramBotId && cleanChatId === telegramBotId);
+        const shouldMatch = requiresChatMatch && !shouldAutoBind;
+        const offsetParam = telegramOffset ? `&offset=${telegramOffset}` : '';
+        const url = `https://api.telegram.org/bot${cleanToken}/getUpdates?timeout=10${offsetParam}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) {
+            const errText = await res.text();
+            if (res.status === 409 || String(errText || '').toLowerCase().includes('conflict')) {
+                telegramPollBlockedUntil = Date.now() + 60000;
+                const msg = String(errText || res.statusText || '').slice(0, 400);
+                console.warn(`[TELEGRAM] Polling paused due to conflict (409): ${msg}`);
+                logToSystem('warn', `Telegram polling conflict (409). Polling paused 60s. ${msg}`);
+                lastTelegramConflictAt = Date.now();
+                lastTelegramConflictMsg = msg;
+                if (!telegramWebhookCleared || (lastTelegramWebhookClearAt && (Date.now() - lastTelegramWebhookClearAt) > 120000)) {
+                    telegramWebhookCleared = false;
+                    try { await ensureTelegramLongPolling(); } catch {}
+                }
+            } else {
+                logToSystem('error', `Telegram Poll Error: ${res.status} ${errText || res.statusText}`);
+                lastTelegramPollError = `HTTP ${res.status}: ${String(errText || res.statusText || '').slice(0, 300)}`;
+            }
+            return 0;
+        }
+        const data = await res.json();
+        if (data && data.ok === false) {
+            if (String(data.description || '').toLowerCase().includes('conflict')) {
+                telegramPollBlockedUntil = Date.now() + 60000;
+                const msg = String(data.description || '').slice(0, 400);
+                console.warn(`[TELEGRAM] Polling paused due to conflict: ${msg}`);
+                logToSystem('warn', `Telegram polling conflict. Polling paused 60s. ${msg}`);
+                lastTelegramConflictAt = Date.now();
+                lastTelegramConflictMsg = msg;
+                if (!telegramWebhookCleared || (lastTelegramWebhookClearAt && (Date.now() - lastTelegramWebhookClearAt) > 120000)) {
+                    telegramWebhookCleared = false;
+                    try { await ensureTelegramLongPolling(); } catch {}
+                }
+            } else {
+                logToSystem('error', `Telegram Poll Error: ${data.description || 'Unknown error'}`);
+                lastTelegramPollError = String(data.description || 'Unknown error').slice(0, 300);
+            }
+            return 0;
+        }
+        const updates = Array.isArray(data?.result) ? data.result : [];
+        let processed = 0;
+        for (const update of updates) {
+            telegramOffset = Math.max(telegramOffset || 0, (update.update_id || 0) + 1);
+            const msg = update.message || update.edited_message;
+            const text = msg?.text || msg?.caption;
+            const fromChatId = msg?.chat?.id ? String(msg.chat.id) : '';
+            if (fromChatId) lastTelegramUpdateAt = Date.now();
+            if (!text) {
+                if (shouldMatch && fromChatId && cleanChatId !== fromChatId) {
+                    logToSystem('warn', `Telegram non-text ignored (chatId mismatch). from=${fromChatId} expected=${cleanChatId}`);
+                    continue;
+                }
+                const now = Date.now();
+                const lastReplyAt = Number(lastTelegramNonTextReplyAtByChat.get(fromChatId) || 0);
+                if (!lastReplyAt || (now - lastReplyAt) > 60000) {
+                    lastTelegramNonTextReplyAtByChat.set(fromChatId, now);
+                    try { await sendTelegramMessage('Obsługuję na razie tylko wiadomości tekstowe. Wyślij proszę tekst.'); } catch {}
+                }
+                continue;
+            }
+            if (shouldMatch && fromChatId && cleanChatId !== fromChatId) {
+                logToSystem('warn', `Telegram message ignored (chatId mismatch). from=${fromChatId} expected=${cleanChatId}`);
+                continue;
+            }
+            if (shouldAutoBind && fromChatId) {
+                SYSTEM_DB.settings.telegramConfig.chatId = fromChatId;
+                saveState();
+                logToSystem('info', `Telegram chatId auto-bound to ${fromChatId}`);
+            }
+            logToSystem('info', `Telegram message received (${fromChatId})`);
+            enqueueUserCommand(() => handleTelegramMessage(text), {
+                source: 'telegram',
+                text: String(text).slice(0, 160),
+                nonBlocking: !isTaskIntentMessage(text),
+                forceUserPriority: isTaskIntentMessage(text),
+                mayInterruptSystem: !isTaskIntentMessage(text)
+            });
+            processed += 1;
+        }
+        if (processed > 0) {
+            lastTelegramProcessedAt = Date.now();
+            lastTelegramProcessedCount = processed;
+        }
+        if (updates.length > 0 && processed === 0) {
+            lastTelegramPollError = lastTelegramPollError || 'No messages processed (filters/non-text).';
+        }
+        return processed;
+    } catch (e) {
+        logToSystem('error', `Telegram Poll Error: ${e.message}`);
+        lastTelegramPollError = String(e?.message || e || 'poll_error').slice(0, 300);
+        return 0;
+    } finally {
+        cleanup();
+        telegramPollInFlight = false;
+    }
+};
+
+const startTelegramPolling = () => {
+    if (telegramPollTimer) return;
+    (async () => {
+        try { await ensureTelegramLongPolling(); } catch {}
+        try { await ensureTelegramBotIdentity(); } catch {}
+        try { await pollTelegram(); } catch {}
+    })();
+    telegramPollTimer = setInterval(() => {
+        pollTelegram().catch(() => {});
+    }, 4000);
+};
+
+const stopTelegramPolling = () => {
+    if (!telegramPollTimer) return;
+    clearInterval(telegramPollTimer);
+    telegramPollTimer = null;
+};
+
+safeSetInterval(() => {
+    const enabled = isTelegramEnabled();
+    if (enabled && !telegramEnabledCache) {
+        telegramOffset = null;
+        telegramWebhookCleared = false;
+        telegramBotId = null;
+        telegramPollBlockedUntil = 0;
+    }
+    telegramEnabledCache = enabled;
+    if (enabled) startTelegramPolling();
+    else stopTelegramPolling();
+}, 5000);
+
+// --- AUTOMATED MAINTENANCE LOOPS ---
+// Blog Health Check is now handled by the Autonomous Kernel (runAutonomousCycle)
+// to ensure visibility in the Task Manager.
+
+app.get('/api/blog-preview', (req, res) => {
+    try {
+        const templatePath = path.join(APP_ROOT, 'temp_ftp_blog', 'index.html');
+        if (!fs.existsSync(templatePath)) return res.status(404).send('Blog template not found (temp_ftp_blog)');
+
+        // Serwujemy statyczne pliki (css/js) z katalogu temp_ftp_blog
+        // Uwaga: w normalnym expressie użylibyśmy express.static, ale tu musimy uważać na kolizje
+        // Zrobimy prosty hack: wstrzykniemy dane artykułów bezpośrednio do HTML
+        
+        const files = fs.readdirSync(ARTICLES_DIR)
+            .filter(f => f.endsWith('.json') && f !== 'index.json')
+            .map(f => {
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(ARTICLES_DIR, f), 'utf8'));
+                    return { id: content.id || f.replace('.json',''), fileName: f, ...content };
+                } catch { return null; }
+            })
+            .filter(Boolean)
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+        let html = fs.readFileSync(templatePath, 'utf8');
+
+        // Wstrzykujemy dane jako window.articlesAPI
+        const injection = `
+        <script>
+            window.articlesAPI = { 
+                articles: ${JSON.stringify(files)} 
+            };
+            // Nadpiszmy fetch, żeby 'data/articles/index.json' zwracał sukces
+            const originalFetch = window.fetch;
+            window.fetch = function(url, opts) {
+                if (url.includes('data/articles/index.json')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve(${JSON.stringify(files.map(f => f.fileName))})
+                    });
+                }
+                if (url.includes('data/articles/')) {
+                     // W trybie preview nie mamy realnych plików .json pod tym URL,
+                     // więc musimy zwrócić dane z pamięci (window.articlesAPI)
+                     // Ale kod main.js próbuje fetchować pojedyncze pliki.
+                     // Symulujemy to:
+                     const fname = url.split('/').pop();
+                     const found = window.articlesAPI.articles.find(a => a.fileName === fname);
+                     if (found) {
+                         return Promise.resolve({
+                             ok: true,
+                             json: () => Promise.resolve(found)
+                         });
+                     }
+                }
+                return originalFetch(url, opts);
+            };
+        </script>
+        `;
+
+        // Wstawiamy przed zamknięciem body lub head
+        html = html.replace('</body>', injection + '</body>');
+
+        // Poprawiamy ścieżki do CSS/JS żeby celowały w /api/blog-preview/assets/...
+        html = html.replace(/href="css\//g, 'href="/api/blog-preview/assets/css/');
+        html = html.replace(/src="js\//g, 'src="/api/blog-preview/assets/js/');
+        html = html.replace(/src="images\//g, 'src="/api/blog-preview/assets/images/');
+
+        res.send(html);
+    } catch (e) { res.status(500).send(`Preview Error: ${e.message}`); }
+});
+
+// Serwowanie assetów z temp_ftp_blog dla preview
+app.get('/api/blog-preview/assets/*', (req, res) => {
+    const assetPath = req.params[0]; // np. "css/styles.css"
+    const safePath = path.join(APP_ROOT, 'temp_ftp_blog', assetPath);
+    if (fs.existsSync(safePath)) {
+        res.sendFile(safePath);
+    } else {
+        res.status(404).send('Asset not found');
+    }
+});
+
+app.get('/api/blog-preview/:fileName', (req, res) => {
+    // To jest fallback dla starego podglądu, ale teraz główny URL /api/blog-preview obsługuje SPA z main.js
+    // Jeśli ktoś wejdzie bezpośrednio w artykuł, przekierujmy do głównego z parametrem id
+    // Ale uwaga: fileName to u nas często 'nazwa-pliku.json', a ID w main.js to 'nazwa-pliku'
+    // Spróbujmy po prostu przekierować:
+    const id = req.params.fileName.replace('.json', '');
+    res.redirect('/api/blog-preview?id=' + id);
+});
+
+app.post('/api/blog/publish', async (req, res) => {
+    try {
+        const result = await publishArticle(req.body || {});
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/blog/delete', async (req, res) => {
+    try {
+        const result = await deleteArticle(req.body || {});
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/blog/toggle-visibility', async (req, res) => {
+    try {
+        const result = await toggleArticleVisibility(req.body || {});
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/blog/maintenance/images', strictLimiter, async (req, res) => {
+    try {
+        // const healer = new BlogHealer(SYSTEM_DB.settings.ftpConfig, ARTICLES_DIR);
+        const fileName = String(req.body?.fileName || '').trim();
+        if (fileName) {
+            if (!isSafeArticleFileName(fileName)) return res.status(400).json({ error: 'Invalid article fileName' });
+            const localPath = path.join(ARTICLES_DIR, fileName);
+            if (!fs.existsSync(localPath)) return res.status(404).json({ error: 'Article not found on server' });
+        }
+        const report = await healer.runDiagnostics(fileName ? { onlyFiles: [fileName] } : {});
+        res.json(report);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Blog maintenance failed' });
+    }
+});
+
+const analyticsNowIsoDate = () => new Date().toISOString().slice(0, 10);
+const analyticsSafeId = (s = '') => String(s || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, 64);
+const analyticsSafeStr = (s, maxLen = 500) => String(s || '').trim().slice(0, maxLen);
+const analyticsEventFile = (siteId, day) => path.join(ANALYTICS_DIR, `${analyticsSafeId(siteId) || 'default'}-${day}.ndjson`);
+const analyticsGscFile = (siteId, day) => path.join(ANALYTICS_DIR, `${analyticsSafeId(siteId) || 'default'}-gsc-${day}.ndjson`);
+const analyticsSafeNum = (v, min, max) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    if (typeof min === 'number' && n < min) return null;
+    if (typeof max === 'number' && n > max) return null;
+    return n;
+};
+const geoCache = new Map();
+const GEO_CACHE_TTL = 6 * 60 * 60 * 1000;
+const normalizeIp = (ip = '') => {
+    const raw = String(ip || '').trim();
+    if (!raw) return '';
+    return raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+};
+const isPrivateIp = (ip = '') => {
+    const v = normalizeIp(ip);
+    if (!v) return true;
+    if (v === '::1' || v === '127.0.0.1') return true;
+    if (v.startsWith('10.') || v.startsWith('192.168.')) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(v)) return true;
+    if (v.startsWith('fc') || v.startsWith('fd')) return true;
+    return false;
+};
+const getClientIp = (req) => {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0]?.trim();
+    const ip = xff || req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers['x-client-ip'] || req.socket?.remoteAddress || '';
+    return normalizeIp(ip);
+};
+const geoFromHeaders = (req) => {
+    const h = req.headers || {};
+    const country = analyticsSafeStr(h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-country'] || h['x-appengine-country'] || h['fastly-client-country'] || h['cloudfront-viewer-country'] || '', 120);
+    const continent = analyticsSafeStr(h['cf-ipcontinent'] || h['x-vercel-ip-continent'] || h['x-continent'] || '', 12);
+    const region = analyticsSafeStr(h['x-vercel-ip-region'] || h['x-region'] || '', 120);
+    const city = analyticsSafeStr(h['x-vercel-ip-city'] || h['x-city'] || h['cf-ipcity'] || '', 120);
+    const lat = analyticsSafeNum(h['x-vercel-ip-latitude'] || h['x-latitude'], -90, 90);
+    const lng = analyticsSafeNum(h['x-vercel-ip-longitude'] || h['x-longitude'], -180, 180);
+    if (!country && !continent && !region && !city) return null;
+    return { country, continent, region, city, lat: lat ?? undefined, lng: lng ?? undefined };
+};
+const resolveGeoByIp = async (ip) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 800);
+    try {
+        const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+            headers: { 'User-Agent': 'GAI-Analytics' },
+            signal: controller.signal
+        });
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => null);
+        if (!data || data?.error) return null;
+        const country = analyticsSafeStr(data.country_name || data.country || '', 120);
+        const countryCode = analyticsSafeStr(data.country_code || '', 8);
+        const continent = analyticsSafeStr(data.continent_code || '', 12);
+        const region = analyticsSafeStr(data.region || data.region_code || '', 120);
+        const city = analyticsSafeStr(data.city || '', 120);
+        const lat = analyticsSafeNum(data.latitude, -90, 90);
+        const lng = analyticsSafeNum(data.longitude, -180, 180);
+        if (!country && !continent && !region && !city && !countryCode) return null;
+        return { country: country || countryCode, countryCode: countryCode || undefined, continent, region, city, lat: lat ?? undefined, lng: lng ?? undefined };
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timeout);
+    }
+};
+const resolveGeo = async (req) => {
+    const fromHeaders = geoFromHeaders(req);
+    if (fromHeaders) return fromHeaders;
+    const ip = getClientIp(req);
+    if (!ip || isPrivateIp(ip)) return null;
+    const cached = geoCache.get(ip);
+    if (cached && Date.now() - cached.ts < GEO_CACHE_TTL) return cached.geo;
+    const geo = await resolveGeoByIp(ip);
+    if (geo) geoCache.set(ip, { ts: Date.now(), geo });
+    return geo || null;
+};
+
+const readNdjsonLines = async (filePath, onLine) => {
+    if (!fs.existsSync(filePath)) return;
+    const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+        const raw = String(line || '').trim();
+        if (!raw) continue;
+        let json;
+        try { json = JSON.parse(raw); } catch { continue; }
+        await onLine(json);
+    }
+};
+
+const iterDaysIso = (fromIso, toIso) => {
+    const from = new Date(`${fromIso}T00:00:00.000Z`);
+    const to = new Date(`${toIso}T00:00:00.000Z`);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return [];
+    const days = [];
+    for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+        days.push(d.toISOString().slice(0, 10));
+    }
+    return days;
+};
+
+app.post('/api/analytics/collect', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const siteId = analyticsSafeId(body.siteId || req.headers['x-site-id'] || 'technova') || 'technova';
+        const type = analyticsSafeId(body.type || '');
+        if (!type || !['pageview', 'click', 'event'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+        const ts = Number(body.ts || Date.now());
+        if (!Number.isFinite(ts) || ts < 946684800000 || ts > Date.now() + 5 * 60_000) return res.status(400).json({ error: 'Invalid ts' });
+
+        const pathValue = analyticsSafeStr(body.path || '', 800);
+        const ref = analyticsSafeStr(body.ref || '', 1200);
+        const href = analyticsSafeStr(body.href || '', 2000);
+        const sid = analyticsSafeStr(body.sid || '', 96);
+        const uid = analyticsSafeStr(body.uid || '', 96);
+        const ua = analyticsSafeStr(req.headers['user-agent'] || '', 400);
+        const lang = analyticsSafeStr(req.headers['accept-language'] || '', 120);
+        const utm = body.utm && typeof body.utm === 'object'
+            ? {
+                source: analyticsSafeStr(body.utm.source || '', 120),
+                medium: analyticsSafeStr(body.utm.medium || '', 120),
+                campaign: analyticsSafeStr(body.utm.campaign || '', 200),
+                term: analyticsSafeStr(body.utm.term || '', 200),
+                content: analyticsSafeStr(body.utm.content || '', 200)
+            }
+            : undefined;
+        const el = body.el && typeof body.el === 'object'
+            ? {
+                tag: analyticsSafeStr(body.el.tag || '', 40),
+                id: analyticsSafeStr(body.el.id || '', 120),
+                cls: analyticsSafeStr(body.el.cls || '', 300),
+                text: analyticsSafeStr(body.el.text || '', 200)
+            }
+            : undefined;
+        const page = body.page && typeof body.page === 'object'
+            ? {
+                title: analyticsSafeStr(body.page.title || '', 200),
+                canonical: analyticsSafeStr(body.page.canonical || '', 1200),
+                articleId: analyticsSafeStr(body.page.articleId || '', 200),
+                articleTitle: analyticsSafeStr(body.page.articleTitle || '', 200),
+                category: analyticsSafeStr(body.page.category || '', 120),
+                tags: Array.isArray(body.page.tags) ? body.page.tags.map((t) => analyticsSafeStr(t || '', 80)).filter(Boolean).slice(0, 20) : undefined
+            }
+            : undefined;
+        const link = body.link && typeof body.link === 'object'
+            ? {
+                type: analyticsSafeStr(body.link.type || '', 40),
+                href: analyticsSafeStr(body.link.href || '', 2000),
+                host: analyticsSafeStr(body.link.host || '', 200),
+                path: analyticsSafeStr(body.link.path || '', 800),
+                rel: analyticsSafeStr(body.link.rel || '', 200),
+                text: analyticsSafeStr(body.link.text || '', 200),
+                isExternal: !!body.link.isExternal,
+                isAffiliate: !!body.link.isAffiliate,
+                articleId: analyticsSafeStr(body.link.articleId || '', 200),
+                articleTitle: analyticsSafeStr(body.link.articleTitle || '', 200)
+            }
+            : undefined;
+        const geo = await resolveGeo(req);
+
+        const day = new Date(ts).toISOString().slice(0, 10);
+        const record = {
+            v: 1,
+            ts,
+            day,
+            siteId,
+            type,
+            path: pathValue,
+            ref,
+            href,
+            sid: sid || undefined,
+            uid: uid || undefined,
+            ua: ua || undefined,
+            lang: lang || undefined,
+            utm,
+            el,
+            page,
+            link,
+            geo
+        };
+
+        const filePath = analyticsEventFile(siteId, day);
+        fs.appendFileSync(filePath, `${JSON.stringify(record)}\n`, 'utf8');
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Collect failed' });
+    }
+});
+
+app.get('/api/analytics/report', async (req, res) => {
+    try {
+        const siteId = analyticsSafeId(req.query.siteId || 'technova') || 'technova';
+        const days = Math.max(1, Math.min(365, Number(req.query.days || 7) || 7));
+        const to = analyticsNowIsoDate();
+        const fromDate = new Date(`${to}T00:00:00.000Z`);
+        fromDate.setUTCDate(fromDate.getUTCDate() - (days - 1));
+        const from = fromDate.toISOString().slice(0, 10);
+
+        const pageviewsByPath = new Map();
+        const sessionsByPath = new Map();
+        const outboundByPath = new Map();
+        const refCounts = new Map();
+        const outboundCounts = new Map();
+        const linkCounts = new Map();
+        const affiliateCounts = new Map();
+        const articleMap = new Map();
+        const channelCounts = new Map();
+        const sourceCounts = new Map();
+        const utmSourceCounts = new Map();
+        const utmCampaignCounts = new Map();
+        const geoCountries = new Map();
+        const geoContinents = new Map();
+        const geoRegions = new Map();
+        const geoCities = new Map();
+        const sessionSet = new Set();
+        const userSet = new Set();
+        const sessionsByDay = new Map();
+        const usersByDay = new Map();
+        const timelineMap = new Map();
+
+        let events = 0;
+        let pageviews = 0;
+        let clicks = 0;
+        let outboundClicks = 0;
+        let affiliateClicks = 0;
+
+        const recent = [];
+        const addCount = (map, key, inc = 1) => {
+            if (!key) return;
+            map.set(key, (map.get(key) || 0) + inc);
+        };
+        const getHost = (value = '') => {
+            try {
+                return new URL(value).hostname.replace(/^www\./, '');
+            } catch {
+                return '';
+            }
+        };
+        const extractArticleId = (value = '') => {
+            try {
+                const u = new URL(value, 'http://local');
+                return analyticsSafeStr(u.searchParams.get('id') || '', 200);
+            } catch {
+                const m = String(value || '').match(/[?&]id=([^&]+)/);
+                return analyticsSafeStr(m ? decodeURIComponent(m[1]) : '', 200);
+            }
+        };
+        const classifyChannel = (utm, refHost) => {
+            const medium = String(utm?.medium || '').toLowerCase();
+            const source = String(utm?.source || '').toLowerCase();
+            if (medium) {
+                if (['cpc', 'ppc', 'paid', 'paidsearch', 'paidsocial', 'display', 'affiliate'].includes(medium)) return 'paid';
+                if (['email', 'newsletter'].includes(medium)) return 'email';
+                if (['social', 'social-media', 'social_network', 'socialnetwork'].includes(medium)) return 'social';
+                if (['organic', 'seo'].includes(medium)) return 'organic';
+                if (['referral'].includes(medium)) return 'referral';
+            }
+            const host = String(refHost || '').toLowerCase();
+            if (!host) return 'direct';
+            const isSearch = ['google.', 'bing.', 'duckduckgo.', 'yahoo.', 'yandex.', 'baidu.'].some((h) => host.includes(h));
+            if (isSearch) return 'organic';
+            const isSocial = ['facebook.', 't.co', 'twitter.', 'instagram.', 'linkedin.', 'reddit.', 'tiktok.', 'pinterest.'].some((h) => host.includes(h));
+            if (isSocial || source.includes('facebook') || source.includes('instagram')) return 'social';
+            return 'referral';
+        };
+        const normalizeSourceKey = (utm, ref) => {
+            const source = String(utm?.source || '').trim();
+            if (source) return source.toLowerCase();
+            const host = getHost(ref);
+            return host || 'direct';
+        };
+        const isAffiliateHref = (href = '') => /[?&](aff|ref|tag|affiliate)=/i.test(href) || /\/ref=/i.test(href);
+
+        for (const day of iterDaysIso(from, to)) {
+            const filePath = analyticsEventFile(siteId, day);
+            await readNdjsonLines(filePath, async (ev) => {
+                events++;
+                const evType = String(ev?.type || '');
+                const p = String(ev?.path || '');
+                const sid = String(ev?.sid || '');
+                const uid = String(ev?.uid || '');
+                const userKey = uid || sid;
+                if (sid) sessionSet.add(sid);
+                if (userKey) userSet.add(userKey);
+                if (sid) {
+                    const set = sessionsByDay.get(day) || new Set();
+                    set.add(sid);
+                    sessionsByDay.set(day, set);
+                }
+                if (userKey) {
+                    const set = usersByDay.get(day) || new Set();
+                    set.add(userKey);
+                    usersByDay.set(day, set);
+                }
+                const timeline = timelineMap.get(day) || { day, pageviews: 0, sessions: 0, clicks: 0, outboundClicks: 0, affiliateClicks: 0, users: 0 };
+
+                if (evType === 'pageview') {
+                    pageviews++;
+                    timeline.pageviews += 1;
+                    pageviewsByPath.set(p, (pageviewsByPath.get(p) || 0) + 1);
+                    if (sid) {
+                        const key = `${p}::${sid}`;
+                        sessionsByPath.set(key, true);
+                    }
+                    const ref = String(ev?.ref || '');
+                    const refKey = ref ? ref.slice(0, 1200) : '';
+                    refCounts.set(refKey, (refCounts.get(refKey) || 0) + 1);
+                    const refHost = getHost(ref);
+                    const channel = classifyChannel(ev?.utm, refHost);
+                    addCount(channelCounts, channel);
+                    const sourceKey = normalizeSourceKey(ev?.utm, ref);
+                    addCount(sourceCounts, sourceKey);
+                    if (ev?.utm?.source) addCount(utmSourceCounts, String(ev?.utm?.source || '').trim());
+                    if (ev?.utm?.campaign) addCount(utmCampaignCounts, String(ev?.utm?.campaign || '').trim());
+                    const geo = ev?.geo || {};
+                    addCount(geoContinents, String(geo?.continent || ''));
+                    addCount(geoCountries, String(geo?.country || geo?.countryCode || ''));
+                    addCount(geoRegions, String(geo?.region || ''));
+                    addCount(geoCities, String(geo?.city || ''));
+                    const articleId = analyticsSafeStr(ev?.page?.articleId || extractArticleId(p), 200);
+                    const articleTitle = analyticsSafeStr(ev?.page?.articleTitle || '', 200);
+                    const articleKey = articleId || articleTitle || '';
+                    if (articleKey) {
+                        const prev = articleMap.get(articleKey) || {
+                            id: articleId || articleKey,
+                            title: articleTitle || articleId || articleKey,
+                            views: 0,
+                            clicks: 0,
+                            outboundClicks: 0,
+                            affiliateClicks: 0
+                        };
+                        prev.views += 1;
+                        articleMap.set(articleKey, prev);
+                    }
+                }
+
+                if (evType === 'click') {
+                    clicks++;
+                    timeline.clicks += 1;
+                    const href = String(ev?.href || ev?.link?.href || '');
+                    const isExternal = ev?.link?.isExternal ?? (href && /^https?:\/\//i.test(href));
+                    const isAffiliate = ev?.link?.isAffiliate ?? isAffiliateHref(href);
+                    if (href) {
+                        addCount(linkCounts, href);
+                        if (isAffiliate) addCount(affiliateCounts, href);
+                    }
+                    if (href && isExternal) {
+                        outboundClicks++;
+                        timeline.outboundClicks += 1;
+                        outboundCounts.set(href, (outboundCounts.get(href) || 0) + 1);
+                        outboundByPath.set(p, (outboundByPath.get(p) || 0) + 1);
+                    }
+                    if (isAffiliate) {
+                        affiliateClicks++;
+                        timeline.affiliateClicks += 1;
+                    }
+                    const linkArticleId = analyticsSafeStr(ev?.link?.articleId || extractArticleId(href), 200);
+                    const linkArticleTitle = analyticsSafeStr(ev?.link?.articleTitle || '', 200);
+                    const isArticleClick = String(ev?.link?.type || '') === 'article' || !!linkArticleId;
+                    if (isArticleClick) {
+                        const articleKey = linkArticleId || linkArticleTitle || '';
+                        if (articleKey) {
+                            const prev = articleMap.get(articleKey) || {
+                                id: linkArticleId || articleKey,
+                                title: linkArticleTitle || linkArticleId || articleKey,
+                                views: 0,
+                                clicks: 0,
+                                outboundClicks: 0,
+                                affiliateClicks: 0
+                            };
+                            prev.clicks += 1;
+                            if (isExternal) prev.outboundClicks += 1;
+                            if (isAffiliate) prev.affiliateClicks += 1;
+                            articleMap.set(articleKey, prev);
+                        }
+                    }
+                }
+
+                timelineMap.set(day, timeline);
+
+                if (recent.length < 80) {
+                    recent.push({
+                        ts: Number(ev?.ts || 0),
+                        type: evType,
+                        path: p,
+                        href: String(ev?.href || ''),
+                        ref: String(ev?.ref || ''),
+                        linkType: String(ev?.link?.type || ''),
+                        affiliate: !!ev?.link?.isAffiliate,
+                        country: String(ev?.geo?.country || ev?.geo?.countryCode || ''),
+                        source: normalizeSourceKey(ev?.utm, ev?.ref || '')
+                    });
+                }
+            });
+        }
+
+        const sessionsPerPath = new Map();
+        for (const key of sessionsByPath.keys()) {
+            const idx = key.indexOf('::');
+            const p = idx >= 0 ? key.slice(0, idx) : key;
+            sessionsPerPath.set(p, (sessionsPerPath.get(p) || 0) + 1);
+        }
+
+        const topPages = Array.from(new Set([...pageviewsByPath.keys(), ...outboundByPath.keys(), ...sessionsPerPath.keys()]))
+            .map((p) => ({
+                path: p,
+                pageviews: pageviewsByPath.get(p) || 0,
+                sessions: sessionsPerPath.get(p) || 0,
+                outboundClicks: outboundByPath.get(p) || 0
+            }))
+            .sort((a, b) => (b.pageviews - a.pageviews) || (b.outboundClicks - a.outboundClicks))
+            .slice(0, 30);
+
+        const topReferrers = Array.from(refCounts.entries())
+            .map(([ref, count]) => ({ ref, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 30);
+
+        const topOutbound = Array.from(outboundCounts.entries())
+            .map(([url, count]) => ({ url, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 30);
+
+        const topLinks = Array.from(linkCounts.entries())
+            .map(([url, count]) => ({ url, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 40);
+
+        const topAffiliates = Array.from(affiliateCounts.entries())
+            .map(([url, count]) => ({ url, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 40);
+
+        const topArticles = Array.from(articleMap.values())
+            .sort((a, b) => (b.views - a.views) || (b.clicks - a.clicks) || (b.outboundClicks - a.outboundClicks))
+            .slice(0, 40);
+
+        const channels = Array.from(channelCounts.entries())
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count);
+        const sources = Array.from(sourceCounts.entries())
+            .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 40);
+        const utmSources = Array.from(utmSourceCounts.entries())
+            .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 40);
+        const utmCampaigns = Array.from(utmCampaignCounts.entries())
+            .map(([campaign, count]) => ({ campaign, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 40);
+        const geo = {
+            continents: Array.from(geoContinents.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 20),
+            countries: Array.from(geoCountries.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 20),
+            regions: Array.from(geoRegions.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 20),
+            cities: Array.from(geoCities.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 20)
+        };
+        const timeline = [];
+        for (const day of iterDaysIso(from, to)) {
+            const row = timelineMap.get(day) || { day, pageviews: 0, sessions: 0, clicks: 0, outboundClicks: 0, affiliateClicks: 0, users: 0 };
+            row.sessions = sessionsByDay.get(day)?.size || 0;
+            row.users = usersByDay.get(day)?.size || 0;
+            timeline.push(row);
+        }
+
+        const gscRows = [];
+        for (const day of iterDaysIso(from, to)) {
+            const gscFile = analyticsGscFile(siteId, day);
+            await readNdjsonLines(gscFile, async (row) => {
+                const date = analyticsSafeStr(row?.date || day, 10);
+                const query = analyticsSafeStr(row?.query || '', 300);
+                const page = analyticsSafeStr(row?.page || '', 1200);
+                const clicks = Number(row?.clicks || 0) || 0;
+                const impressions = Number(row?.impressions || 0) || 0;
+                const ctr = Number(row?.ctr || 0) || 0;
+                const position = Number(row?.position || 0) || 0;
+                if (!query && !page) return;
+                gscRows.push({ date, query, page, clicks, impressions, ctr, position });
+            });
+        }
+
+        const byQuery = new Map();
+        const byPage = new Map();
+        const agg = (map, key, row) => {
+            if (!key) return;
+            const prev = map.get(key) || { clicks: 0, impressions: 0, positionSum: 0 };
+            const clicks = prev.clicks + row.clicks;
+            const impressions = prev.impressions + row.impressions;
+            const positionSum = prev.positionSum + (row.position * Math.max(1, row.impressions || 1));
+            map.set(key, { clicks, impressions, positionSum });
+        };
+        for (const r of gscRows) {
+            agg(byQuery, r.query, r);
+            agg(byPage, r.page, r);
+        }
+        const topQueries = Array.from(byQuery.entries())
+            .map(([query, v]) => {
+                const ctr = v.impressions ? v.clicks / v.impressions : 0;
+                const position = v.impressions ? v.positionSum / v.impressions : 0;
+                return { query, clicks: v.clicks, impressions: v.impressions, ctr, position };
+            })
+            .sort((a, b) => (b.impressions - a.impressions) || (b.clicks - a.clicks))
+            .slice(0, 50);
+        const gscTopPages = Array.from(byPage.entries())
+            .map(([page, v]) => {
+                const ctr = v.impressions ? v.clicks / v.impressions : 0;
+                const position = v.impressions ? v.positionSum / v.impressions : 0;
+                return { page, clicks: v.clicks, impressions: v.impressions, ctr, position };
+            })
+            .sort((a, b) => (b.impressions - a.impressions) || (b.clicks - a.clicks))
+            .slice(0, 50);
+
+        res.json({
+            siteId,
+            range: { from, to },
+            counts: { events, pageviews, clicks, outboundClicks, affiliateClicks, sessions: sessionSet.size, users: userSet.size },
+            topPages,
+            topReferrers,
+            topOutbound,
+            topLinks,
+            topAffiliates,
+            topArticles,
+            sources: { channels, sources, utmSources, utmCampaigns },
+            geo,
+            timeline,
+            recentEvents: recent.sort((a, b) => b.ts - a.ts),
+            gsc: { days, rows: gscRows, topQueries, topPages: gscTopPages }
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Report failed' });
+    }
+});
+
+app.post('/api/analytics/gsc/import', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const siteId = analyticsSafeId(body.siteId || 'technova') || 'technova';
+        const rows = Array.isArray(body.rows) ? body.rows : [];
+        if (!rows.length) return res.status(400).json({ error: 'rows required' });
+
+        const writtenDays = new Set();
+        for (const r of rows) {
+            const day = analyticsSafeStr(r?.date || analyticsNowIsoDate(), 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+            const record = {
+                v: 1,
+                date: day,
+                query: analyticsSafeStr(r?.query || '', 300),
+                page: analyticsSafeStr(r?.page || '', 1200),
+                clicks: Number(r?.clicks || 0) || 0,
+                impressions: Number(r?.impressions || 0) || 0,
+                ctr: Number(r?.ctr || 0) || 0,
+                position: Number(r?.position || 0) || 0
+            };
+            const filePath = analyticsGscFile(siteId, day);
+            fs.appendFileSync(filePath, `${JSON.stringify(record)}\n`, 'utf8');
+            writtenDays.add(day);
+        }
+        res.json({ ok: true, days: Array.from(writtenDays).sort() });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Import failed' });
+    }
+});
+
+// --- FTP API ENDPOINTS ---
+
+app.post('/api/ftp/list', async (req, res) => {
+    try {
+        const ftpPath = req.body.path || '/';
+        
+        // Validate FTP path
+        if (typeof ftpPath !== 'string' || ftpPath.length > 500) {
+            return res.status(400).json({ error: 'Invalid FTP path' });
+        }
+        
+        const list = await performFtpAction(client => client.list(ftpPath));
+        res.json(list);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ftp/upload', async (req, res) => {
+    try {
+        const { localPath, remotePath } = req.body;
+        
+        // Validate inputs
+        if (typeof localPath !== 'string' || localPath.length > 500) {
+            return res.status(400).json({ error: 'Invalid local path' });
+        }
+        if (typeof remotePath !== 'string' || remotePath.length > 500) {
+            return res.status(400).json({ error: 'Invalid remote path' });
+        }
+        
+        const fullLocalPath = path.isAbsolute(localPath) ? localPath : path.join(APP_ROOT, localPath);
+        await performFtpAction(client => client.uploadFrom(fullLocalPath, remotePath));
+        res.json({ status: 'uploaded' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ftp/download', async (req, res) => {
+    try {
+        const { remotePath, localDir, isDirectory } = req.body;
+        const fullLocalDir = path.isAbsolute(localDir) ? localDir : path.join(APP_ROOT, localDir);
+        if (!fs.existsSync(fullLocalDir)) fs.mkdirSync(fullLocalDir, { recursive: true });
+
+        await performFtpAction(async (client) => {
+            if (isDirectory) {
+                await client.downloadToDir(fullLocalDir, remotePath);
+            } else {
+                const fileName = remotePath.split('/').pop();
+                await client.downloadTo(path.join(fullLocalDir, fileName), remotePath);
+            }
+        });
+        res.json({ status: 'downloaded' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ftp/mkdir', async (req, res) => {
+    try {
+        await performFtpAction(client => client.ensureDir(req.body.path));
+        res.json({ status: 'created' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ftp/delete', async (req, res) => {
+    try {
+        await performFtpAction(client => client.remove(req.body.path));
+        res.json({ status: 'deleted' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ftp/rename', async (req, res) => {
+    try {
+        await performFtpAction(client => client.rename(req.body.path, req.body.newPath));
+        res.json({ status: 'renamed' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+const clampInt = (value, fallback, min, max) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.floor(n)));
+};
+
+const isSafePexelsImageUrl = (url) => {
+    try {
+        const u = new URL(String(url || ''));
+        if (u.protocol !== 'https:') return false;
+        const host = u.hostname.toLowerCase();
+        if (!host.endsWith('pexels.com')) return false;
+        if (!host.includes('images.pexels.com')) return false;
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const inferImageExt = (contentType = '') => {
+    const ct = String(contentType || '').toLowerCase();
+    if (ct.includes('image/png')) return 'png';
+    if (ct.includes('image/webp')) return 'webp';
+    if (ct.includes('image/gif')) return 'gif';
+    return 'jpg';
+};
+
+app.get('/api/pexels/search', strictLimiter, async (req, res) => {
+    try {
+        const query = String(req.query.query || '').trim();
+        if (!query) return res.status(400).json({ error: 'Missing query' });
+        const perPage = clampInt(req.query.perPage, 12, 1, 30);
+        const page = clampInt(req.query.page, 1, 1, 100);
+        const orientation = String(req.query.orientation || '').trim();
+        const safeOrientation = ['landscape', 'portrait', 'square'].includes(orientation) ? orientation : '';
+        const url = new URL('https://api.pexels.com/v1/search');
+        url.searchParams.set('query', query);
+        url.searchParams.set('per_page', String(perPage));
+        url.searchParams.set('page', String(page));
+        if (safeOrientation) url.searchParams.set('orientation', safeOrientation);
+
+        const { controller, cleanup } = createAbortControllerWithTimeout(null, 10000);
+        try {
+            const r = await fetch(url.toString(), {
+                headers: { Authorization: String(PEXELS_API_KEY || '').trim() },
+                signal: controller.signal
+            });
+            if (!r.ok) {
+                const t = await r.text().catch(() => '');
+                return res.status(502).json({ error: `Pexels error: ${r.status}`, details: t.slice(0, 300) });
+            }
+            const data = await r.json();
+            const photos = Array.isArray(data?.photos) ? data.photos : [];
+            res.json({
+                query,
+                page: data?.page || page,
+                perPage: data?.per_page || perPage,
+                totalResults: data?.total_results || 0,
+                photos: photos.map(p => ({
+                    id: p?.id,
+                    width: p?.width,
+                    height: p?.height,
+                    url: p?.url,
+                    photographer: p?.photographer,
+                    alt: p?.alt,
+                    src: p?.src
+                }))
+            });
+        } finally {
+            cleanup();
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Pexels search failed' });
+    }
+});
+
+app.post('/api/pexels/download', strictLimiter, async (req, res) => {
+    try {
+        const url = String(req.body?.url || '').trim();
+        if (!url) return res.status(400).json({ error: 'Missing url' });
+        if (!isSafePexelsImageUrl(url)) return res.status(400).json({ error: 'Unsafe url' });
+
+        const { controller, cleanup } = createAbortControllerWithTimeout(null, 15000);
+        try {
+            const r = await fetch(url, { signal: controller.signal });
+            if (!r.ok) return res.status(502).json({ error: `Download failed: ${r.status}` });
+            const contentType = String(r.headers.get('content-type') || '');
+            const contentLength = Number(r.headers.get('content-length') || 0);
+            if (Number.isFinite(contentLength) && contentLength > 8 * 1024 * 1024) {
+                return res.status(413).json({ error: 'Image too large' });
+            }
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (buf.length > 8 * 1024 * 1024) return res.status(413).json({ error: 'Image too large' });
+            const base64 = buf.toString('base64');
+            res.json({ base64, contentType, ext: inferImageExt(contentType) });
+        } finally {
+            cleanup();
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Download failed' });
+    }
+});
+
+app.post('/api/visualize-product', strictLimiter, async (req, res) => {
+    try {
+        const productName = String(req.body?.productName || '').trim();
+        const environment = String(req.body?.environment || '').trim();
+        if (!productName) return res.status(400).json({ error: 'Missing productName' });
+        if (productName.length > 200) return res.status(400).json({ error: 'productName too long' });
+        if (environment.length > 400) return res.status(400).json({ error: 'environment too long' });
+
+        const apiKey = String(PEXELS_API_KEY || '').trim();
+        if (!apiKey) return res.status(500).json({ error: 'Pexels API key missing' });
+
+        const q = `${productName} product photo`;
+        const { controller: sc, cleanup: scClean } = createAbortControllerWithTimeout(null, 12000);
+        let srcUrl = '';
+        let pexelsMeta = null;
+        try {
+            const url = new URL('https://api.pexels.com/v1/search');
+            url.searchParams.set('query', q);
+            url.searchParams.set('per_page', '1');
+            url.searchParams.set('orientation', 'square');
+            const r = await fetch(url.toString(), { headers: { Authorization: apiKey }, signal: sc.signal });
+            if (!r.ok) {
+                const t = await r.text().catch(() => '');
+                return res.status(502).json({ error: `Pexels error: ${r.status}`, details: t.slice(0, 300) });
+            }
+            const data = await r.json().catch(() => ({}));
+            const photo = Array.isArray(data?.photos) ? data.photos[0] : null;
+            srcUrl = String(photo?.src?.large2x || photo?.src?.large || photo?.src?.original || '').trim();
+            pexelsMeta = photo ? { id: photo?.id, url: photo?.url, photographer: photo?.photographer, alt: photo?.alt } : null;
+        } finally {
+            scClean();
+        }
+
+        if (!srcUrl) return res.status(404).json({ error: 'No reference image found' });
+        if (!isSafePexelsImageUrl(srcUrl)) return res.status(400).json({ error: 'Unsafe reference image url' });
+
+        const refPath = path.join(OUT_DIR, `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`);
+        await fetchBinaryToFile(srcUrl, refPath, 60000);
+        const refWebPath = `/data/out/${path.basename(refPath)}`;
+
+        const visionModel = await pickVisionModelName();
+        if (!visionModel) {
+            return res.status(400).json({ error: 'Brak modelu wizyjnego (llava) w Ollama.' });
+        }
+
+        const imageBuffer = fs.readFileSync(refPath);
+        const base64Image = imageBuffer.toString('base64');
+        const visionPrompt = [
+            'Analyze the product photo. Return ONLY valid JSON with keys: prompt, negative_prompt.',
+            'prompt: describe the same product as a high-end studio product photo on seamless white background, softbox lighting, sharp focus, no text, no watermark.',
+            'negative_prompt: list common artifacts to avoid (text, watermark, blurry, extra objects, deformed, low quality).',
+            environment ? `Context to optionally include (subtle): ${environment}` : ''
+        ].filter(Boolean).join('\n');
+
+        const { controller: vc, cleanup: vcClean } = createAbortControllerWithTimeout(null, 120000);
+        let visionText = '';
+        try {
+            const r = await fetch(`${SYSTEM_DB.settings.ollamaBaseUrl || OLLAMA_BASE_URL}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                signal: vc.signal,
+                body: JSON.stringify({ model: visionModel, prompt: visionPrompt, images: [base64Image], stream: false })
+            });
+            if (!r.ok) return res.status(502).json({ error: `Ollama vision error: ${r.status}` });
+            const d = await r.json().catch(() => ({}));
+            visionText = String(d?.response || '').trim();
+        } finally {
+            vcClean();
+        }
+
+        const parsed = parseJsonSafe(visionText);
+        const promptFromVision = typeof parsed === 'object' && parsed && typeof parsed.prompt === 'string' ? parsed.prompt : visionText;
+        const finalPrompt = [
+            String(promptFromVision || '').trim(),
+            productName ? `Product name: ${productName}` : '',
+            'studio product photography, softbox lighting, seamless white background, high detail'
+        ].filter(Boolean).join('. ');
+
+        const gen = await generateImage(finalPrompt);
+        return res.json({
+            ok: true,
+            imageUrl: gen.webPath,
+            referenceUrl: refWebPath,
+            provider: gen.webPath.includes('/data/out/pexels_') ? 'pexels_fallback' : 'generator',
+            visionModel,
+            vision: typeof parsed === 'object' && parsed ? parsed : { raw: visionText },
+            reference: { src: srcUrl, meta: pexelsMeta }
+        });
+    } catch (e) {
+        return res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.get('/api/models', async (req, res) => {
+    const providerRaw = req.query.provider || 'ollama';
+    const provider = String(providerRaw).toLowerCase();
+    
+    // Validate provider name
+    if (!validateModelName(provider)) {
+        return res.status(400).json({ error: 'Invalid provider name' });
+    }
+    
+    if (provider !== 'ollama') return res.json({ [provider]: [] });
+
+    try {
+        const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+        const r = await fetch(`${baseUrl}/api/tags`, { headers: getOllamaAuthHeaders() });
+        if (!r.ok) return res.json({ [provider]: [] });
+        const d = await r.json();
+        const models = Array.isArray(d?.models) ? d.models : [];
+        return res.json({ [provider]: models.map(m => ({ id: m.name, displayName: m.name })) });
+    } catch (e) { res.json({ [provider]: [] }); }
+});
+
+const validateOllamaModelRef = (name) => {
+    if (typeof name !== 'string') return false;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length > 200) return false;
+    return /^[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?$/.test(trimmed);
+};
+
+app.get('/api/ollama/version', async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 2500);
+    try {
+        const r = await fetch(`${baseUrl}/api/version`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!r.ok) return res.status(502).json({ ok: false, baseUrl, error: `HTTP_${r.status}` });
+        const d = await r.json();
+        return res.json({ ok: true, baseUrl, version: d?.version || '' });
+    } catch (e) {
+        return res.status(502).json({ ok: false, baseUrl, error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.get('/api/ollama/ps', async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 2500);
+    try {
+        const r = await fetch(`${baseUrl}/api/ps`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!r.ok) return res.status(502).json({ models: [], error: `HTTP_${r.status}` });
+        const d = await r.json();
+        return res.json(d && typeof d === 'object' ? d : { models: [] });
+    } catch (e) {
+        return res.status(502).json({ models: [], error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.get('/api/ollama/tags', async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 6000);
+    try {
+        const r = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal, headers: getOllamaAuthHeaders() });
+        if (!r.ok) return res.status(502).json({ models: [], error: `HTTP_${r.status}` });
+        const d = await r.json();
+        return res.json(d && typeof d === 'object' ? d : { models: [] });
+    } catch (e) {
+        return res.status(502).json({ models: [], error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.get('/api/ollama/trace', async (req, res) => {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50) || 50));
+    const tail = OLLAMA_TRACE.slice(-limit);
+    res.json({ ok: true, limit, items: tail });
+});
+
+app.post('/api/ollama/test', strictLimiter, async (req, res) => {
+    try {
+        const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+        const model = String(req.body?.model || SYSTEM_DB?.settings?.activeModel || 'qwen3:latest').trim();
+        const stream = req.body?.stream !== false;
+        const modelRole = String(req.body?.modelRole || 'chat').trim() || 'chat';
+        const prompt = String(req.body?.prompt || 'Reply with OK.').slice(0, 2000);
+        const traceId = `test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const startedAt = Date.now();
+        pushOllamaTrace({ id: traceId, kind: 'test', mode: stream ? 'stream' : 'nonstream', baseUrl, modelRole, model, stage: 'start' });
+
+        const { controller, cleanup } = createAbortControllerWithTimeout(null, 120000);
+        try {
+            const r = await fetch(`${baseUrl}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        { role: 'system', content: '' },
+                        { role: 'user', content: prompt }
+                    ],
+                    keep_alive: resolveKeepAliveForModel(model),
+                    options: buildOllamaOptions({ num_keep: -1 }, modelRole, model),
+                    stream,
+                    ...(shouldForceThinkFalse({ model, modelRole, userPrompt: prompt }) ? { think: false } : {})
+                })
+            });
+            if (!r.ok) {
+                const errText = await r.text();
+                pushOllamaTrace({ id: traceId, kind: 'test', mode: stream ? 'stream' : 'nonstream', baseUrl, modelRole, model, stage: 'http_error', status: r.status, error: String(errText || '').slice(0, 500) });
+                return res.status(502).json({ ok: false, error: errText || `HTTP_${r.status}`, baseUrl, model, stream });
+            }
+            if (!stream) {
+                const d = await r.json();
+                pushOllamaTrace({ id: traceId, kind: 'test', mode: 'nonstream', baseUrl, modelRole, model, stage: 'ok' });
+                return res.json({ ok: true, baseUrl, model, stream: false, elapsedMs: Date.now() - startedAt, response: d?.message?.content || d?.response || '' });
+            }
+            if (!r.body) return res.status(502).json({ ok: false, error: 'No stream body', baseUrl, model, stream: true });
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let got = '';
+            let ttfbMs = 0;
+            const t0 = Date.now();
+            while (got.length < 200) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (!ttfbMs) ttfbMs = Date.now() - t0;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    try {
+                        const p = JSON.parse(trimmed);
+                        const content = p?.message?.content || p?.response || '';
+                        const thinking = p?.message?.thinking || p?.thinking || '';
+                        const piece = String(content || thinking || '');
+                        if (piece) {
+                            got += piece;
+                            if (got.length >= 200) break;
+                        }
+                    } catch {}
+                }
+            }
+            pushOllamaTrace({ id: traceId, kind: 'test', mode: 'stream', baseUrl, modelRole, model, stage: 'ok', ttfbMs, elapsedMs: Date.now() - startedAt });
+            return res.json({ ok: true, baseUrl, model, stream: true, ttfbMs, elapsedMs: Date.now() - startedAt, sample: got.slice(0, 200) });
+        } finally {
+            cleanup();
+        }
+    } catch (e) {
+        return res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/ollama/stop', strictLimiter, async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const model = String(req.body?.model || '').trim();
+    if (!validateOllamaModelRef(model)) {
+        return res.status(400).json({ error: 'Invalid model' });
+    }
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 20_000);
+    try {
+        const r = await fetch(`${baseUrl}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+            body: JSON.stringify({ model, prompt: '', stream: false, keep_alive: 0 }),
+            signal: controller.signal
+        });
+        if (!r.ok) return res.status(502).json({ error: `HTTP_${r.status}` });
+        return res.json({ ok: true });
+    } catch (e) {
+        return res.status(502).json({ error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.get('/api/ollama/library/search', async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2 || q.length > 80) {
+        return res.json({ results: [] });
+    }
+    const url = `https://ollama.com/search?q=${encodeURIComponent(q)}`;
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 8000);
+    try {
+        const r = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'GAI-OS/1.0' } });
+        if (!r.ok) return res.status(502).json({ results: [], error: `HTTP_${r.status}` });
+        const html = await r.text();
+        const strip = (s = '') => String(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+        const results = [];
+        const re = /<a\s+href="\/library\/([^"]+)"[^>]*>([\s\S]*?)<\/a>/gim;
+        let m;
+        while ((m = re.exec(html)) !== null) {
+            const slug = String(m[1] || '').trim();
+            const block = String(m[2] || '');
+            if (!slug) continue;
+            const text = strip(block);
+            const descMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+            const description = descMatch ? strip(descMatch[1]) : '';
+            const pullsMatch = text.match(/([0-9][0-9.,]*[KMB]?)\s*Pulls/i);
+            const tagsMatch = text.match(/([0-9]+)\s*Tags/i);
+            const updatedMatch = text.match(/Updated\s*([A-Za-z0-9 ]+ago|yesterday|today)/i);
+            results.push({
+                name: slug,
+                description,
+                pulls: pullsMatch ? pullsMatch[1] : '',
+                tags: tagsMatch ? tagsMatch[1] : '',
+                updated: updatedMatch ? updatedMatch[1] : '',
+                url: `https://ollama.com/library/${slug}`
+            });
+            if (results.length >= 30) break;
+        }
+        return res.json({ results });
+    } catch (e) {
+        return res.status(502).json({ results: [], error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.post('/api/ollama/delete', strictLimiter, async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const model = String(req.body?.model || '').trim();
+    if (!validateOllamaModelRef(model)) {
+        return res.status(400).json({ error: 'Invalid model' });
+    }
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 60_000);
+    try {
+        const r = await fetch(`${baseUrl}/api/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+            body: JSON.stringify({ name: model }),
+            signal: controller.signal
+        });
+        if (!r.ok) return res.status(502).json({ error: `HTTP_${r.status}` });
+        return res.json({ ok: true });
+    } catch (e) {
+        return res.status(502).json({ error: e?.message || String(e) });
+    } finally {
+        cleanup();
+    }
+});
+
+app.post('/api/ollama/pull/stream', strictLimiter, async (req, res) => {
+    const baseUrl = SYSTEM_DB?.settings?.ollamaBaseUrl || OLLAMA_BASE_URL;
+    const model = String(req.body?.model || '').trim();
+    if (!validateOllamaModelRef(model)) {
+        return res.status(400).json({ error: 'Invalid model' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const emit = (type, content) => {
+        res.write(`data: ${JSON.stringify({ type, content })}\n\n`);
+        res.flush?.();
+    };
+    const heartbeat = setInterval(() => {
+        res.write(':\n\n');
+        res.flush?.();
+    }, 15000);
+
+    const { controller, cleanup } = createAbortControllerWithTimeout(null, 60 * 60 * 1000);
+    try {
+        const r = await fetch(`${baseUrl}/api/pull`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getOllamaAuthHeaders() },
+            body: JSON.stringify({ name: model, stream: true }),
+            signal: controller.signal
+        });
+        if (!r.ok || !r.body) {
+            emit('error', { error: `HTTP_${r.status}` });
+            res.end();
+            return;
+        }
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            while (true) {
+                const idx = buffer.indexOf('\n');
+                if (idx === -1) break;
+                const line = buffer.slice(0, idx).trim();
+                buffer = buffer.slice(idx + 1);
+                if (!line) continue;
+                try {
+                    emit('progress', JSON.parse(line));
+                } catch {
+                    emit('progress', { status: line });
+                }
+            }
+        }
+        if (buffer.trim()) {
+            try {
+                emit('progress', JSON.parse(buffer.trim()));
+            } catch {
+                emit('progress', { status: buffer.trim() });
+            }
+        }
+        emit('done', { ok: true });
+        res.end();
+    } catch (e) {
+        emit('error', { error: e?.message || String(e) });
+        res.end();
+    } finally {
+        cleanup();
+        clearInterval(heartbeat);
+    }
+});
+
+app.get('/api/db', (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        // Safe serialization to handle circular references
+        const getCircularReplacer = () => {
+            const seen = new WeakSet();
+            return (key, value) => {
+                if (typeof value === "object" && value !== null) {
+                    if (seen.has(value)) {
+                        return '[Circular]';
+                    }
+                    seen.add(value);
+                }
+                return value;
+            };
+        };
+
+        // OPTIMIZATION: Create a 'Lite' view of the DB for the client sync
+        // This prevents massive payloads (images in VFS, huge logs) from slowing down the sync
+        const shouldOmitVfsContent = (file) => {
+            const name = String(file?.name || '').toLowerCase();
+            const ext = name.includes('.') ? name.split('.').pop() : '';
+            const content = typeof file?.content === 'string' ? file.content : '';
+            const isBinaryExt = ['png','jpg','jpeg','gif','webp','mp3','wav','mp4','mov','pdf','zip'].includes(ext);
+            if (isBinaryExt) return true;
+            if (content.startsWith('data:')) return true;
+            if (content.length > 32_000) return true;
+            return false;
+        };
+
+        const dbView = {
+            ...SYSTEM_DB,
+            vfs: (SYSTEM_DB.vfs || []).map(f => {
+                if (!f || !f.content) return { ...f, content: '' };
+                if (shouldOmitVfsContent(f)) return { ...f, content: '[BLOB_OMITTED_FOR_PERFORMANCE]' };
+                return f;
+            }),
+            logs: (SYSTEM_DB.logs || []).slice(-200),
+            chatHistory: (SYSTEM_DB.chatHistory || []).slice(-1000),
+            reasoningHistory: (SYSTEM_DB.reasoningHistory || []).slice(-20),
+            notifications: (SYSTEM_DB.notifications || []).slice(-200),
+            // Ensure these fields are explicitly included even if empty in SYSTEM_DB
+            memories: SYSTEM_DB.memories || [],
+            gaiProfile: SYSTEM_DB.gaiProfile || null,
+            gaiLearnings: SYSTEM_DB.gaiLearnings || []
+        };
+
+        const json = JSON.stringify(dbView, getCircularReplacer());
+        const sizeMb = (json.length / 1024 / 1024).toFixed(2);
+        if (parseFloat(sizeMb) > 1.0) console.log(`[API/DB] Serving Optimized DB state: ${sizeMb} MB`);
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.send(json);
+    } catch (e) {
+        console.error("API/DB Error:", e);
+        res.status(500).json({ error: "Failed to serialize DB", details: e.message });
+    }
+});
+
+app.post('/api/upload', strictLimiter, async (req, res) => {
+    try {
+        const contentType = req.headers['content-type'] || '';
+        const ext = contentType.includes('image/png') ? '.png' 
+                  : contentType.includes('image/jpeg') ? '.jpg' 
+                  : contentType.includes('image/webp') ? '.webp'
+                  : '.bin';
+        const filename = `upload_${Date.now()}_${Math.random().toString(36).slice(2,8)}${ext}`;
+        const filePath = path.join(DATA_DIR, 'uploads', filename);
+        
+        // Simple raw binary handling for now (assuming client sends raw body or simple form)
+        // Since we don't have multer, we'll try to use a stream if it's large, but for now just write body.
+        // Express by default might parse JSON/UrlEncoded. If body is buffer, good.
+        // We need to ensure body parser doesn't mangle binary.
+        // Assuming the client sends standard fetch body.
+        
+        // Actually, without multer, handling multipart/form-data is hard.
+        // We'll assume client sends RAW BINARY in body with correct Content-Type.
+        
+        if (req.body && Buffer.isBuffer(req.body)) {
+             fs.writeFileSync(filePath, req.body);
+        } else {
+             // Fallback: try to pipe req to file (if body parser didn't consume it)
+             // But body-parser likely consumed it. 
+             // Let's assume for this specific endpoint we need raw body.
+             // We can't easily change global middleware.
+             // So we will use a workaround: Client sends JSON with base64.
+             if (req.body && req.body.fileBase64) {
+                 const buffer = Buffer.from(req.body.fileBase64, 'base64');
+                 fs.writeFileSync(filePath, buffer);
+             } else {
+                 return res.status(400).json({ error: 'Upload expects JSON with fileBase64 field' });
+             }
+        }
+        
+        res.json({ ok: true, path: `data/uploads/${filename}` });
+    } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/chat/delete', async (req, res) => {
+    try {
+        const idsRaw = Array.isArray(req.body?.ids) ? req.body.ids : null;
+        const single = String(req.body?.id || '').trim();
+        const ids = (idsRaw ? idsRaw : (single ? [single] : []))
+            .map((x) => String(x || '').trim())
+            .filter(Boolean);
+        if (!ids.length) return res.status(400).json({ error: 'Missing id(s)' });
+        
+        const before = Array.isArray(SYSTEM_DB.chatHistory) ? SYSTEM_DB.chatHistory.length : 0;
+        if (!Array.isArray(SYSTEM_DB.chatHistory)) SYSTEM_DB.chatHistory = [];
+        
+        const idSet = new Set(ids);
+        SYSTEM_DB.chatHistory = SYSTEM_DB.chatHistory.filter(m => !idSet.has(String(m?.id || '')));
+        
+        const after = SYSTEM_DB.chatHistory.length;
+        if (after !== before) {
+            saveState();
+            logToSystem('info', `Deleted ${before - after} chat messages.`);
+        }
+        return res.json({ ok: true, deleted: Math.max(0, before - after) });
+    } catch (e) {
+        logToSystem('error', `Failed to delete chat messages: ${e.message}`);
+        return res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.get('/api/notifications', (req, res) => {
+    const items = Array.isArray(SYSTEM_DB.notifications) ? SYSTEM_DB.notifications.slice(-200) : [];
+    res.json({ notifications: items });
+});
+
+app.post('/api/notifications/read', strictLimiter, async (req, res) => {
+    try {
+        const id = String(req.body?.id || '').trim();
+        if (!id) return res.status(400).json({ error: 'Missing id' });
+        const items = Array.isArray(SYSTEM_DB.notifications) ? SYSTEM_DB.notifications : [];
+        const idx = items.findIndex(n => String(n?.id || '') === id);
+        if (idx !== -1) {
+            items[idx] = { ...items[idx], read: true };
+            SYSTEM_DB.notifications = items;
+            saveState();
+        }
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/notifications/read_all', strictLimiter, async (req, res) => {
+    try {
+        const items = Array.isArray(SYSTEM_DB.notifications) ? SYSTEM_DB.notifications : [];
+        SYSTEM_DB.notifications = items.map(n => (n && n.read !== true) ? { ...n, read: true } : n);
+        saveState();
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/notifications/clear', strictLimiter, async (req, res) => {
+    try {
+        SYSTEM_DB.notifications = [];
+        saveState();
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/sync', (req, res) => {
+    const body = req.body || {};
+    if (body && typeof body === 'object') {
+        if (body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings)) {
+            SYSTEM_DB.settings = { ...(SYSTEM_DB.settings || {}), ...body.settings };
+            
+            // Sync autonomy flags: if autonomyEnabled changed, update agenticSystem.enabled
+            if (SYSTEM_DB.settings.autonomyEnabled !== undefined && SYSTEM_DB.settings.agenticSystem) {
+                if (typeof SYSTEM_DB.settings.agenticSystem.enabled !== 'boolean') {
+                    SYSTEM_DB.settings.agenticSystem.enabled = SYSTEM_DB.settings.autonomyEnabled;
+                }
+                gaiAgentRouter.setConfig(SYSTEM_DB.settings.agenticSystem);
+            }
+
+            delete body.settings;
+        }
+        if (body.agentState && typeof body.agentState === 'object' && !Array.isArray(body.agentState)) {
+            const current = SYSTEM_DB.agentState || {};
+            const merged = { ...current, ...body.agentState };
+            const runtimeKeys = [
+                'currentAction',
+                'processingStage',
+                'thoughtProcess',
+                'ollamaWaitStartedAt',
+                'autonomyBackoffUntil',
+                'autonomyFailureCount',
+                'lastAutonomyError',
+                'lastRun',
+                'lastHeartbeatAt',
+                'lastActionHash',
+                'consecutiveLoops'
+            ];
+            for (const k of runtimeKeys) merged[k] = current[k];
+            SYSTEM_DB.agentState = merged;
+            delete body.agentState;
+        }
+        if (Array.isArray(body.tasks)) {
+            const serverTasks = Array.isArray(SYSTEM_DB.tasks) ? SYSTEM_DB.tasks : [];
+            const incomingTasks = body.tasks.filter(t => t && typeof t === 'object' && t.id).map(t => normalizeTask(t));
+            
+            // Sprawdź cache - jeśli tasky się nie zmieniły, pomiń procesowanie
+            const currentHash = simpleHash({ serverTasks: serverTasks.length, incomingTasks: incomingTasks.length });
+            const now = Date.now();
+            
+            if (taskSyncCache.lastHash === currentHash && (now - taskSyncCache.lastUpdate) < taskSyncCache.CACHE_TTL) {
+                // Tasky się nie zmieniły, użyj cache'owanej wersji
+                SYSTEM_DB.tasks = taskSyncCache.lastTasks || serverTasks;
+                delete body.tasks;
+            } else {
+                // Tasky się zmieniły, przetwórz je
+                const byId = new Map();
+                const order = [];
+                for (const t of serverTasks) {
+                    if (!t || !t.id) continue;
+                    const id = String(t.id);
+                    byId.set(id, t);
+                    order.push(id);
+                }
+                for (const incoming of incomingTasks) {
+                    const id = String(incoming.id);
+                    const existing = byId.get(id);
+                    if (!existing) {
+                        byId.set(id, incoming);
+                        continue;
+                    }
+                    const a = Number(existing.updatedAt || existing.createdAt || 0);
+                    const b = Number(incoming.updatedAt || incoming.createdAt || 0);
+                    if (b > a) {
+                        const merged = { ...existing, ...incoming };
+                        if (existing.status === 'failed' && incoming.status !== 'failed') merged.status = 'failed';
+                        if (existing.status === 'completed') merged.status = 'completed';
+                        const progExisting = Number(existing.progress) || 0;
+                        const progIncoming = Number(incoming.progress) || 0;
+                        if (progExisting > progIncoming) merged.progress = progExisting;
+                        if ((existing.status === 'in_progress' && incoming.status === 'pending') || (progExisting > progIncoming && existing.status === 'in_progress')) {
+                            merged.status = 'in_progress';
+                        }
+                        if (Array.isArray(existing.logs) && Array.isArray(incoming.logs) && existing.logs.length > incoming.logs.length) {
+                            merged.logs = existing.logs;
+                        }
+                        byId.set(id, normalizeTask(merged));
+                    } else {
+                        if (Array.isArray(incoming.logs) && Array.isArray(existing.logs) && incoming.logs.length > existing.logs.length) {
+                            const extra = incoming.logs.slice(existing.logs.length);
+                            existing.logs.push(...extra);
+                            existing.updatedAt = Date.now();
+                        }
+                    }
+                }
+                
+                // Zakończ przetwarzanie tasków i zaktualizuj cache
+                const nextTasks = [];
+                const seen = new Set();
+                for (const id of order) {
+                    const t = byId.get(id);
+                    if (t) {
+                        nextTasks.push(t);
+                        seen.add(id);
+                    }
+                }
+                for (const [id, t] of byId.entries()) {
+                    if (!seen.has(id)) nextTasks.push(t);
+                }
+                
+                SYSTEM_DB.tasks = nextTasks;
+                taskSyncCache.lastTasks = nextTasks;
+                taskSyncCache.lastHash = currentHash;
+                taskSyncCache.lastUpdate = now;
+                delete body.tasks;
+            }
+        }
+        Object.assign(SYSTEM_DB, body);
+    }
+    applyRuntimeConfig();
+    normalizeAllTasks();
+    saveState();
+    res.json({ status: 'ok' });
+});
+app.get('/api/system/status', (req, res) => {
+    const projectId = process.env.GCP_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || '';
+    const serviceName = process.env.K_SERVICE || 'GAI_CORE_V6';
+    res.json({
+        status: 'ok',
+        uptime: os.uptime(),
+        platform: os.platform(),
+        arch: os.arch(),
+        nodeEnv: process.env.NODE_ENV || 'production',
+        cpus: os.cpus()?.length || 0,
+        projectId,
+        serviceName,
+        memory: process.memoryUsage(),
+        persistence: { path: DATA_DIR, status: 'WRITABLE' },
+        logs: SYSTEM_DB.logs
+    });
+});
+
+app.get('/api/system/logs', (req, res) => {
+    try {
+        const limit = Number.isFinite(Number(req.query?.limit)) ? Math.max(1, Math.min(1000, Number(req.query.limit))) : 200;
+        const since = Number.isFinite(Number(req.query?.since)) ? Number(req.query.since) : 0;
+        const levelsRaw = String(req.query?.levels || '').trim();
+        const levels = levelsRaw
+            ? new Set(levelsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))
+            : null;
+
+        const entries = readNdjsonTail(SYSTEM_LOG_PATH, limit, NDJSON_TAIL_MAX_BYTES)
+            .filter(e => !since || (Number(e?.timestamp || 0) >= since))
+            .filter(e => !levels || levels.has(String(e?.level || '').toLowerCase()));
+
+        res.json({ status: 'ok', file: SYSTEM_LOG_PATH, entries });
+    } catch (e) {
+        res.status(500).json({ error: String(e?.message || e || 'logs_failed') });
+    }
+});
+
+app.get('/api/autonomy/telemetry', (req, res) => {
+    try {
+        const logsLimit = Number.isFinite(Number(req.query?.logsLimit)) ? Math.max(0, Math.min(500, Number(req.query.logsLimit))) : 80;
+        const tasksLimit = Number.isFinite(Number(req.query?.tasksLimit)) ? Math.max(0, Math.min(50, Number(req.query.tasksLimit))) : 20;
+
+        const now = Date.now();
+        const settings = SYSTEM_DB?.settings || {};
+        const agent = SYSTEM_DB?.agentState || {};
+        const tasks = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks : [];
+        const openTasks = tasks.filter(t => t && (t.status === 'pending' || t.status === 'in_progress'));
+        const inProgress = tasks.filter(t => t && t.status === 'in_progress');
+
+        const backoffUntil = Number(agent.autonomyBackoffUntil || 0);
+        const backoffRemainingSec = backoffUntil && backoffUntil > now ? Math.ceil((backoffUntil - now) / 1000) : 0;
+
+        const compactOpen = openTasks
+            .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+            .slice(0, tasksLimit)
+            .map((t) => ({
+                id: t.id,
+                title: t.title,
+                status: t.status,
+                priority: t.priority,
+                progress: t.progress,
+                retryCount: t.retryCount,
+                updatedAt: t.updatedAt,
+                withinObjectives: !!t.withinObjectives,
+                lastLogs: Array.isArray(t.logs) ? t.logs.slice(-8) : []
+            }));
+
+        const entries = logsLimit > 0 ? readNdjsonTail(SYSTEM_LOG_PATH, logsLimit, NDJSON_TAIL_MAX_BYTES) : [];
+
+        res.json({
+            status: 'ok',
+            now,
+            autonomy: {
+                enabled: !!settings.autonomyEnabled,
+                scheduler: String(settings.autonomyScheduler || 'heartbeat'),
+                heartbeat: settings.heartbeat || { enabled: false, intervalSeconds: 60 },
+                idleAutoTasksEnabled: settings.idleAutoTasksEnabled !== false,
+                idleAutoTasksTargetOpen: Number(settings.idleAutoTasksTargetOpen || 1),
+                idleAutoTasksThrottleSec: Number(settings.idleAutoTasksThrottleSec || 60)
+            },
+            model: {
+                provider: settings.aiProvider,
+                activeModel: settings.activeModel,
+                roles: settings.modelRoles || {},
+                localBackupModel: settings.localBackupModel || ''
+            },
+            agent: {
+                currentAction: agent.currentAction,
+                processingStage: agent.processingStage,
+                thoughtProcess: agent.thoughtProcess,
+                lastRun: agent.lastRun,
+                lastHeartbeatAt: agent.lastHeartbeatAt,
+                consecutiveLoops: agent.consecutiveLoops,
+                userPriority: agent.userPriority,
+                userQueueLength: agent.userQueueLength,
+                autonomyBackoffUntil: agent.autonomyBackoffUntil,
+                backoffRemainingSec,
+                lastIdleTaskPlanAt: agent.lastIdleTaskPlanAt,
+                lastLoopBreakerAt: agent.lastLoopBreakerAt,
+                lastCycleStartedAt: agent.lastCycleStartedAt,
+                lastCycleFinishedAt: agent.lastCycleFinishedAt,
+                lastCycleResult: agent.lastCycleResult
+            },
+            tasks: {
+                counts: {
+                    pending: openTasks.filter(t => t.status === 'pending').length,
+                    in_progress: inProgress.length,
+                    completed: tasks.filter(t => t.status === 'completed').length,
+                    failed: tasks.filter(t => t.status === 'failed').length
+                },
+                open: compactOpen
+            },
+            ai: {
+                active: {
+                    system: !!activeAiAbortControllers?.system,
+                    user: !!activeAiAbortControllers?.user
+                }
+            },
+            logs: { entries }
+        });
+    } catch (e) {
+        res.status(500).json({ error: String(e?.message || e || 'telemetry_failed') });
+    }
+});
+app.post('/api/search', async (req, res) => {
+    try {
+        const query = normalizeWebQuery(req.body?.query || '');
+        const maxResults = Number.isFinite(Number(req.body?.maxResults)) ? Math.max(1, Math.min(10, Number(req.body?.maxResults))) : 5;
+        if (!query) return res.status(400).json({ error: 'Missing query' });
+        const results = await performWebSearch(query, maxResults);
+        res.json({ results });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'search_failed' });
+    }
+});
+app.get('/api/tools/health', async (req, res) => {
+    try {
+        const report = await runToolHealthChecks();
+        res.json(report);
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'tool_health_failed' });
+    }
+});
+
+app.post('/api/system/power', strictLimiter, (req, res) => {
+    const action = String(req.body?.action || '').toLowerCase();
+    const allowed = new Set(['stop', 'restart']);
+    if (!allowed.has(action)) {
+        return res.status(400).json({ error: 'Invalid action' });
+    }
+    const scriptPath = path.join(APP_ROOT, 'gaios');
+    if (!fs.existsSync(scriptPath)) {
+        return res.status(500).json({ error: 'gaios script not found' });
+    }
+    res.json({ status: 'scheduled', action });
+    const cmd = action === 'stop' ? 'stop' : 'restart';
+    const child = spawn('bash', ['-lc', `sleep 0.5; "${scriptPath}" ${cmd}`], {
+        cwd: APP_ROOT,
+        detached: true,
+        stdio: 'ignore'
+    });
+    child.unref();
+    try {
+        logToSystem('info', `System power action scheduled: ${action}`);
+    } catch {}
+});
+app.get('/api/telegram/status', (req, res) => {
+    const cfg = SYSTEM_DB?.settings?.telegramConfig || {};
+    const cleanToken = String(cfg.botToken || '').trim();
+    const maskedToken = cleanToken ? `${cleanToken.slice(0, 6)}...${cleanToken.slice(-4)}` : '';
+    const botIdFromToken = cleanToken && cleanToken.includes(':') ? String(cleanToken.split(':')[0] || '').trim() : '';
+    const currentChatId = String(cfg.chatId || '').trim();
+    const response = {
+        enabled: !!cfg.enabled,
+        botTokenMasked: maskedToken,
+        chatId: currentChatId,
+        pollingActive: !!telegramPollTimer,
+        offset: telegramOffset,
+        webhookCleared: telegramWebhookCleared,
+        pollBlockedUntil: telegramPollBlockedUntil || 0,
+        botId: telegramBotId || '',
+        lastPollAt: lastTelegramPollAt || 0,
+        lastUpdateAt: lastTelegramUpdateAt || 0,
+        lastProcessedAt: lastTelegramProcessedAt || 0,
+        lastProcessedCount: lastTelegramProcessedCount || 0,
+        lastPollError: lastTelegramPollError || '',
+        lastConflictAt: lastTelegramConflictAt || 0,
+        lastConflictMsg: lastTelegramConflictMsg || '',
+        chatIdWarning: currentChatId && botIdFromToken && currentChatId === botIdFromToken
+            ? 'chatId wygląda jak bot id (pierwsza część tokena). Zostanie potraktowany jak pusty i system spróbuje auto-bind po pierwszej wiadomości do bota.'
+            : ''
+    };
+    if (String(req.query?.verbose || '') === '1') {
+        getTelegramWebhookInfoCached().then((info) => {
+            res.json({ ...response, webhookInfo: info?.result || info || null });
+        }).catch(() => {
+            res.json({ ...response, webhookInfo: null });
+        });
+        return;
+    }
+    res.json(response);
+});
+app.post('/api/telegram/poll', async (req, res) => {
+    try {
+        await ensureTelegramLongPolling();
+        await ensureTelegramBotIdentity();
+        const count = await pollTelegram();
+        res.json({ status: 'ok', processed: count || 0 });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'poll_failed' });
+    }
+});
+
+app.get('/api/telegram/peek', async (req, res) => {
+    try {
+        if (!isTelegramEnabled()) return res.status(400).json({ error: 'telegram_disabled' });
+        const cfg = SYSTEM_DB?.settings?.telegramConfig || {};
+        const cleanToken = String(cfg.botToken || '').trim();
+        if (!cleanToken) return res.status(400).json({ error: 'missing_bot_token' });
+        const timeoutSec = Math.max(0, Math.min(10, Number(req.query?.timeoutSec || 0) || 0));
+        const offset = req.query?.offset !== undefined ? String(req.query.offset) : '';
+        const offsetParam = offset && /^[0-9]+$/.test(offset) ? `&offset=${offset}` : '';
+        const url = `https://api.telegram.org/bot${cleanToken}/getUpdates?timeout=${timeoutSec}${offsetParam}`;
+        const r = await fetch(url);
+        const text = await r.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch {}
+        const updates = Array.isArray(data?.result) ? data.result : [];
+        const sample = updates.slice(-10).map((u) => {
+            const msg = u?.message || u?.edited_message;
+            const chat = msg?.chat || {};
+            const from = msg?.from || {};
+            return {
+                update_id: u?.update_id,
+                chat_id: chat?.id,
+                chat_type: chat?.type,
+                from_id: from?.id,
+                from_username: from?.username,
+                has_text: !!msg?.text,
+                has_caption: !!msg?.caption,
+                text_preview: String(msg?.text || msg?.caption || '').slice(0, 120)
+            };
+        });
+        res.json({
+            ok: r.ok,
+            status: r.status,
+            hasUpdates: updates.length > 0,
+            count: updates.length,
+            sample
+        });
+    } catch (e) {
+        res.status(500).json({ error: e?.message || 'peek_failed' });
+    }
+});
+app.post('/api/tick', async (req, res) => {
+    const force = req.body?.force === true;
+    const forceUnlock = req.body?.forceUnlock === true || req.body?.unlock === true;
+    if (forceUnlock) {
+        try { abortActiveAi('system'); } catch {}
+        try { releaseHeartbeatLock(); } catch {}
+        try {
+            SYSTEM_DB.agentState.currentAction = 'idle';
+            SYSTEM_DB.agentState.processingStage = '';
+            SYSTEM_DB.agentState.thoughtProcess = 'Manual force-unlock requested.';
+            SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+            SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+            SYSTEM_DB.agentState.autonomyFailureCount = 0;
+            SYSTEM_DB.agentState.lastAutonomyError = '';
+            SYSTEM_DB.agentState.lastRun = Date.now();
+            saveState();
+        } catch {}
+    }
+    const result = await runAutonomousCycle(force ? { force: true } : {});
+    res.json(result || { status: 'triggered' });
+});
+
+app.post('/api/tick/force', async (req, res) => {
+    const result = await runAutonomousCycle({ force: true });
+    res.json(result || { status: 'triggered' });
+});
+
+
+
+app.post('/api/reset-state', strictLimiter, async (req, res) => {
+    // FORCE HARD RESET OF AGENT STATE
+    SYSTEM_DB.agentState.currentAction = 'idle';
+    SYSTEM_DB.agentState.thoughtProcess = 'Manual Reset Initiated.';
+    SYSTEM_DB.agentState.processingStage = '';
+    SYSTEM_DB.agentState.ollamaWaitStartedAt = 0;
+    SYSTEM_DB.agentState.autonomyBackoffUntil = 0;
+    SYSTEM_DB.agentState.autonomyFailureCount = 0;
+    SYSTEM_DB.agentState.lastAutonomyError = '';
+    SYSTEM_DB.agentState.taskActionErrorCount = 0;
+    SYSTEM_DB.agentState.lastIdleAiAt = 0;
+    SYSTEM_DB.agentState.lastObjectivePlanAt = 0;
+    SYSTEM_DB.agentState.pendingTaskApproval = null;
+    SYSTEM_DB.agentState.lastRun = Date.now();
+    saveState();
+    releaseHeartbeatLock();
+    logToSystem('warn', 'Manual Kernel Reset Triggered via API');
+    res.json({ status: 'reset' });
+});
+
+app.post('/api/user/priority/reset', strictLimiter, async (req, res) => {
+    clearUserCommandState('priority_reset');
+    res.json({ ok: true });
+});
+
+app.post('/api/user/priority/set', strictLimiter, async (req, res) => {
+    const enabled = req.body?.enabled !== false;
+    try {
+        setUserPriority(enabled);
+        if (enabled) {
+            abortActiveAi('system');
+            releaseHeartbeatLock();
+        }
+        res.json({ ok: true, userPriority: !!SYSTEM_DB?.agentState?.userPriority });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+});
+
+app.post('/api/user/queue/remove', strictLimiter, async (req, res) => {
+    const id = String(req.body?.id || '').trim();
+    const rawIndex = Number(req.body?.index);
+    const idxById = id ? userCommandQueue.findIndex(item => String(item?.id || '') === id) : -1;
+    const idxByPos = (Number.isFinite(rawIndex) && userCommandQueue.length > 0)
+        ? Math.max(0, Math.min(userCommandQueue.length - 1, Math.floor(rawIndex)))
+        : -1;
+    const idx = idxById >= 0 ? idxById : idxByPos;
+    if (idx === -1) return res.status(404).json({ ok: false, error: 'Queue item not found' });
+    const [removed] = userCommandQueue.splice(idx, 1);
+    if (!removed) return res.status(404).json({ ok: false, error: 'Queue item not found' });
+    try { removed?.reject?.(new Error('Queue item removed by operator')); } catch {}
+    updateUserQueueLength();
+    logToSystem('warn', `Queue item removed by operator: ${id || `#${idx}`}`);
+    res.json({ ok: true, removedId: id || String(removed?.id || ''), queueLength: userCommandQueue.length });
+});
+
+app.post('/api/user/queue/force-send', strictLimiter, async (req, res) => {
+    const id = String(req.body?.id || '').trim();
+    const rawIndex = Number(req.body?.index);
+    const idxById = id ? userCommandQueue.findIndex(item => String(item?.id || '') === id) : -1;
+    const idxByPos = (Number.isFinite(rawIndex) && userCommandQueue.length > 0)
+        ? Math.max(0, Math.min(userCommandQueue.length - 1, Math.floor(rawIndex)))
+        : -1;
+    const idx = idxById >= 0 ? idxById : idxByPos;
+    if (idx === -1) return res.status(404).json({ ok: false, error: 'Queue item not found' });
+    const [item] = userCommandQueue.splice(idx, 1);
+    if (!item) return res.status(404).json({ ok: false, error: 'Queue item not found' });
+    
+    // Fix for crash: Ensure item is an object before setting meta
+    if (item && typeof item === 'object') {
+        if (item) item.meta = {
+            ...(item?.meta || {}),
+            forceUserPriority: true,
+            nonBlocking: false,
+            enqueueFront: true
+        };
+    } else {
+        logToSystem('warn', `Queue item found but invalid type: ${typeof item}`);
+    }
+    
+    userCommandQueue.unshift(item);
+    updateUserQueueLength();
+    processUserCommandQueue().catch(() => {});
+    logToSystem('info', `Queue item forced to front: ${id || `#${idx}`}`);
+    res.json({ ok: true, forcedId: id || String(item?.id || ''), queueLength: userCommandQueue.length });
+});
+
+app.post('/api/stop-kernel', strictLimiter, async (req, res) => {
+    if (activeAiAbortControllers.system) {
+        activeAiAbortControllers.system.abort();
+        activeAiAbortControllers.system = null;
+    }
+    if (activeAiAbortControllers.user) {
+        activeAiAbortControllers.user.abort();
+        activeAiAbortControllers.user = null;
+    }
+    rejectAndClearQueuedUserCommands('stop_kernel');
+    const activeTask = SYSTEM_DB.tasks.find(t => t.status === 'in_progress');
+    if (activeTask) {
+        activeTask.status = 'pending';
+        activeTask.logs = Array.isArray(activeTask.logs) ? activeTask.logs : [];
+        activeTask.logs.push('[USER STOP] Task paused by operator.');
+        activeTask.updatedAt = Date.now();
+    }
+    SYSTEM_DB.agentState.currentAction = 'idle';
+    SYSTEM_DB.agentState.thoughtProcess = 'Action stopped by operator.';
+    SYSTEM_DB.agentState.lastRun = Date.now();
+    saveState();
+    logToSystem('warn', 'Kernel Stop Triggered via API');
+    res.json({ status: 'stopped' });
+});
+
+app.post('/api/command', strictLimiter, async (req, res) => {
+    const { message, attachments, config, context, model } = req.body;
+
+    req.on('close', () => {
+        try { abortActiveAi('user'); } catch {}
+        try { setUserPriority(false); } catch {}
+    });
+    
+    // Validate inputs
+    if (!message || typeof message !== 'string' || message.length === 0 || message.length > MAX_COMMAND_MESSAGE_CHARS) {
+        return res.status(400).json({ error: 'Invalid message format or too long' });
+    }
+
+    {
+        const m = String(message || '');
+        const match = m.match(/^\s*GENERATE_IMAGE\s*:\s*([\s\S]+)$/i);
+        if (match) {
+            const prompt = String(match[1] || '').trim();
+            if (!prompt) return res.status(400).json({ error: 'Missing image prompt' });
+            try {
+                const gen = await generateImage(prompt);
+                logUserMessageOnce(message);
+                logToChat('model', `IMAGE GENERATED: ${gen.webPath}`, 'fs');
+                return res.json({ response: `IMAGE GENERATED: ${gen.webPath}`, summary: '' });
+            } catch (e) {
+                return res.status(500).json({ error: e?.message || String(e) });
+            }
+        }
+    }
+    
+    if (attachments && !Array.isArray(attachments)) {
+        return res.status(400).json({ error: 'Invalid attachments format' });
+    }
+    
+    const provider = SYSTEM_DB.settings.aiProvider;
+    // LOCAL MODE: No API Key check for Ollama
+    // const apiKey = SYSTEM_DB.settings.apiKeys[provider] || '';
+    // if (provider !== 'ollama' && !apiKey) return res.status(400).json({ error: `No API Key for ${provider}.` });
+    const modelRole = selectUserModelRole(message, config?.modelRole);
+    const roleModel = model || SYSTEM_DB.settings.modelRoles?.[modelRole] || SYSTEM_DB.settings.activeModel;
+    const userSystemInstruction = buildChatSystemInstruction(config?.systemInstruction || SYSTEM_DB.settings.systemPrompt);
+
+    try {
+        try {
+            setUserPriority(true);
+            abortActiveAi('system');
+            releaseHeartbeatLock();
+        } catch {}
+        const result = await enqueueUserCommand(async () => {
+            const memCmd = await handleMemorySlashCommand(message, attachments);
+            if (memCmd && memCmd.response) {
+                logUserMessageOnce(message);
+                logToChat('model', memCmd.response);
+                return { response: memCmd.response, summary: '' };
+            }
+            const approvalHandled = await handleTaskApproval(message, 'terminal');
+            if (approvalHandled) {
+                return { response: 'Potwierdzenie przyjęte.', summary: '' };
+            }
+
+            // --- AGENT ROUTER (CAPTAIN) CHECK ---
+            if (gaiAgentRouter && gaiAgentRouter.config?.enabled) {
+                try {
+                    const routerResult = await gaiAgentRouter.routeRequest(message, [], { 
+                        chat: async (model, messages) => {
+                             const sys = messages.find(m => m.role === 'system')?.content || '';
+                             const usr = messages.find(m => m.role === 'user')?.content || '';
+                             return await queryUniversalAI({ 
+                                provider: SYSTEM_DB.settings.aiProvider, model, 
+                                modelRole: 'agent', 
+                                systemInstruction: sys, 
+                                userPrompt: usr,
+                                stream: false 
+                            });
+                        },
+                        generate: async (model, prompt, opts) => {
+                            return await queryUniversalAI({
+                                provider: SYSTEM_DB.settings.aiProvider, model,
+                                modelRole: 'planning',
+                                systemInstruction: 'You are a JSON generator.',
+                                userPrompt: prompt,
+                                stream: false
+                            });
+                        }
+                    });
+                    
+                    if (routerResult) {
+                        const finalResponse = routerResult.response.content || routerResult.response; 
+                        logUserMessageOnce(message);
+                        logToChat('model', finalResponse); 
+                        
+                        // Check for any side effects like reporting to Telegram
+                        if (isTelegramEnabled() && finalResponse.includes("CAPTAIN'S REPORT")) {
+                             await sendTelegramMessage(finalResponse).catch(() => {});
+                        }
+
+                        return { response: finalResponse, summary: '' };
+                    }
+                } catch (e) {
+                    console.error('[AGENT_ROUTER] Failed during routing, falling back to standard chat:', e);
+                }
+            }
+            // ------------------------------------
+
+            logUserUpdateToActiveTask(message, 'terminal');
+            await maybeCreateTaskFromUserMessage(message, 'terminal');
+            scheduleRealtimeSources('terminal');
+            let composedPrompt = applyThinkingTag(message, modelRole);
+            const needsArticleGuide = shouldIncludeArticleGuide(message);
+            const userController = createActiveAbortController('user');
+            const consultations = modelRole === 'chat'
+                ? await runChatConsultations({
+                    message,
+                    provider,
+                    systemInstruction: userSystemInstruction,
+                    signal: userController.signal
+                })
+                : [];
+            if (consultations.length) {
+                const notes = consultations.map(c => `- ${c.role}/${c.model}:\n${c.text}`).join('\n\n');
+                composedPrompt = `${composedPrompt}\n\n[CONSULTATION_NOTES]\n${notes}\n[/CONSULTATION_NOTES]`;
+            }
+            const extraContext = buildClientExtraContext(context);
+            composedPrompt = composePrompt({ message: composedPrompt, modelRole, includeGuide: needsArticleGuide, extraContext });
+
+            const emit = () => {};
+
+
+
+            const openTasks = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks.filter(t => t?.status !== 'completed') : [];
+            const activeTask = openTasks.find(t => t.status === 'in_progress');
+            const pendingTask = openTasks.find(t => t.status === 'pending');
+            let lockInfo = 'none';
+            try {
+                if (fs.existsSync(HEARTBEAT_LOCK_PATH)) {
+                    const raw = fs.readFileSync(HEARTBEAT_LOCK_PATH, 'utf8');
+                    const lock = JSON.parse(raw || '{}');
+                    const pid = Number(lock?.pid || 0);
+                    const startedAt = Number(lock?.updatedAt || lock?.startedAt || 0);
+                    const ageSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+                    lockInfo = `${ageSec}s${pid ? ` pid ${pid}` : ''}`;
+                }
+            } catch {}
+            logUserMessageOnce(message);
+
+            if (Array.isArray(attachments) && attachments.length > 0) {
+                for (const p of attachments) {
+                    const fullPath = resolveDiskPath(p);
+                    if (!fs.existsSync(fullPath)) continue;
+                    const stat = fs.statSync(fullPath);
+                    if (stat.isDirectory()) continue;
+                    if (stat.size > 512 * 1024) continue;
+                    const content = fs.readFileSync(fullPath, 'utf8');
+                    const maxChars = Math.max(2000, Math.floor(Number(SYSTEM_DB?.settings?.ollamaMaxAttachmentChars || 120000)));
+                    const safe = content.length > maxChars
+                        ? `${content.slice(0, maxChars)}\n\n[TRUNCATED: ${content.length - maxChars} chars omitted]`
+                        : content;
+                    composedPrompt += `\n\n[ATTACHMENT:${p}]\n${safe}\n[/ATTACHMENT]`;
+                }
+            }
+            let reply;
+            try {
+                const { controller: stepController, cleanup: stepCleanup } = createAbortControllerWithTimeout(userController.signal, Number(AUTONOMY_STEP_TIMEOUT_MS) || 300000);
+                try {
+                reply = await queryUniversalAI({
+                    provider, model: roleModel,
+                    modelRole,
+                    systemInstruction: userSystemInstruction,
+                    userPrompt: composedPrompt,
+                        signal: stepController.signal
+                });
+                } finally {
+                    stepCleanup();
+                }
+            } finally {
+                clearActiveAbortController('user', userController);
+            }
+            await executeTools(reply, { source: 'user' });
+            const parsed = parseThinkTags(reply);
+            const thought = normalizeThoughtText(parsed.thought || parsed.summary);
+            if (isMeaningfulThought(thought)) {
+                logToChat('model', thought, 'thought');
+            } else {
+                const fallbackThought = buildFallbackThought();
+                if (isMeaningfulThought(fallbackThought)) logToChat('model', fallbackThought, 'thought');
+            }
+            const askUser = extractAskUser(parsed.answer || reply);
+            recordReasoning({
+                summary: thought || parsed.answer?.slice(0, 400),
+                role: modelRole,
+                model: roleModel,
+                source: 'terminal'
+            });
+            const answerCandidate = (parsed.answer || parsed.summary || reply || '').trim();
+            const suppressed = suppressRedundantPrompts(answerCandidate);
+            const responseText = askUser ? askUser : (suppressed || answerCandidate);
+            logToChat('model', responseText);
+            safeSetTimeout(() => {
+                maybeAutoSummarizeConversation({ trigger: 'user' }).catch(() => undefined);
+            }, 50);
+            if (askUser && isTelegramEnabled()) {
+                await sendTelegramMessage(`Pytanie od GAI: ${askUser}`);
+            }
+            return { response: responseText, summary: parsed.thought || parsed.summary || '' };
+        }, {
+            source: 'terminal',
+            text: String(message || '').slice(0, 160),
+            nonBlocking: false,
+            forceUserPriority: true,
+            mayInterruptSystem: true,
+            enqueueFront: true
+        });
+        res.json(result);
+    } catch (e) { 
+        logError('Command', e, { provider, message: message?.slice(0, 100) });
+        res.status(500).json({ error: e.message }); 
+    }
+});
+
+app.post('/api/command/stream', strictLimiter, async (req, res) => {
+    const { message, attachments, config, context, model } = req.body;
+    const provider = SYSTEM_DB.settings.aiProvider;
+    // LOCAL MODE: No API Key check
+    // const apiKey = SYSTEM_DB.settings.apiKeys[provider] || '';
+    // if (provider !== 'ollama' && !apiKey) return res.status(400).json({ error: `No API Key for ${provider}.` });
+    const modelRole = selectUserModelRole(message, config?.modelRole);
+    const roleModel = model || SYSTEM_DB.settings.modelRoles?.[modelRole] || SYSTEM_DB.settings.activeModel;
+    const userSystemInstruction = buildChatSystemInstruction(config?.systemInstruction || SYSTEM_DB.settings.systemPrompt);
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const emit = (type, content) => {
+        if (res.writableEnded) return;
+        res.write(`data: ${JSON.stringify({ type, content })}\n\n`);
+        res.flush?.();
+    };
+    const heartbeat = setInterval(() => {
+        if (res.writableEnded) return;
+        res.write(':\n\n');
+        res.flush?.();
+    }, 15000);
+    let closed = false;
+    req.on('close', () => {
+        closed = true;
+        try { abortActiveAi('user'); } catch {}
+        try { setUserPriority(false); } catch {}
+    });
+
+    try {
+        setUserPriority(true);
+        abortActiveAi('system');
+    } catch {}
+
+    try {
+        await enqueueUserCommand(async () => {
+            if (closed) return;
+            const memCmd = await handleMemorySlashCommand(message, attachments);
+            if (memCmd && memCmd.response) {
+                logUserMessageOnce(message);
+                emit('answer_delta', memCmd.response);
+                emit('done', { summary: '', answer: memCmd.response });
+                return;
+            }
+            const approvalHandled = await handleTaskApproval(message, 'terminal');
+            if (approvalHandled) {
+                emit('answer_delta', 'Potwierdzenie przyjęte.');
+                return;
+            }
+
+            // --- AGENT ROUTER (CAPTAIN) CHECK ---
+            if (gaiAgentRouter && gaiAgentRouter.config?.enabled) {
+                try {
+                    const routerResult = await gaiAgentRouter.routeRequest(message, [], { 
+                        chat: async (model, messages) => {
+                             const sys = messages.find(m => m.role === 'system')?.content || '';
+                             const usr = messages.find(m => m.role === 'user')?.content || '';
+                             return await queryUniversalAI({ 
+                                provider: SYSTEM_DB.settings.aiProvider, model, 
+                                modelRole: 'agent', 
+                                systemInstruction: sys, 
+                                userPrompt: usr,
+                                stream: false 
+                            });
+                        },
+                        generate: async (model, prompt, opts) => {
+                            return await queryUniversalAI({
+                                provider: SYSTEM_DB.settings.aiProvider, model,
+                                modelRole: 'planning',
+                                systemInstruction: 'You are a JSON generator.',
+                                userPrompt: prompt,
+                                stream: false
+                            });
+                        }
+                    });
+                    
+                    if (routerResult) {
+                        const finalResponse = routerResult.response.content || routerResult.response; 
+                        logUserMessageOnce(message);
+                        emit('answer_delta', finalResponse); 
+                        logToChat('model', finalResponse); 
+                        
+                        if (isTelegramEnabled() && finalResponse.includes("CAPTAIN'S REPORT")) {
+                             await sendTelegramMessage(finalResponse).catch(() => {});
+                        }
+                        
+                        emit('done', { summary: '', answer: finalResponse });
+                        return;
+                    }
+                } catch (e) {
+                    console.error('[AGENT_ROUTER] Failed during routing, falling back to standard chat:', e);
+                }
+            }
+            // ------------------------------------
+
+            logUserUpdateToActiveTask(message, 'terminal');
+            await maybeCreateTaskFromUserMessage(message, 'terminal');
+            scheduleRealtimeSources('terminal');
+            let composedPrompt = applyThinkingTag(message, modelRole);
+            const needsArticleGuide = shouldIncludeArticleGuide(message);
+            logUserMessageOnce(message);
+
+            if (Array.isArray(attachments) && attachments.length > 0) {
+                for (const p of attachments) {
+                    const fullPath = resolveDiskPath(p);
+                    if (!fs.existsSync(fullPath)) continue;
+                    const stat = fs.statSync(fullPath);
+                    if (stat.isDirectory()) continue;
+                    if (stat.size > 512 * 1024) continue;
+                    const content = fs.readFileSync(fullPath, 'utf8');
+                    composedPrompt += `\n\n[ATTACHMENT:${p}]\n${content}\n[/ATTACHMENT]`;
+                }
+            }
+
+            const userController = createActiveAbortController('user');
+            const consultations = modelRole === 'chat'
+                ? await runChatConsultations({
+                    message,
+                    provider,
+                    systemInstruction: userSystemInstruction,
+                    signal: userController.signal
+                })
+                : [];
+            if (closed) return;
+            if (consultations.length) {
+                const notes = consultations.map(c => `- ${c.role}/${c.model}:\n${c.text}`).join('\n\n');
+                composedPrompt = `${composedPrompt}\n\n[CONSULTATION_NOTES]\n${notes}\n[/CONSULTATION_NOTES]`;
+            }
+            const extraContext = buildClientExtraContext(context);
+            composedPrompt = composePrompt({ message: composedPrompt, modelRole, includeGuide: needsArticleGuide, extraContext });
+
+            const openTasks = Array.isArray(SYSTEM_DB?.tasks) ? SYSTEM_DB.tasks.filter(t => t?.status !== 'completed') : [];
+            const activeTask = openTasks.find(t => t.status === 'in_progress');
+            const pendingTask = openTasks.find(t => t.status === 'pending');
+            let lockInfo = 'none';
+            try {
+                if (fs.existsSync(HEARTBEAT_LOCK_PATH)) {
+                    const raw = fs.readFileSync(HEARTBEAT_LOCK_PATH, 'utf8');
+                    const lock = JSON.parse(raw || '{}');
+                    const pid = Number(lock?.pid || 0);
+                    const startedAt = Number(lock?.updatedAt || lock?.startedAt || 0);
+                    const ageSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : 0;
+                    lockInfo = `${ageSec}s${pid ? ` pid ${pid}` : ''}`;
+                }
+            } catch {}
+
+
+            let mode = 'other';
+            let carry = '';
+            let sawMarkers = false;
+            let streamingRaw = false;
+            let streamedAnswerLen = 0;
+            let streamedSummaryLen = 0;
+
+            const emitDelta = (type, content) => {
+                const text = String(content || '');
+                if (type === 'answer_delta') streamedAnswerLen += text.length;
+                if (type === 'summary_delta') streamedSummaryLen += text.length;
+                emit(type, content);
+            };
+
+            const consume = (chunk) => {
+                if (!chunk) return;
+                if (typeof chunk === 'object' && chunk.type && typeof chunk.content === 'string') {
+                    const type = chunk.type === 'token' ? 'answer_delta' : chunk.type;
+                    emitDelta(type, chunk.content);
+                    return;
+                }
+                if (streamingRaw) {
+                    emitDelta('answer_delta', chunk);
+                    return;
+                }
+
+                carry += chunk;
+                const lower = carry.toLowerCase();
+
+                if (mode !== 'summary') {
+                    const thinkIdx = lower.indexOf('<think>');
+                    if (thinkIdx !== -1) {
+                        if (thinkIdx > 0) emitDelta('answer_delta', carry.slice(0, thinkIdx));
+                        carry = carry.slice(thinkIdx + 7);
+                        mode = 'summary';
+                        sawMarkers = true;
+                        if (carry) consume('');
+                        return;
+                    }
+                    const thoughtIdx = carry.indexOf('THOUGHT:');
+                    if (thoughtIdx !== -1) {
+                        if (thoughtIdx > 0) emitDelta('answer_delta', carry.slice(0, thoughtIdx));
+                        carry = carry.slice(thoughtIdx + 8);
+                        mode = 'summary';
+                        sawMarkers = true;
+                        if (carry) consume('');
+                        return;
+                    }
+                }
+
+                if (mode === 'summary') {
+                    const endThinkIdx = lower.indexOf('</think>');
+                    if (endThinkIdx !== -1) {
+                        emitDelta('summary_delta', carry.slice(0, endThinkIdx));
+                        carry = carry.slice(endThinkIdx + 8);
+                        mode = 'answer';
+                        if (carry) consume('');
+                        return;
+                    }
+                    const answerIdx = carry.indexOf('ANSWER:');
+                    if (answerIdx !== -1) {
+                        emitDelta('summary_delta', carry.slice(0, answerIdx));
+                        carry = carry.slice(answerIdx + 7);
+                        mode = 'answer';
+                        if (carry) consume('');
+                        return;
+                    }
+                    const summaryIdx = carry.indexOf('SUMMARY:');
+                    if (summaryIdx !== -1) {
+                        emitDelta('summary_delta', carry.slice(0, summaryIdx));
+                        carry = carry.slice(summaryIdx + 8);
+                        if (carry) consume('');
+                        return;
+                    }
+                }
+
+                const safeLen = carry.length - 20;
+                if (safeLen > 0) {
+                    const flush = carry.slice(0, safeLen);
+                    emitDelta(mode === 'summary' ? 'summary_delta' : 'answer_delta', flush);
+                    carry = carry.slice(safeLen);
+                }
+            };
+
+            let reply;
+            try {
+                const { controller: stepController, cleanup: stepCleanup } = createAbortControllerWithTimeout(userController.signal, Number(AUTONOMY_STEP_TIMEOUT_MS) || 300000);
+                try {
+                    reply = await ollamaQueue.enqueue(() => streamOllamaChat({
+                        model: roleModel,
+                        modelRole,
+                        systemInstruction: userSystemInstruction,
+                        userPrompt: composedPrompt,
+                        onToken: consume,
+                        signal: stepController.signal,
+                        source: 'terminal'
+                    }), 10);
+                } catch (e) {
+                    reply = await queryUniversalAI({
+                        provider,
+                        model: roleModel,
+                        modelRole,
+                        systemInstruction: userSystemInstruction,
+                        userPrompt: composedPrompt,
+                        signal: stepController.signal,
+                        stream: false,
+                        priority: 10
+                    });
+                    emit('answer_delta', reply);
+                } finally {
+                    stepCleanup();
+                }
+            } finally {
+                clearActiveAbortController('user', userController);
+            }
+
+            await executeTools(reply, { source: 'user' });
+            const parsed = parseModelReply(reply);
+            const thought = normalizeThoughtText(parsed.thought || parsed.summary);
+            if (isMeaningfulThought(thought)) {
+                logToChat('model', thought, 'thought');
+            } else {
+                const fallbackThought = buildFallbackThought();
+                if (isMeaningfulThought(fallbackThought)) logToChat('model', fallbackThought, 'thought');
+            }
+            const askUser = extractAskUser(parsed.answer || reply);
+            recordReasoning({
+                summary: thought || parsed.answer?.slice(0, 400),
+                role: modelRole,
+                model: roleModel,
+                source: 'terminal'
+            });
+            const answerCandidate = (parsed.answer || parsed.summary || reply || '').trim();
+            const suppressed = suppressRedundantPrompts(answerCandidate);
+            const responseText = askUser ? askUser : (suppressed || answerCandidate);
+            logToChat('model', responseText);
+            safeSetTimeout(() => {
+                maybeAutoSummarizeConversation({ trigger: 'user' }).catch(() => undefined);
+            }, 50);
+            if (askUser && isTelegramEnabled()) {
+                await sendTelegramMessage(`Pytanie od GAI: ${askUser}`);
+            }
+            if ((!sawMarkers && streamedAnswerLen < 10) || (streamedAnswerLen < 10 && responseText && responseText.length > 10)) {
+                const fallback = responseText;
+                if (fallback) emitDelta('answer_delta', fallback);
+            }
+            emit('done', { summary: thought || '', answer: responseText });
+            res.end();
+        }, {
+            source: 'terminal',
+            text: String(message || '').slice(0, 160),
+            nonBlocking: false,
+            forceUserPriority: true,
+            mayInterruptSystem: true,
+            enqueueFront: true
+        });
+    } catch (e) {
+        logError('Command Stream', e, { provider, message: message?.slice(0, 100) });
+        emit('error', e.message || 'Stream failed');
+        res.end();
+    } finally {
+        clearInterval(heartbeat);
+    }
+});
+
+app.post('/api/fs/list', (req, res) => {
+    try {
+        const baseVirtual = req.body.path || '/';
+        
+        // Validate input
+        if (!validatePath(baseVirtual)) {
+            return res.status(400).json({ error: 'Invalid path' });
+        }
+        
+        const targetPath = resolveDiskPath(baseVirtual);
+        const files = fs.readdirSync(targetPath).map(f => {
+            const stat = fs.statSync(path.join(targetPath, f));
+            return { name: f, type: stat.isDirectory() ? 'directory' : 'file', path: joinVirtualPath(baseVirtual, f), size: stat.size, updatedAt: stat.mtimeMs };
+        });
+        res.json(files);
+    } catch (e) { res.json([]); }
+});
+
+// NEW ENDPOINT: FS READ
+app.post('/api/fs/read', (req, res) => {
+    try {
+        const { path: filePath } = req.body;
+        
+        // Validate input
+        if (!validatePath(filePath)) {
+            return res.status(400).json({ error: 'Invalid file path' });
+        }
+        
+        const fullPath = resolveDiskPath(filePath);
+        
+        if (fs.existsSync(fullPath)) {
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+                return res.status(400).json({ error: 'Cannot read directory as file' });
+            }
+            const content = fs.readFileSync(fullPath, 'utf8');
+            res.json({ content });
+        } else {
+            res.status(404).json({ error: 'File not found' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/fs/write', async (req, res) => {
+    try {
+        const { path: filePath, content, encoding } = req.body;
+        
+        // 🛡️ SPRAWDŹ BEZPIECZEŃSTWO OPERACJI
+        const safetyCheck = await checkOperationSafety(createSafeOperation('file_write', filePath, content));
+        if (!safetyCheck.safe) {
+            console.warn(`🛡️ Safety check failed for file write: ${safetyCheck.message}`);
+            return res.status(403).json({ 
+                error: 'Operation blocked by safety system',
+                message: safetyCheck.message,
+                details: safetyCheck.details,
+                action: safetyCheck.action
+            });
+        }
+        
+        // Validate inputs
+        if (!validatePath(filePath)) {
+            return res.status(400).json({ error: 'Invalid file path' });
+        }
+        
+        if (!validateFileContent(content)) {
+            return res.status(400).json({ error: 'Invalid or too large file content' });
+        }
+        
+        if (encoding && !['utf8', 'base64'].includes(encoding)) {
+            return res.status(400).json({ error: 'Invalid encoding' });
+        }
+        
+        if (typeof filePath !== 'string') return res.status(400).json({ error: 'Invalid path' });
+        const fullPath = resolveDiskPath(filePath);
+        const isBase64 = encoding === 'base64';
+        
+        await createAutoSnapshotIfDue('fs_write');
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+        // --- ROBUST RECOVERY BACKUP ---
+        // Save a versioned backup to .gaios/recovery for auto-healing watchdog
+        if (!isBase64 && (fullPath.endsWith('.js') || fullPath.endsWith('.ts') || fullPath.endsWith('.json') || fullPath.endsWith('.mjs') || fullPath.endsWith('.cjs'))) {
+             try {
+                 if (fs.existsSync(fullPath)) {
+                     const recoveryDir = path.join(APP_ROOT, '.gaios', 'recovery');
+                     if (!fs.existsSync(recoveryDir)) fs.mkdirSync(recoveryDir, { recursive: true });
+                     
+                     const timestamp = Date.now();
+                     const safeName = path.basename(fullPath).replace(/[^a-zA-Z0-9.-]/g, '_');
+                     const backupPath = path.join(recoveryDir, `${safeName}_${timestamp}.bak`);
+                     
+                     // Read old content for diff
+                     const oldContent = fs.readFileSync(fullPath, 'utf8');
+                     
+                     fs.copyFileSync(fullPath, backupPath);
+                     
+                     // Update manifest for watchdog
+                     const manifestPath = path.join(recoveryDir, 'manifest.json');
+                     let manifest = { changes: [] };
+                     try {
+                         if (fs.existsSync(manifestPath)) manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+                     } catch {}
+                     
+                     manifest.changes.push({
+                         originalPath: fullPath,
+                         backupPath: backupPath,
+                         timestamp: timestamp
+                     });
+                     
+                     if (manifest.changes.length > 50) manifest.changes = manifest.changes.slice(-50);
+                     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+                     
+                     // --- GENERATE DIFF ---
+                     try {
+                        const diff = Diff.createTwoFilesPatch(path.basename(fullPath), path.basename(fullPath), oldContent, content);
+                        // Broadcast diff if it's not too huge
+                        if (diff.length < 50000) {
+                            // Send diff directly to CHAT with special type so it appears in TerminalApp
+                            logToChat('system', `File modified: ${path.basename(fullPath)}`, 'diff', { diff: diff, file: path.basename(fullPath) });
+                        } else {
+                            logToSystem('info', `File ${path.basename(fullPath)} updated (diff too large to display)`);
+                        }
+                     } catch(err) {
+                        logToSystem('warn', `Diff generation failed: ${err.message}`);
+                     }
+                 } else {
+                    // New file
+                    logToSystem('info', `File created: ${path.basename(fullPath)}`);
+                 }
+             } catch (e) {
+                 console.warn(`[Recovery] Backup/Diff creation failed for ${fullPath}: ${e.message}`);
+             }
+        } else {
+             // For non-code files or if backup skipped
+             logToSystem('info', `File updated: ${path.basename(fullPath)}`);
+        }
+        // -------------------------
+
+        // --- PERFORM WRITE WITH AUTO-BACKUP ---
+        const writeOptions = { encoding: isBase64 ? 'base64' : 'utf8', reason: 'api_write' };
+        const writeResult = await safeWriteFile(fullPath, isBase64 ? Buffer.from(String(content || ''), 'base64') : String(content || ''), writeOptions);
+        
+        if (!writeResult.success) {
+            throw new Error(`Failed to write file: ${writeResult.error}`);
+        }
+
+        // --- POST-WRITE VALIDATION ---
+        let verificationMsg = '';
+        if (!isBase64 && (fullPath.endsWith('.json') || fullPath.endsWith('.js') || fullPath.endsWith('.ts'))) {
+            try {
+                if (fullPath.endsWith('.json')) {
+                    JSON.parse(String(content || ''));
+                } else {
+                    // Quick syntax check for JS/TS using node --check
+                    // Note: This only works if node is available and for JS compatible files. 
+                    // For TS we might need tsc but that's heavy. 
+                    // Let's try basic node check for JS only to be safe.
+                    if (fullPath.endsWith('.js') || fullPath.endsWith('.cjs') || fullPath.endsWith('.mjs')) {
+                         await execAsync(`node --check "${fullPath}"`, { timeout: 5000 });
+                    }
+                }
+            } catch (e) {
+                verificationMsg = `\n[WARNING]: Syntax check failed after write: ${e.message.split('\n')[0]}`;
+            }
+        }
+        // -----------------------------
+
+        res.json({ status: 'written', warning: verificationMsg || undefined });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/fs/raw', (req, res) => {
+    try {
+        const filePath = String(req.query.path || '');
+        
+        // Validate input
+        if (!validatePath(filePath)) {
+            return res.status(400).send('Invalid file path');
+        }
+        
+        const fullPath = resolveDiskPath(filePath);
+        if (!fs.existsSync(fullPath)) return res.status(404).send('Not found');
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) return res.status(400).send('Cannot render directory');
+        res.sendFile(fullPath);
+    } catch (e) {
+        res.status(500).send(String(e.message || 'error'));
+    }
+});
+
+app.post('/api/fs/mkdir', (req, res) => {
+    try {
+        const { path: dirPath } = req.body;
+        
+        // Validate input
+        if (!validatePath(dirPath)) {
+            return res.status(400).json({ error: 'Invalid directory path' });
+        }
+        
+        const fullPath = resolveDiskPath(dirPath);
+        if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
+        res.json({ status: 'created' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/proxy', async (req, res) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('Missing URL');
+
+    try {
+        const decodedUrl = decodeURIComponent(targetUrl);
+        const urlObj = new URL(decodedUrl);
+        
+        // Use a more browser-like User-Agent
+        const userAgent = req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+        const response = await fetch(decodedUrl, {
+            headers: {
+                'User-Agent': userAgent,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': urlObj.origin + '/',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'cross-site',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
+            },
+            redirect: 'follow'
+        });
+
+        // Copy headers but strip security ones
+        for (const [key, value] of response.headers.entries()) {
+            if (['content-security-policy', 'x-frame-options', 'frame-options', 'access-control-allow-origin', 'set-cookie', 'strict-transport-security'].includes(key.toLowerCase())) continue;
+            res.setHeader(key, value);
+        }
+        
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('X-Frame-Options', 'ALLOWALL'); 
+        res.setHeader('Content-Security-Policy', "frame-ancestors 'self' *;"); 
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+            let html = buffer.toString('utf8');
+            const baseUrl = urlObj.origin;
+
+            // 1. Inject <base> tag
+            const headRegex = /<head\b[^>]*>/i;
+            const match = html.match(headRegex);
+            if (match) {
+                 html = html.replace(match[0], `${match[0]}<base href="${baseUrl}/">`);
+            } else {
+                 html = `<base href="${baseUrl}/">` + html;
+            }
+
+            // 2. Rewrite links AND forms to use proxy
+            html = html.replace(/href=["'](https?:\/\/[^"']+)["']/g, (match, url) => `href="/api/proxy?url=${encodeURIComponent(url)}"`);
+            html = html.replace(/action=["'](https?:\/\/[^"']+)["']/g, (match, url) => `action="/api/proxy?url=${encodeURIComponent(url)}"`);
+            
+            // Rewrite relative links starting with /
+            html = html.replace(/href=["'](\/[^"']*)["']/g, (match, path) => {
+                const absolute = new URL(path, baseUrl).toString();
+                return `href="/api/proxy?url=${encodeURIComponent(absolute)}"`;
+            });
+             html = html.replace(/action=["'](\/[^"']*)["']/g, (match, path) => {
+                const absolute = new URL(path, baseUrl).toString();
+                return `action="/api/proxy?url=${encodeURIComponent(absolute)}"`;
+            });
+            
+            // 3. Script to intercept ALL clicks and form submissions
+            const script = `
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // Intercept clicks
+                document.body.addEventListener('click', function(e) {
+                    const link = e.target.closest('a');
+                    if (link && link.href && !link.href.includes('/api/proxy')) {
+                        e.preventDefault();
+                        const target = link.href;
+                        if (target.startsWith('http')) {
+                            window.location.href = '/api/proxy?url=' + encodeURIComponent(target);
+                        }
+                    }
+                });
+                
+                // Intercept forms
+                document.body.addEventListener('submit', function(e) {
+                    const form = e.target;
+                    if (form && form.action && !form.action.includes('/api/proxy')) {
+                        e.preventDefault();
+                        const target = form.action;
+                        if (target.startsWith('http')) {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'original_action';
+                            input.value = target;
+                            form.appendChild(input);
+                            form.action = '/api/proxy?url=' + encodeURIComponent(target);
+                            form.submit();
+                        }
+                    }
+                });
+            });
+            </script>
+            `;
+            html = html.replace('</body>', `${script}</body>`);
+
+            res.send(html);
+        } else {
+            res.send(buffer);
+        }
+
+    } catch (e) {
+        // Return a friendly error page inside the iframe
+        res.status(200).send(`
+            <html>
+            <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #f8f9fa; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h2 style="color: #dc3545; margin-top: 0;">Proxy Error</h2>
+                    <p>Failed to load: <strong>${targetUrl}</strong></p>
+                    <div style="background: #e9ecef; padding: 15px; border-radius: 5px; text-align: left; overflow: auto; margin: 20px 0; font-family: monospace; font-size: 13px;">${e.message}</div>
+                    <p style="color: #666; font-size: 14px;">The upstream server might be blocking automated requests or the URL is invalid.</p>
+                    <div style="margin-top: 20px;">
+                        <button onclick="window.history.back()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">Go Back</button>
+                        <a href="${targetUrl}" target="_blank" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open in New Tab</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+});
+
+app.post('/api/fs/delete', async (req, res) => {
+    try {
+        const { path: targetPath, permanent } = req.body;
+        
+        // Validate input
+        if (!validatePath(targetPath)) {
+            return res.status(400).json({ error: 'Invalid target path' });
+        }
+        
+        const fullTarget = resolveDiskPath(targetPath);
+        if (!fs.existsSync(fullTarget)) return res.status(404).json({ error: 'Not found' });
+        await createAutoSnapshotIfDue('fs_delete');
+        if (permanent) {
+            const stat = fs.statSync(fullTarget);
+            if (stat.isDirectory()) fs.rmSync(fullTarget, { recursive: true, force: true });
+            else fs.unlinkSync(fullTarget);
+        } else {
+            const name = fullTarget.split('/').pop() || '';
+            const trashDir = path.join(APP_ROOT, '.trash');
+            if (!fs.existsSync(trashDir)) fs.mkdirSync(trashDir, { recursive: true });
+            const dest = path.join(trashDir, name);
+            fs.renameSync(fullTarget, dest);
+        }
+        res.json({ status: 'ok' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/fs/copy', (req, res) => {
+    try {
+        const { src, dest } = req.body;
+        
+        // Validate inputs
+        if (!validatePath(src) || !validatePath(dest)) {
+            return res.status(400).json({ error: 'Invalid source or destination path' });
+        }
+        
+        const fullSrc = resolveDiskPath(src);
+        const fullDest = resolveDiskPath(dest);
+        if (!fs.existsSync(fullSrc)) return res.status(404).json({ error: 'Source not found' });
+        const parentDir = path.dirname(fullDest);
+        if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+        const stat = fs.statSync(fullSrc);
+        if (stat.isDirectory()) fs.cpSync(fullSrc, fullDest, { recursive: true });
+        else fs.copyFileSync(fullSrc, fullDest);
+        res.json({ status: 'copied' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/fs/move', (req, res) => {
+    try {
+        const { src, dest } = req.body;
+        
+        // Validate inputs
+        if (!validatePath(src) || !validatePath(dest)) {
+            return res.status(400).json({ error: 'Invalid source or destination path' });
+        }
+        
+        const fullSrc = resolveDiskPath(src);
+        const fullDest = resolveDiskPath(dest);
+        if (!fs.existsSync(fullSrc)) return res.status(404).json({ error: 'Source not found' });
+        const parentDir = path.dirname(fullDest);
+        if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+        fs.renameSync(fullSrc, fullDest);
+        res.json({ status: 'moved' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tasks', async (req, res) => {
+    try {
+        const t = req.body || {};
+        
+        // Validate task data
+        if (t.title && typeof t.title !== 'string') {
+            return res.status(400).json({ error: 'Invalid title format' });
+        }
+        if (t.description && typeof t.description !== 'string') {
+            return res.status(400).json({ error: 'Invalid description format' });
+        }
+        if (t.status && !['pending', 'in_progress', 'completed', 'failed'].includes(t.status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+        if (t.priority && !['low', 'medium', 'high'].includes(t.priority)) {
+            return res.status(400).json({ error: 'Invalid priority' });
+        }
+        
+        const task = normalizeTask({
+            id: `task_${Date.now()}`,
+            title: t.title || 'Untitled Task',
+            description: t.description || '',
+            status: t.status || 'pending',
+            progress: t.progress || 0,
+            priority: t.priority || 'medium',
+            logs: t.logs || [],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        });
+        SYSTEM_DB.tasks.push(task);
+        const breakdownCfg = getTaskBreakdownConfig();
+        if (breakdownCfg.enabled && breakdownCfg.autoOnCreate) {
+            await generateTaskBreakdownForTask(task, 'api');
+        }
+        maybeAutoCompleteTaskFromSubtasks(task);
+        saveState();
+        scheduleAutonomyEvent('api_task_created', 250);
+        res.json(task);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/tasks/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const idx = SYSTEM_DB.tasks.findIndex(t => t.id === id);
+        if (idx === -1) return res.status(404).json({ error: 'Not found' });
+        const prev = SYSTEM_DB.tasks[idx];
+        const updates = req.body || {};
+        const merged = normalizeTask({ ...SYSTEM_DB.tasks[idx], ...updates, updatedAt: Date.now() });
+        SYSTEM_DB.tasks[idx] = merged;
+        const breakdownCfg = getTaskBreakdownConfig();
+        const hasSubtasks = Array.isArray(merged.subtasks) && merged.subtasks.length > 0;
+        if (breakdownCfg.enabled && breakdownCfg.autoOnStart && merged.status === 'in_progress' && !hasSubtasks) {
+            await generateTaskBreakdownForTask(SYSTEM_DB.tasks[idx], 'api');
+        }
+        maybeAutoCompleteTaskFromSubtasks(SYSTEM_DB.tasks[idx]);
+        saveState();
+        scheduleAutonomyEvent('api_task_updated', 250);
+
+        const prevStatus = String(prev?.status || '');
+        const nextStatus = String(merged?.status || '');
+        if (prevStatus !== nextStatus) {
+            const pn = SYSTEM_DB.settings.progressNotifications || { enabled: false, intervalSeconds: 120, telegram: false };
+            const logs = Array.isArray(merged.logs) ? merged.logs.slice(-3) : [];
+            const logsText = logs.length ? `\n\nLOGS:\n- ${logs.map(l => String(l)).join('\n- ')}` : '';
+            if (nextStatus === 'in_progress') {
+                pushNotification({ level: 'info', title: 'Task started', message: String(merged.title || '').slice(0, 200), meta: { id: merged.id } }).catch(() => undefined);
+            }
+            if (nextStatus === 'completed') {
+                pushNotification({ level: 'success', title: 'Task completed', message: `${String(merged.title || '').slice(0, 200)}${logsText}`, meta: { id: merged.id }, notifyTelegram: pn.telegram === true }).catch(() => undefined);
+            }
+            if (nextStatus === 'failed') {
+                pushNotification({ level: 'error', title: 'Task failed', message: `${String(merged.title || '').slice(0, 200)}${logsText}`, meta: { id: merged.id }, notifyTelegram: pn.telegram === true }).catch(() => undefined);
+            }
+        }
+        res.json(merged);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/tasks/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        SYSTEM_DB.tasks = SYSTEM_DB.tasks.filter(t => t.id !== id);
+        if (SYSTEM_DB.tasks.length === 0 && SYSTEM_DB?.agentState) {
+            SYSTEM_DB.agentState.lastObjectivePlanAt = 0;
+        }
+        saveState();
+        scheduleAutonomyEvent('api_task_deleted', 250);
+        res.json({ status: 'deleted' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/tasks', (req, res) => {
+    try {
+        SYSTEM_DB.tasks = [];
+        if (SYSTEM_DB?.agentState) {
+            SYSTEM_DB.agentState.lastObjectivePlanAt = 0;
+        }
+        saveState();
+        scheduleAutonomyEvent('api_tasks_cleared', 250);
+        res.json({ status: 'cleared' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/reset', (req, res) => {
+    try {
+        SYSTEM_DB = {
+            settings: SYSTEM_DB.settings,
+            tasks: [],
+            chatHistory: [],
+            reasoningHistory: [],
+            blogs: [],
+            memories: [],
+            installedApps: [],
+            desktopLayout: [],
+            agentState: { lastRun: 0, lastHeartbeatAt: 0, currentAction: 'idle', thoughtProcess: 'System Initialized.', consecutiveLoops: 0, userPriority: false, userQueueLength: 0, userQueuePreview: [], processingStage: '', ollamaWaitStartedAt: 0, pendingTaskApproval: null },
+            logs: [],
+            vfs: [],
+            version: '5.0.1'
+        };
+        fs.existsSync(DB_PATH) && fs.unlinkSync(DB_PATH);
+        saveState();
+        res.json({ status: 'reset' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/snapshot/list', async (req, res) => {
+    try {
+        const byId = new Map();
+        const localFiles = fs.existsSync(SNAPSHOT_DIR) ? fs.readdirSync(SNAPSHOT_DIR).filter(f => f.endsWith('.json')) : [];
+        for (const f of localFiles) {
+            const full = path.join(SNAPSHOT_DIR, f);
+            byId.set(f.replace(/\.json$/, ''), fs.statSync(full).mtimeMs);
+        }
+
+        const ids = Array.from(byId.entries()).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+        res.json({ snapshots: ids });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/snapshot/create', async (req, res) => {
+    try {
+        const type = (req.body?.type === 'manual' || req.body?.type === 'auto') ? req.body.type : 'manual';
+        const id = `gai_snapshot_${Date.now()}_${type}`;
+        const snapPath = path.join(SNAPSHOT_DIR, `${id}.json`);
+
+        await saveState();
+        fs.copyFileSync(DB_PATH, snapPath);
+        logToSystem('info', `Snapshot created: ${id}`);
+        res.json({ status: 'created', id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/snapshot/daily', async (req, res) => {
+    try {
+        const id = await createDailySnapshotIfDue({ force: true });
+        res.json({ status: id ? 'created' : 'skipped', id: id || null });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/snapshot/restore', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id || typeof id !== 'string') return res.status(400).json({ error: 'Missing snapshot id' });
+        const snapPath = path.join(SNAPSHOT_DIR, `${id}.json`);
+        let content = null;
+        if (fs.existsSync(snapPath)) {
+            content = fs.readFileSync(snapPath, 'utf8');
+        } else {
+            return res.status(404).json({ error: 'Snapshot not found' });
+        }
+
+        const parsed = JSON.parse(content);
+        SYSTEM_DB = parsed;
+        SYSTEM_DB.agentState = SYSTEM_DB.agentState || { lastRun: 0, currentAction: 'idle', thoughtProcess: 'Restored', consecutiveLoops: 0 };
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        await saveState();
+        logToSystem('warn', `Snapshot restored: ${id}`);
+        res.json({ status: 'restored' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/ping', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    sseClients.add(res);
+
+    // Initial ping
+    res.write('event: ping\ndata: "connected"\n\n');
+
+    req.on('close', () => {
+        sseClients.delete(res);
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    try {
+        // Debug log
+        if (DEBUG_MODE) {
+            console.log('[DEBUG] Health check called, SYSTEM_DB exists:', !!SYSTEM_DB);
+            console.log('[DEBUG] SYSTEM_DB.settings exists:', !!SYSTEM_DB?.settings);
+            console.log('[DEBUG] SYSTEM_DB.settings.heartbeat exists:', !!SYSTEM_DB?.settings?.heartbeat);
+        }
+        
+        const health = {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            version: SYSTEM_DB?.version || 'unknown',
+            memory: {
+                used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+                total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+                external: Math.round(process.memoryUsage().external / 1024 / 1024)
+            },
+            system: {
+                platform: process.platform,
+                arch: process.arch,
+                nodeVersion: process.version,
+                pid: process.pid
+            },
+            ai: {
+                provider: SYSTEM_DB?.settings?.aiProvider || 'unknown',
+                activeModel: SYSTEM_DB?.settings?.activeModel || 'unknown',
+                circuitBreaker: {
+                    ai: aiCircuitBreaker.getState(),
+                    ollama: ollamaCircuitBreaker.getState()
+                }
+            },
+            database: {
+                tasks: SYSTEM_DB?.tasks?.length || 0,
+                memories: SYSTEM_DB?.memories?.length || 0,
+                lastBackup: SYSTEM_DB?.lastBackupAt || null
+            },
+            services: {
+                telegram: isTelegramEnabled(),
+                heartbeat: SYSTEM_DB?.settings?.heartbeat?.enabled || false,
+                autonomy: (typeof SYSTEM_DB?.settings?.autonomyEnabled === 'boolean')
+                    ? SYSTEM_DB.settings.autonomyEnabled
+                    : (SYSTEM_DB?.settings?.heartbeat?.enabled || false)
+            },
+            debug: {
+                mode: DEBUG_MODE,
+                verbose: VERBOSE_LOGGING,
+                activeIntervals: activeIntervals.size,
+                activeTimeouts: activeTimeouts.size
+            }
+        };
+        
+        // Check if any critical services are down
+        const issues = [];
+        
+        if (ollamaCircuitBreaker.getState() === 'OPEN') {
+            issues.push('Ollama circuit breaker is OPEN');
+        }
+        
+        if (aiCircuitBreaker.getState() === 'OPEN') {
+            issues.push('AI circuit breaker is OPEN');
+        }
+        
+        if (issues.length > 0) {
+            health.status = 'degraded';
+            health.issues = issues;
+            res.status(503).json(health);
+        } else {
+            res.json(health);
+        }
+        
+    } catch (error) {
+        res.status(500).json({
+            status: 'unhealthy',
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
+});
+
+// ☁️ EXTERNAL AI ENDPOINTS - KIMI2.5 SUPPORT
+app.post('/api/external-ai/chat', async (req, res) => {
+    try {
+        const { model, messages, temperature, max_tokens, stream } = req.body;
+        
+        if (!model || !messages) {
+            return res.status(400).json({ error: 'Model and messages are required' });
+        }
+
+        // Sprawdź API key w ustawieniach
+        const provider = model.includes('kimi') ? 'kimi' : 
+                        model.includes('gpt') ? 'openai' : 
+                        model.includes('claude') ? 'anthropic' : 'custom';
+        
+        const apiKey = SYSTEM_DB.settings.apiKeys?.[provider];
+        if (!apiKey) {
+            return res.status(401).json({ 
+                error: `API key for ${provider} not found. Please add it in settings.`,
+                provider,
+                availableKeys: Object.keys(SYSTEM_DB.settings.apiKeys || {})
+            });
+        }
+
+        // Ustaw API key w serwisie
+        gaiExternalAI.setApiKey(provider, apiKey);
+
+        const request = {
+            model,
+            messages,
+            temperature: temperature || 0.7,
+            max_tokens: max_tokens || 4000,
+            stream: stream || false
+        };
+
+        console.log(`☁️ External AI request: ${model} (${provider})`);
+
+        if (stream) {
+            // Streaming response
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive'
+            });
+
+            // Dla streamingu musimy użyć innego podejścia
+            // Na razie zwróćmy zwykłą odpowiedź
+            const response = await gaiExternalAI.sendRequest(request, model);
+            
+            if (response.error) {
+                res.write(`data: ${JSON.stringify({ type: 'error', content: response.error })}\n\n`);
+            } else {
+                res.write(`data: ${JSON.stringify({ type: 'answer_delta', content: response.content })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'done', content: { summary: 'External AI response completed' } })}\n\n`);
+            }
+            
+            res.end();
+        } else {
+            // Regular response
+            const response = await gaiExternalAI.sendRequest(request, model);
+            
+            if (response.error) {
+                res.status(500).json({ 
+                    error: response.error,
+                    model: response.model 
+                });
+            } else {
+                res.json({
+                    success: true,
+                    response: {
+                        content: response.content,
+                        model: response.model,
+                        usage: response.usage,
+                        finish_reason: response.finish_reason
+                    }
+                });
+            }
+        }
+
+    } catch (error) {
+        console.error('☁️ External AI error:', error);
+        res.status(500).json({ 
+            error: 'External AI request failed',
+            details: error.message 
+        });
+    }
+});
+
+// ☁️ EXTERNAL AI MODELS INFO
+app.get('/api/external-ai/models', (req, res) => {
+    try {
+        const models = gaiExternalAI.getAllModels();
+        const stats = gaiExternalAI.getModelStats();
+        
+        res.json({
+            models: models.map(model => ({
+                id: model.id,
+                name: model.name,
+                provider: model.provider,
+                maxTokens: model.maxTokens,
+                supportsStreaming: model.supportsStreaming,
+                supportsImages: model.supportsImages,
+                supportsTools: model.supportsTools,
+                rateLimit: model.rateLimit,
+                pricing: model.pricing
+            })),
+            stats,
+            availableProviders: ['kimi', 'openai', 'anthropic', 'google', 'mistral']
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            error: 'Failed to get external AI models',
+            details: error.message 
+        });
+    }
+});
+
+// ☁️ TEST EXTERNAL AI CONNECTION
+app.post('/api/external-ai/test', async (req, res) => {
+    try {
+        const { model } = req.body;
+        
+        if (!model) {
+            return res.status(400).json({ error: 'Model is required' });
+        }
+
+        console.log(`🧪 Testing external AI model: ${model}`);
+        const result = await gaiExternalAI.testModel(model);
+        
+        res.json({
+            success: result.success,
+            responseTime: result.responseTime,
+            error: result.error,
+            sampleResponse: result.sampleResponse
+        });
+        
+    } catch (error) {
+        console.error('🧪 External AI test error:', error);
+        res.status(500).json({ 
+            error: 'Test failed',
+            details: error.message 
+        });
+    }
+});
+
+// 🛡️ SAFETY SYSTEM ENDPOINTS
+app.get('/api/safety/status', (req, res) => {
+    try {
+        const stats = gaiSafety.getStats();
+        const recentIncidents = gaiSafety.getRecentIncidents(5);
+        const unresolvedIncidents = gaiSafety.getUnresolvedIncidents();
+        
+        res.json({
+            status: 'ok',
+            safetyEnabled: gaiSafety.isEnabled,
+            isInLockdown: gaiSafety.isInLockdown,
+            stats,
+            recentIncidents,
+            unresolvedIncidents,
+            totalRules: gaiSafety.getAllRules().length
+        });
+    } catch (error) {
+        console.error('🛡️ Safety status error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get safety status',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/api/safety/check', async (req, res) => {
+    try {
+        const { operation } = req.body;
+        
+        if (!operation) {
+            return res.status(400).json({ error: 'Operation is required' });
+        }
+        
+        const result = await checkOperationSafety(operation);
+        
+        res.json({
+            safe: result.safe,
+            action: result.action,
+            message: result.message,
+            details: result.details
+        });
+        
+    } catch (error) {
+        console.error('🛡️ Safety check error:', error);
+        res.status(500).json({ 
+            error: 'Safety check failed',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/api/safety/incident/resolve', (req, res) => {
+    try {
+        const { incidentId, resolution } = req.body;
+        
+        if (!incidentId) {
+            return res.status(400).json({ error: 'Incident ID is required' });
+        }
+        
+        const success = gaiSafety.resolveIncident(incidentId, resolution);
+        
+        res.json({
+            success,
+            message: success ? 'Incident resolved' : 'Incident not found'
+        });
+        
+    } catch (error) {
+        console.error('🛡️ Incident resolution error:', error);
+        res.status(500).json({ 
+            error: 'Failed to resolve incident',
+            details: error.message 
+        });
+    }
+});
+
+// 🔓 UNCENSOR SYSTEM ENDPOINTS
+app.get('/api/uncensor/status', (req, res) => {
+    try {
+        const transparencyReport = gaiUncensor.getTransparencyReport();
+        const bypassHistory = gaiUncensor.getBypassHistory(10);
+        
+        res.json({
+            status: 'ok',
+            uncensorEnabled: gaiUncensor.isEnabled,
+            transparencyMode: gaiUncensor.transparencyMode,
+            userEmpowerment: gaiUncensor.userEmpowerment,
+            transparencyReport,
+            bypassHistory,
+            totalRestrictions: gaiUncensor.restrictions.size
+        });
+    } catch (error) {
+        console.error('🔓 Uncensor status error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get uncensor status',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/api/uncensor/bypass', (req, res) => {
+    try {
+        const { ruleId, userReason } = req.body;
+        
+        if (!ruleId || !userReason) {
+            return res.status(400).json({ error: 'Rule ID and user reason are required' });
+        }
+        
+        const result = gaiUncensor.requestBypass(ruleId, userReason);
+        
+        res.json({
+            success: result.success,
+            requestId: result.requestId,
+            message: result.message,
+            autoApproved: result.autoApproved
+        });
+        
+    } catch (error) {
+        console.error('🔓 Uncensor bypass error:', error);
+        res.status(500).json({ 
+            error: 'Bypass request failed',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/api/uncensor/override', (req, res) => {
+    try {
+        const { operation, userConfirmation } = req.body;
+        
+        if (!operation) {
+            return res.status(400).json({ error: 'Operation is required' });
+        }
+        
+        const result = gaiUncensor.userOverride(operation, userConfirmation);
+        
+        res.json({
+            success: result.success,
+            message: result.message,
+            operationId: result.operationId
+        });
+        
+    } catch (error) {
+        console.error('🔓 Uncensor override error:', error);
+        res.status(500).json({ 
+            error: 'Override failed',
+            details: error.message 
+        });
+    }
+});
+
+app.post('/api/uncensor/configure', (req, res) => {
+    try {
+        const { enabled, transparencyMode, userEmpowerment } = req.body;
+        
+        if (typeof enabled === 'boolean') {
+            gaiUncensor.setEnabled(enabled);
+        }
+        if (typeof transparencyMode === 'boolean') {
+            gaiUncensor.setTransparencyMode(transparencyMode);
+        }
+        if (typeof userEmpowerment === 'boolean') {
+            gaiUncensor.setUserEmpowerment(userEmpowerment);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Uncensor system configured',
+            settings: {
+                enabled: gaiUncensor.isEnabled,
+                transparencyMode: gaiUncensor.transparencyMode,
+                userEmpowerment: gaiUncensor.userEmpowerment
+            }
+        });
+        
+    } catch (error) {
+        console.error('🔓 Uncensor configuration error:', error);
+        res.status(500).json({ 
+            error: 'Configuration failed',
+            details: error.message 
+        });
+    }
+});
+
+// Debug endpoint for system information
+app.get('/api/debug', (req, res) => {
+    if (!DEBUG_MODE) {
+        return res.status(403).json({ error: 'Debug mode is disabled' });
+    }
+    
+    try {
+        const debugInfo = {
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            versions: {
+                node: process.version,
+                v8: process.versions.v8,
+                uv: process.versions.uv,
+                zlib: process.versions.zlib
+            },
+            environment: {
+                nodeEnv: process.env.NODE_ENV,
+                debugMode: DEBUG_MODE,
+                verboseLogging: VERBOSE_LOGGING,
+                port: PORT
+            },
+            system: {
+                platform: process.platform,
+                arch: process.arch,
+                pid: process.pid,
+                ppid: process.ppid,
+                cwd: process.cwd()
+            },
+            timers: {
+                activeIntervals: Array.from(activeIntervals),
+                activeTimeouts: Array.from(activeTimeouts),
+                telegramPollTimer: telegramPollTimer !== null,
+                heartbeatTimer: heartbeatTimer !== null,
+                ollamaLiveTimer: ollamaLiveTimer !== null
+            },
+            database: {
+                settings: SYSTEM_DB?.settings || {},
+                agentState: SYSTEM_DB?.agentState || {},
+                tasksCount: SYSTEM_DB?.tasks?.length || 0,
+                memoriesCount: SYSTEM_DB?.memories?.length || 0,
+                chatsCount: SYSTEM_DB?.chats?.length || 0
+            }
+        };
+        
+        res.json(debugInfo);
+    } catch (error) {
+        logError('Debug Endpoint', error);
+        res.status(500).json({ error: 'Failed to gather debug information' });
+    }
+});
+
+app.get('/index.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.send(`
+body { margin: 0; padding: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+`);
+});
+
+app.get('/pwa-192x192.png', (req, res) => {
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+    const crcTable = (() => {
+        const t = new Uint32Array(256);
+        for (let i = 0; i < 256; i++) {
+            let c = i;
+            for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            t[i] = c >>> 0;
+        }
+        return t;
+    })();
+
+    const crc32 = (buf) => {
+        let c = 0xFFFFFFFF;
+        for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+        return (c ^ 0xFFFFFFFF) >>> 0;
+    };
+
+    const chunk = (type, data) => {
+        const typeBuf = Buffer.from(type, 'ascii');
+        const lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        const crcBuf = Buffer.alloc(4);
+        const crc = crc32(Buffer.concat([typeBuf, data]));
+        crcBuf.writeUInt32BE(crc, 0);
+        return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+    };
+
+    const makePng = (w, h) => {
+        const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+        const ihdr = Buffer.alloc(13);
+        ihdr.writeUInt32BE(w, 0);
+        ihdr.writeUInt32BE(h, 4);
+        ihdr[8] = 8;
+        ihdr[9] = 6;
+        ihdr[10] = 0;
+        ihdr[11] = 0;
+        ihdr[12] = 0;
+
+        const stride = w * 4;
+        const raw = Buffer.alloc((stride + 1) * h);
+        for (let y = 0; y < h; y++) {
+            const rowStart = y * (stride + 1);
+            raw[rowStart] = 0;
+            for (let x = 0; x < w; x++) {
+                const p = rowStart + 1 + x * 4;
+                raw[p] = 59;
+                raw[p + 1] = 130;
+                raw[p + 2] = 246;
+                raw[p + 3] = 255;
+            }
+        }
+
+        const idatData = zlib.deflateSync(raw, { level: 9 });
+        return Buffer.concat([
+            signature,
+            chunk('IHDR', ihdr),
+            chunk('IDAT', idatData),
+            chunk('IEND', Buffer.alloc(0))
+        ]);
+    };
+
+    res.send(makePng(192, 192));
+});
+
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).end();
+});
+
+app.get('/api/system/backups', async (req, res) => {
+    try {
+        if (!fs.existsSync(BACKUP_DIR)) return res.json([]);
+        const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json') && !f.endsWith('.meta.json'));
+        const backups = files.map(f => {
+            try {
+                return JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, f), 'utf8'));
+            } catch (e) { return null; }
+        }).filter(Boolean);
+        res.json(backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/system/rollback', async (req, res) => {
+    const { backupPath, targetPath } = req.body;
+    if (!backupPath || !targetPath) return res.status(400).json({ error: 'Missing paths' });
+    try {
+        const result = await restoreBackup(backupPath, targetPath);
+        if (result.success) {
+            try { logToSystem('info', `System rollback successful: ${targetPath} from ${backupPath}`); } catch(e) {}
+            res.json({ status: 'success' });
+        } else {
+            res.status(500).json({ error: result.error });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('*', (req, res) => {
+    const accept = String(req.headers.accept || '');
+    if (!accept.includes('text/html')) {
+        return res.status(404).end();
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+// --- GLOBAL WATCHDOG ---
+setInterval(() => {
+    const now = Date.now();
+    const lastRun = Number(SYSTEM_DB?.agentState?.lastRun || 0);
+    const action = String(SYSTEM_DB?.agentState?.currentAction || 'idle');
+    
+    // If action is not idle, but lastRun was > 10 minutes ago, we are likely stuck
+    if (action !== 'idle' && (now - lastRun > 600000)) {
+        const msg = `[WATCHDOG-GLOBAL] Action '${action}' stuck for > 10m. Force clearing lock.`;
+        console.warn(msg);
+        try { logToSystem('warn', msg); } catch {}
+        releaseHeartbeatLock();
+        SYSTEM_DB.agentState.currentAction = 'idle';
+        SYSTEM_DB.agentState.thoughtProcess = 'Watchdog-Global: Force cleared stuck action.';
+        SYSTEM_DB.agentState.lastRun = now;
+        saveState();
+    }
+}, 60000);
+
+const startServer = () => {
+    const host = process.env.ELECTRON_RUN === 'true' ? '127.0.0.1' : '0.0.0.0';
+    const server = app.listen(PORT, host, async () => {
+        console.log(`GAI OS Universal AI Kernel v${SYSTEM_DB.version} Active on ${PORT}`);
+        console.log(`Environment: LOCAL (Ollama Native)`);
+        console.log(`Root: ${APP_ROOT}`);
+        console.log(`Data: ${DATA_DIR}`);
+        if (process.env.GAIOS_DISABLE_OLLAMA_SYNC !== '1') {
+            await syncOllamaModels();
+            setTimeout(() => { warmupOllamaModel(); }, 1500);
+        }
+        
+        // 🧠 INICJALIZACJA PRAWDZIWEJ PAMIĘCI GAI
+        try {
+            await initializeGAIMemory();
+            console.log('🧠 GAI Memory System initialized - ready for intelligent interactions');
+        } catch (error) {
+            console.error('❌ Failed to initialize GAI Memory:', error);
+        }
+        
+        // 🛡️ INICJALIZACJA SYSTEMU BEZPIECZEŃSTWA
+        try {
+            if (typeof initializeSafetySystem === 'function') {
+                await initializeSafetySystem();
+                console.log('🛡️ GAI Safety System initialized - protecting against self-destruction');
+            }
+        } catch (error) {
+            console.error('❌ Failed to initialize Safety System:', error);
+        }
+        
+        // 🔓 INICJALIZACJA SYSTEMU UNCENSOR
+        try {
+            initializeUncensorSystem();
+            console.log('🔓 GAI Uncensor System initialized - minimal restrictions, maximum freedom');
+        } catch (error) {
+            console.error('❌ Failed to initialize Uncensor System:', error);
+        }
+        
+        // ☁️ INICJALIZACJA ZEWNĘTRZNEGO AI (KIMI2.5)
+        try {
+            await initializeExternalAI();
+            // SYNC API KEYS FROM DB
+            if (SYSTEM_DB.settings && SYSTEM_DB.settings.apiKeys) {
+                Object.entries(SYSTEM_DB.settings.apiKeys).forEach(([provider, key]) => {
+                     if (key) gaiExternalAI.setApiKey(provider, key);
+                });
+            }
+            console.log('☁️ External AI Service initialized - Kimi2.5 support ready');
+        } catch (error) {
+            console.error('❌ Failed to initialize External AI:', error);
+        }
+    });
+
+    server.on('error', (err) => {
+        if (err?.code === 'EADDRINUSE') {
+            const msg = `[SERVER] Port ${PORT} in use, retrying in 3000ms`;
+            console.warn(msg);
+            try { logToSystem('warn', msg); } catch {}
+            setTimeout(() => {
+                try { server.close(); } catch {}
+                startServer();
+            }, 3000);
+            return;
+        }
+        console.error('[SERVER] Listen error:', err);
+    });
+};
+
+startServer();

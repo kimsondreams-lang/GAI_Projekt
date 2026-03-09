@@ -1,0 +1,31 @@
+{
+  "consumer_electronics": {
+    "apple": {
+      "spring_2026": ["iPhone 17e", "Home Hub (J490/J491)", "AirTag 2", "M5 MacBook Air", "M5 iPad Air"],
+      "september_2026": ["Foldable iPhone (V68)", "iPhone 18 Pro/Max (Under-display Face ID)", "Apple Watch Series 12", "iPad mini 8 (OLED)"],
+      "late_2026": ["M6 MacBook Pro (Redesign)", "Mac Studio M5 Max/Ultra"]
+    },
+    "samsung": {
+      "early_2026": ["Galaxy S26 Series", "Galaxy Z Fold 8"],
+      "mid_2026": ["Wide-screen Foldable (Pura X competitor)"]
+    },
+    "google": {
+      "spring_2026": ["Pixel 10a"],
+      "fall_2026": ["Pixel 11 (2nm Tensor G6)"]
+    }
+  },
+  "gaming": {
+    "nintendo": {
+      "early_2026": ["Switch 2 Major Game Launches (Metroid Prime 4, New Mario)"]
+    },
+    "sony": {
+      "2026": ["PS6 Development Rumors", "Next-gen Handheld Gaming Trends"]
+    }
+  },
+  "strategic_trends": {
+    "physical_ai": "AI moving into robotics and home hubs (Apple Home Hub, Humanoid robots)",
+    "agentic_ai": "Autonomous reasoning systems (Siri/Gemini evolution)",
+    "ai_infrastructure": "CEO-level focus on compute and specialized chips",
+    "tech_as_revenue": "Enterprises shifting tech from cost center to revenue driver"
+  }
+}

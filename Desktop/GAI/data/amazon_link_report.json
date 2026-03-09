@@ -1,0 +1,248 @@
+{
+  "scanDate": "2026-03-02T22:42:06.776Z",
+  "totalArticles": 31,
+  "totalLinks": 35,
+  "validLinks": 17,
+  "missingTag": 0,
+  "brokenLinks": 18,
+  "missingImages": 0,
+  "articles": [
+    {
+      "file": "affiliate_links.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "ai-assistants-comparison-2025",
+      "file": "ai-assistants-comparison-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "apple-watch-ultra-2-review",
+      "file": "apple-watch-ultra-2-review.json",
+      "linkCount": 1,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "article1",
+      "file": "article1.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "article3",
+      "file": "article3.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "article4",
+      "file": "article4.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "article9",
+      "file": "article9.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-4k-monitors-2025",
+      "file": "best-4k-monitors-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-amazon-gadgets-march-2025",
+      "file": "best-amazon-gadgets-march-2025.json",
+      "linkCount": 3,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-budget-tech-gadgets-2024",
+      "file": "best-budget-tech-gadgets-2024.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-eco-friendly-products-amazon-2025",
+      "file": "best-eco-friendly-products-amazon-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-gaming-accessories-2025",
+      "file": "best-gaming-accessories-2025.json",
+      "linkCount": 4,
+      "imageCount": 4,
+      "issues": []
+    },
+    {
+      "id": "best-gaming-headsets-2025",
+      "file": "best-gaming-headsets-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-laptops-2025",
+      "file": "best-laptops-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-mechanical-keyboards-2025",
+      "file": "best-mechanical-keyboards-2025.json",
+      "linkCount": 6,
+      "imageCount": 0,
+      "issues": [
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Keychron+Q1+Pro&tag=kimsondreams-21"
+      ]
+    },
+    {
+      "id": "best-portable-monitors-2025",
+      "file": "best-portable-monitors-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-smart-home-devices-2025",
+      "file": "best-smart-home-devices-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-tech-gadgets-amazon-2025",
+      "file": "best-tech-gadgets-amazon-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-tech-gadgets-comparison-2025",
+      "file": "best-tech-gadgets-comparison-2025.json",
+      "linkCount": 4,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "best-wireless-earbuds-2025",
+      "file": "best-wireless-earbuds-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "dji-mini-4-pro-review",
+      "file": "dji-mini-4-pro-review.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "file": "internal_linking_map.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "iphone-17-vs-samsung-s25",
+      "file": "iphone-17-vs-samsung-s25.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "revolutionary-ai-tech-products-amazon-2025",
+      "file": "revolutionary-ai-tech-products-amazon-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "file": "schema-index.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "sony-wh-1000xm5-review",
+      "file": "sony-wh-1000xm5-review.json",
+      "linkCount": 1,
+      "imageCount": 0,
+      "issues": [
+        "Broken link (503): https://www.amazon.com/s?k=Sony+WH-1000XM5+Headphones/s?k=sony+wh-1000xm5&tag=kimsondreams-21\\"
+      ]
+    },
+    {
+      "id": "summer-2025-laptop-buying-guide",
+      "file": "summer-2025-laptop-buying-guide.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "top-10-smart-home-gadgets-amazon-2025",
+      "file": "top-10-smart-home-gadgets-amazon-2025.json",
+      "linkCount": 0,
+      "imageCount": 0,
+      "issues": []
+    },
+    {
+      "id": "top-5-flagship-gadgets-2025",
+      "file": "top-5-flagship-gadgets-2025.json",
+      "linkCount": 8,
+      "imageCount": 0,
+      "issues": [
+        "Broken link (503): https://www.amazon.com/s?k=Samsung+Galaxy+S24+Ultra/dp/B0CMDL9S8B?tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Samsung+Galaxy+S24+Ultra+5G/s?k=Samsung+Galaxy+S24+Ultra&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=MacBook+Air+M3+Chip/s?k=MacBook+Air+M3&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=iPhone+15+Pro+Max/s?k=B0CCZ26B5V&tag=kimsondreams-21"
+      ]
+    },
+    {
+      "id": "top-ai-gadgets-amazon-2025",
+      "file": "top-ai-gadgets-amazon-2025.json",
+      "linkCount": 5,
+      "imageCount": 0,
+      "issues": [
+        "Broken link (503): https://www.amazon.com/s?k=echo+show+15&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=ring+doorbell+plus&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=nest+hub+max&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=blink+outdoor+4&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=philips+hue+starter+kit&tag=kimsondreams-21"
+      ]
+    },
+    {
+      "id": "top-wireless-earbuds-2025-comparison",
+      "file": "top-wireless-earbuds-2025-comparison.json",
+      "linkCount": 3,
+      "imageCount": 0,
+      "issues": [
+        "Broken link (503): https://www.amazon.com/s?k=Sony+WF-1000XM5&tag=kimsondreams-21",
+        "Broken link (503): https://www.amazon.com/s?k=Bose+QuietComfort+Ultra+Earbuds+2nd+Gen&tag=kimsondreams-21"
+      ]
+    }
+  ]
+}

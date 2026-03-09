@@ -1,0 +1,4395 @@
+🚀 Deploying from: /Users/jakubnetza/Desktop/GAI/temp_blog_fix
+🛡️ Running Pre-deployment Audit...
+🔍 Starting Full Audit...
+✅ Audit report saved to /Users/jakubnetza/Desktop/GAI/data/link_checker/audit_report_2026-03-08T17-07-41-436Z.json
+📊 Audit Summary: 94 links checked, 0 broken, 47 image mismatches.
+⚠️ Audit found issues! Check data/link_checker/latest_audit.json for details.
+Connected to 89.116.53.41:21 (No encryption)
+< 220 FTP Server ready.
+
+> OPTS UTF8 ON
+< 200 UTF8 set to on
+
+Login security: No encryption
+> USER u866168581.coolkee.fun
+< 331 Password required for u866168581.coolkee.fun
+
+> PASS ###
+< 230 User u866168581.coolkee.fun logged in
+
+> FEAT
+< 211-Features:
+ AUTH TLS
+ CCC
+ CLNT
+ EPRT
+
+<  EPSV
+ HOST
+ LANG ko-KR;ru-RU;zh-CN;es-ES;ja-JP;en-US;it-IT;zh-TW;bg-BG;fr-FR
+ MDTM
+ MFF modify;UNIX.group;UNIX.mode;
+ MFMT
+ MLST modify*;perm*;size*;type*;unique*;UNIX.group*;UNIX.groupname*;UNIX.mode*;UNIX.owner*;UNIX.ownername*;
+ PBSZ
+ PROT
+ REST STREAM
+ SIZE
+ SSCN
+ TVFS
+ UTF8
+211 End
+
+> TYPE I
+< 200 Type set to I
+
+> STRU F
+< 200 Structure set to F
+
+> OPTS UTF8 ON
+< 200 UTF8 set to on
+
+> OPTS MLST type;size;modify;unique;unix.mode;unix.owner;unix.group;unix.ownername;unix.groupname;
+< 200 MLST OPTS type;size;modify;unique;UNIX.mode;UNIX.owner;UNIX.group;UNIX.ownername;UNIX.groupname;
+
+✅ FTP Connected
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD data
+< 550 data: File exists
+
+> CWD data
+< 250 CWD command successful
+
+> MKD articles
+< 550 articles: File exists
+
+> CWD articles
+< 250 CWD command successful
+
+> PWD
+< 257 "/public_html/kimsondreams/data/articles" is the current directory
+
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD data
+< 550 data: File exists
+
+> CWD data
+< 250 CWD command successful
+
+> MKD articles
+< 550 articles: File exists
+
+> CWD articles
+< 250 CWD command successful
+
+Trying to find optimal transfer strategy...
+> EPSV
+< 229 Entering Extended Passive Mode (|||2209|)
+
+Optimal transfer strategy found.
+> STOR 2025-flagship-smartphone-guide.json
+< 150 Opening BINARY mode data connection for 2025-flagship-smartphone-guide.json
+
+Uploading to 89.116.53.41:2209 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2127|)
+
+> STOR 2025-smart-home-essentials-guide.json
+< 150 Opening BINARY mode data connection for 2025-smart-home-essentials-guide.json
+
+Uploading to 89.116.53.41:2127 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2261|)
+
+> STOR 2026-flagship-smartphone-guide.json
+< 150 Opening BINARY mode data connection for 2026-flagship-smartphone-guide.json
+
+Uploading to 89.116.53.41:2261 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2132|)
+
+> STOR 2026-high-performance-laptop-guide.json
+< 150 Opening BINARY mode data connection for 2026-high-performance-laptop-guide.json
+
+Uploading to 89.116.53.41:2132 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2233|)
+
+> STOR 2026-march-wearable-health-guide.json
+< 150 Opening BINARY mode data connection for 2026-march-wearable-health-guide.json
+
+Uploading to 89.116.53.41:2233 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2372|)
+
+> STOR affiliate_links.json
+< 150 Opening BINARY mode data connection for affiliate_links.json
+
+Uploading to 89.116.53.41:2372 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2394|)
+
+> STOR ai-assistants-comparison-2025.json
+< 150 Opening BINARY mode data connection for ai-assistants-comparison-2025.json
+
+Uploading to 89.116.53.41:2394 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2291|)
+
+> STOR apple-watch-ultra-2-review.json
+< 150 Opening BINARY mode data connection for apple-watch-ultra-2-review.json
+
+Uploading to 89.116.53.41:2291 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2319|)
+
+> STOR article1.json
+< 150 Opening BINARY mode data connection for article1.json
+
+Uploading to 89.116.53.41:2319 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2314|)
+
+> STOR article2.json
+< 150 Opening BINARY mode data connection for article2.json
+
+Uploading to 89.116.53.41:2314 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2218|)
+
+> STOR article3.json
+< 150 Opening BINARY mode data connection for article3.json
+
+Uploading to 89.116.53.41:2218 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2271|)
+
+> STOR article4.json
+< 150 Opening BINARY mode data connection for article4.json
+
+Uploading to 89.116.53.41:2271 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2296|)
+
+> STOR article5.json
+< 150 Opening BINARY mode data connection for article5.json
+
+Uploading to 89.116.53.41:2296 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2347|)
+
+> STOR article6.json
+< 150 Opening BINARY mode data connection for article6.json
+
+Uploading to 89.116.53.41:2347 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2179|)
+
+> STOR article7.json
+< 150 Opening BINARY mode data connection for article7.json
+
+Uploading to 89.116.53.41:2179 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2194|)
+
+> STOR article8.json
+< 150 Opening BINARY mode data connection for article8.json
+
+Uploading to 89.116.53.41:2194 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2197|)
+
+> STOR article9.json
+< 150 Opening BINARY mode data connection for article9.json
+
+Uploading to 89.116.53.41:2197 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2369|)
+
+> STOR articles.json
+< 150 Opening BINARY mode data connection for articles.json
+
+Uploading to 89.116.53.41:2369 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2374|)
+
+> STOR best-4k-monitors-2025.json
+< 150 Opening BINARY mode data connection for best-4k-monitors-2025.json
+
+Uploading to 89.116.53.41:2374 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2295|)
+
+> STOR best-amazon-gadgets-march-2025.json
+< 150 Opening BINARY mode data connection for best-amazon-gadgets-march-2025.json
+
+Uploading to 89.116.53.41:2295 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2336|)
+
+> STOR best-budget-tech-gadgets-2024.json
+< 150 Opening BINARY mode data connection for best-budget-tech-gadgets-2024.json
+
+Uploading to 89.116.53.41:2336 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2364|)
+
+> STOR best-eco-friendly-products-amazon-2025.json
+< 150 Opening BINARY mode data connection for best-eco-friendly-products-amazon-2025.json
+
+Uploading to 89.116.53.41:2364 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2213|)
+
+> STOR best-gaming-accessories-2025.json
+< 150 Opening BINARY mode data connection for best-gaming-accessories-2025.json
+
+Uploading to 89.116.53.41:2213 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2272|)
+
+> STOR best-gaming-headsets-2025.json
+< 150 Opening BINARY mode data connection for best-gaming-headsets-2025.json
+
+Uploading to 89.116.53.41:2272 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2364|)
+
+> STOR best-laptops-2025.json
+< 150 Opening BINARY mode data connection for best-laptops-2025.json
+
+Uploading to 89.116.53.41:2364 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2349|)
+
+> STOR best-mechanical-keyboards-2025.json
+< 150 Opening BINARY mode data connection for best-mechanical-keyboards-2025.json
+
+Uploading to 89.116.53.41:2349 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2170|)
+
+> STOR best-portable-monitors-2025.json
+< 150 Opening BINARY mode data connection for best-portable-monitors-2025.json
+
+Uploading to 89.116.53.41:2170 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2251|)
+
+> STOR best-smart-home-devices-2025.json
+< 150 Opening BINARY mode data connection for best-smart-home-devices-2025.json
+
+Uploading to 89.116.53.41:2251 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2309|)
+
+> STOR best-tech-gadgets-amazon-2025-fixed.json
+< 150 Opening BINARY mode data connection for best-tech-gadgets-amazon-2025-fixed.json
+
+Uploading to 89.116.53.41:2309 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2138|)
+
+> STOR best-tech-gadgets-amazon-2025.json
+< 150 Opening BINARY mode data connection for best-tech-gadgets-amazon-2025.json
+
+Uploading to 89.116.53.41:2138 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2156|)
+
+> STOR best-tech-gadgets-comparison-2025.json
+< 150 Opening BINARY mode data connection for best-tech-gadgets-comparison-2025.json
+
+Uploading to 89.116.53.41:2156 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2119|)
+
+> STOR best-wireless-earbuds-2025.json
+< 150 Opening BINARY mode data connection for best-wireless-earbuds-2025.json
+
+Uploading to 89.116.53.41:2119 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2165|)
+
+> STOR ces-2026-highlights-ai-robots-smart-home.json
+< 150 Opening BINARY mode data connection for ces-2026-highlights-ai-robots-smart-home.json
+
+Uploading to 89.116.53.41:2165 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2317|)
+
+> STOR dji-mini-4-pro-review.json
+< 150 Opening BINARY mode data connection for dji-mini-4-pro-review.json
+
+Uploading to 89.116.53.41:2317 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2152|)
+
+> STOR fix_json.py
+< 150 Opening BINARY mode data connection for fix_json.py
+
+Uploading to 89.116.53.41:2152 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2298|)
+
+> STOR google-io-2026-agentic-android-preview.json
+< 150 Opening BINARY mode data connection for google-io-2026-agentic-android-preview.json
+
+Uploading to 89.116.53.41:2298 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR index.json
+< 150 Opening BINARY mode data connection for index.json
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2146|)
+
+> STOR internal_linking_map.json
+< 150 Opening BINARY mode data connection for internal_linking_map.json
+
+Uploading to 89.116.53.41:2146 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2190|)
+
+> STOR iphone-16-pro-max-review.json
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-review.json
+
+Uploading to 89.116.53.41:2190 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2209|)
+
+> STOR iphone-16-pro-max-vs-samsung-s24-ultra.json
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-vs-samsung-s24-ultra.json
+
+Uploading to 89.116.53.41:2209 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2361|)
+
+> STOR iphone-17-vs-samsung-s25.json
+< 150 Opening BINARY mode data connection for iphone-17-vs-samsung-s25.json
+
+Uploading to 89.116.53.41:2361 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2309|)
+
+> STOR iphone-se-4-vs-pixel-10a-comparison.json
+< 150 Opening BINARY mode data connection for iphone-se-4-vs-pixel-10a-comparison.json
+
+Uploading to 89.116.53.41:2309 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2380|)
+
+> STOR july-2026-tech-buying-guide.json
+< 150 Opening BINARY mode data connection for july-2026-tech-buying-guide.json
+
+Uploading to 89.116.53.41:2380 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2258|)
+
+> STOR macbook-neo-review-2026.json
+< 150 Opening BINARY mode data connection for macbook-neo-review-2026.json
+
+Uploading to 89.116.53.41:2258 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2256|)
+
+> STOR may-2025-tech-gift-guide.json
+< 150 Opening BINARY mode data connection for may-2025-tech-gift-guide.json
+
+Uploading to 89.116.53.41:2256 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2159|)
+
+> STOR meta-quest-3s-review.json
+< 150 Opening BINARY mode data connection for meta-quest-3s-review.json
+
+Uploading to 89.116.53.41:2159 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2352|)
+
+> STOR mwc-2026-highlights.json
+< 150 Opening BINARY mode data connection for mwc-2026-highlights.json
+
+Uploading to 89.116.53.41:2352 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2354|)
+
+> STOR pixel-10a-vs-iphone-se-4-comparison.json
+< 150 Opening BINARY mode data connection for pixel-10a-vs-iphone-se-4-comparison.json
+
+Uploading to 89.116.53.41:2354 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2129|)
+
+> STOR prime-day-2026-back-to-school-ai-tech-guide.json
+< 150 Opening BINARY mode data connection for prime-day-2026-back-to-school-ai-tech-guide.json
+
+Uploading to 89.116.53.41:2129 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2327|)
+
+> STOR razer-v4-pro-vs-logitech-g915x-comparison.json
+< 150 Opening BINARY mode data connection for razer-v4-pro-vs-logitech-g915x-comparison.json
+
+Uploading to 89.116.53.41:2327 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2249|)
+
+> STOR revolutionary-ai-tech-products-amazon-2025.json
+< 150 Opening BINARY mode data connection for revolutionary-ai-tech-products-amazon-2025.json
+
+Uploading to 89.116.53.41:2249 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2365|)
+
+> STOR samsung-galaxy-s26-ultra-review.json
+< 150 Opening BINARY mode data connection for samsung-galaxy-s26-ultra-review.json
+
+Uploading to 89.116.53.41:2365 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2292|)
+
+> STOR schema-index.json
+< 150 Opening BINARY mode data connection for schema-index.json
+
+Uploading to 89.116.53.41:2292 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2362|)
+
+> STOR sony-wh-1000xm5-review.json
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-review.json
+
+Uploading to 89.116.53.41:2362 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2237|)
+
+> STOR sony-wh-1000xm5-vs-bose-qc-ultra-comparison.json
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-vs-bose-qc-ultra-comparison.json
+
+Uploading to 89.116.53.41:2237 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2256|)
+
+> STOR spring-2026-wearable-ai-guide.json
+< 150 Opening BINARY mode data connection for spring-2026-wearable-ai-guide.json
+
+Uploading to 89.116.53.41:2256 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2312|)
+
+> STOR spring-into-health-wearable-ai-guide-march-2026.json
+< 150 Opening BINARY mode data connection for spring-into-health-wearable-ai-guide-march-2026.json
+
+Uploading to 89.116.53.41:2312 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2308|)
+
+> STOR summer-2025-laptop-buying-guide.json
+< 150 Opening BINARY mode data connection for summer-2025-laptop-buying-guide.json
+
+Uploading to 89.116.53.41:2308 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2107|)
+
+> STOR top-10-smart-home-gadgets-amazon-2025.json
+< 150 Opening BINARY mode data connection for top-10-smart-home-gadgets-amazon-2025.json
+
+Uploading to 89.116.53.41:2107 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2221|)
+
+> STOR top-5-flagship-gadgets-2025.json
+< 150 Opening BINARY mode data connection for top-5-flagship-gadgets-2025.json
+
+Uploading to 89.116.53.41:2221 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2346|)
+
+> STOR top-ai-gadgets-amazon-2025.json
+< 150 Opening BINARY mode data connection for top-ai-gadgets-amazon-2025.json
+
+Uploading to 89.116.53.41:2346 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR top-wireless-earbuds-2025-comparison.json
+< 150 Opening BINARY mode data connection for top-wireless-earbuds-2025-comparison.json
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> CWD /public_html/kimsondreams/data/articles
+< 250 CWD command successful
+
+✅ Uploaded data/articles
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD images
+< 550 images: File exists
+
+> CWD images
+< 250 CWD command successful
+
+> MKD articles
+< 550 articles: File exists
+
+> CWD articles
+< 250 CWD command successful
+
+> PWD
+< 257 "/public_html/kimsondreams/images/articles" is the current directory
+
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD images
+< 550 images: File exists
+
+> CWD images
+< 250 CWD command successful
+
+> MKD articles
+< 550 articles: File exists
+
+> CWD articles
+< 250 CWD command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2241|)
+
+> STOR 2026-flagship-guide-main.jpg
+< 150 Opening BINARY mode data connection for 2026-flagship-guide-main.jpg
+
+Uploading to 89.116.53.41:2241 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2111|)
+
+> STOR 2026-wearable-tech-health-gadgets-guide-main.jpg
+< 150 Opening BINARY mode data connection for 2026-wearable-tech-health-gadgets-guide-main.jpg
+
+Uploading to 89.116.53.41:2111 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2381|)
+
+> STOR ai-tech-products-2025.jpg
+< 150 Opening BINARY mode data connection for ai-tech-products-2025.jpg
+
+Uploading to 89.116.53.41:2381 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2293|)
+
+> STOR ai-tech-products-2025.webp
+< 150 Opening BINARY mode data connection for ai-tech-products-2025.webp
+
+Uploading to 89.116.53.41:2293 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2310|)
+
+> STOR airpods-pro-2.jpg
+< 150 Opening BINARY mode data connection for airpods-pro-2.jpg
+
+Uploading to 89.116.53.41:2310 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2272|)
+
+> STOR airpods-pro-2.webp
+< 150 Opening BINARY mode data connection for airpods-pro-2.webp
+
+Uploading to 89.116.53.41:2272 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2340|)
+
+> STOR alienware-x14.jpg
+< 150 Opening BINARY mode data connection for alienware-x14.jpg
+
+Uploading to 89.116.53.41:2340 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2101|)
+
+> STOR alienware-x14.webp
+< 150 Opening BINARY mode data connection for alienware-x14.webp
+
+Uploading to 89.116.53.41:2101 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2381|)
+
+> STOR amazon-prime-big-deal-days-2026-main.jpg
+< 150 Opening BINARY mode data connection for amazon-prime-big-deal-days-2026-main.jpg
+
+Uploading to 89.116.53.41:2381 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2301|)
+
+> STOR apple-airpods-pro-2.jpg
+< 150 Opening BINARY mode data connection for apple-airpods-pro-2.jpg
+
+Uploading to 89.116.53.41:2301 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2310|)
+
+> STOR apple-airpods-pro-2.webp
+< 150 Opening BINARY mode data connection for apple-airpods-pro-2.webp
+
+Uploading to 89.116.53.41:2310 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2362|)
+
+> STOR apple-watch-s10-main.jpg
+< 150 Opening BINARY mode data connection for apple-watch-s10-main.jpg
+
+Uploading to 89.116.53.41:2362 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2159|)
+
+> STOR apple-watch-s10-main.webp
+< 150 Opening BINARY mode data connection for apple-watch-s10-main.webp
+
+Uploading to 89.116.53.41:2159 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2167|)
+
+> STOR apple-watch-series-10-alt.jpg
+< 150 Opening BINARY mode data connection for apple-watch-series-10-alt.jpg
+
+Uploading to 89.116.53.41:2167 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2122|)
+
+> STOR apple-watch-series-10-alt.webp
+< 150 Opening BINARY mode data connection for apple-watch-series-10-alt.webp
+
+Uploading to 89.116.53.41:2122 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2112|)
+
+> STOR apple-watch-series-10-main.jpg
+< 150 Opening BINARY mode data connection for apple-watch-series-10-main.jpg
+
+Uploading to 89.116.53.41:2112 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2121|)
+
+> STOR apple-watch-series-10-main.webp
+< 150 Opening BINARY mode data connection for apple-watch-series-10-main.webp
+
+Uploading to 89.116.53.41:2121 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2151|)
+
+> STOR apple-watch-series-9-alt.jpg
+< 150 Opening BINARY mode data connection for apple-watch-series-9-alt.jpg
+
+Uploading to 89.116.53.41:2151 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2340|)
+
+> STOR apple-watch-series-9-alt.webp
+< 150 Opening BINARY mode data connection for apple-watch-series-9-alt.webp
+
+Uploading to 89.116.53.41:2340 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2271|)
+
+> STOR apple-watch-series-9-main.jpg
+< 150 Opening BINARY mode data connection for apple-watch-series-9-main.jpg
+
+Uploading to 89.116.53.41:2271 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2117|)
+
+> STOR apple-watch-series-9-main.webp
+< 150 Opening BINARY mode data connection for apple-watch-series-9-main.webp
+
+Uploading to 89.116.53.41:2117 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2232|)
+
+> STOR apple-watch-series-9.jpg
+< 150 Opening BINARY mode data connection for apple-watch-series-9.jpg
+
+Uploading to 89.116.53.41:2232 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2233|)
+
+> STOR apple-watch-series-9.webp
+< 150 Opening BINARY mode data connection for apple-watch-series-9.webp
+
+Uploading to 89.116.53.41:2233 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2254|)
+
+> STOR apple-watch-ultra-2.jpg
+< 150 Opening BINARY mode data connection for apple-watch-ultra-2.jpg
+
+Uploading to 89.116.53.41:2254 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2388|)
+
+> STOR apple-watch-ultra-2.webp
+< 150 Opening BINARY mode data connection for apple-watch-ultra-2.webp
+
+Uploading to 89.116.53.41:2388 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2145|)
+
+> STOR article2-afeela.jpg
+< 150 Opening BINARY mode data connection for article2-afeela.jpg
+
+Uploading to 89.116.53.41:2145 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR article2-afeela.webp
+< 150 Opening BINARY mode data connection for article2-afeela.webp
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2396|)
+
+> STOR article2-ai-pin.jpg
+< 150 Opening BINARY mode data connection for article2-ai-pin.jpg
+
+Uploading to 89.116.53.41:2396 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2267|)
+
+> STOR article2-ai-pin.webp
+< 150 Opening BINARY mode data connection for article2-ai-pin.webp
+
+Uploading to 89.116.53.41:2267 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2109|)
+
+> STOR article2-cover.jpg
+< 150 Opening BINARY mode data connection for article2-cover.jpg
+
+Uploading to 89.116.53.41:2109 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2160|)
+
+> STOR article2-cover.webp
+< 150 Opening BINARY mode data connection for article2-cover.webp
+
+Uploading to 89.116.53.41:2160 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2109|)
+
+> STOR article3-cover.jpg
+< 150 Opening BINARY mode data connection for article3-cover.jpg
+
+Uploading to 89.116.53.41:2109 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2121|)
+
+> STOR article3-cover.webp
+< 150 Opening BINARY mode data connection for article3-cover.webp
+
+Uploading to 89.116.53.41:2121 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2141|)
+
+> STOR article5-cover.jpg
+< 150 Opening BINARY mode data connection for article5-cover.jpg
+
+Uploading to 89.116.53.41:2141 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2302|)
+
+> STOR article5-cover.webp
+< 150 Opening BINARY mode data connection for article5-cover.webp
+
+Uploading to 89.116.53.41:2302 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2331|)
+
+> STOR article5-solar.jpg
+< 150 Opening BINARY mode data connection for article5-solar.jpg
+
+Uploading to 89.116.53.41:2331 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2314|)
+
+> STOR article5-solar.webp
+< 150 Opening BINARY mode data connection for article5-solar.webp
+
+Uploading to 89.116.53.41:2314 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2242|)
+
+> STOR article6-cover.jpg
+< 150 Opening BINARY mode data connection for article6-cover.jpg
+
+Uploading to 89.116.53.41:2242 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2333|)
+
+> STOR article6-cover.webp
+< 150 Opening BINARY mode data connection for article6-cover.webp
+
+Uploading to 89.116.53.41:2333 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2295|)
+
+> STOR article7-cover.jpg
+< 150 Opening BINARY mode data connection for article7-cover.jpg
+
+Uploading to 89.116.53.41:2295 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2144|)
+
+> STOR article7-cover.webp
+< 150 Opening BINARY mode data connection for article7-cover.webp
+
+Uploading to 89.116.53.41:2144 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2244|)
+
+> STOR article8-cover.jpg
+< 150 Opening BINARY mode data connection for article8-cover.jpg
+
+Uploading to 89.116.53.41:2244 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2258|)
+
+> STOR article8-cover.webp
+< 150 Opening BINARY mode data connection for article8-cover.webp
+
+Uploading to 89.116.53.41:2258 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2204|)
+
+> STOR article8-mouse.jpg
+< 150 Opening BINARY mode data connection for article8-mouse.jpg
+
+Uploading to 89.116.53.41:2204 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2311|)
+
+> STOR article8-mouse.webp
+< 150 Opening BINARY mode data connection for article8-mouse.webp
+
+Uploading to 89.116.53.41:2311 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2280|)
+
+> STOR asus-rog-zephyrus-2026-gaming.jpg
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-2026-gaming.jpg
+
+Uploading to 89.116.53.41:2280 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2217|)
+
+> STOR asus-rog-zephyrus-g14-alt.jpg
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14-alt.jpg
+
+Uploading to 89.116.53.41:2217 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2333|)
+
+> STOR asus-rog-zephyrus-g14-alt.webp
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14-alt.webp
+
+Uploading to 89.116.53.41:2333 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2332|)
+
+> STOR asus-rog-zephyrus-g14-main.jpg
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14-main.jpg
+
+Uploading to 89.116.53.41:2332 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2157|)
+
+> STOR asus-rog-zephyrus-g14-main.webp
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14-main.webp
+
+Uploading to 89.116.53.41:2157 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2204|)
+
+> STOR asus-rog-zephyrus-g14.jpg
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14.jpg
+
+Uploading to 89.116.53.41:2204 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2349|)
+
+> STOR asus-rog-zephyrus-g14.webp
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g14.webp
+
+Uploading to 89.116.53.41:2349 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2289|)
+
+> STOR asus-rog-zephyrus-g16.jpg
+< 150 Opening BINARY mode data connection for asus-rog-zephyrus-g16.jpg
+
+Uploading to 89.116.53.41:2289 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2338|)
+
+> STOR back-to-school-2026-ai-laptop-guide.jpg
+< 150 Opening BINARY mode data connection for back-to-school-2026-ai-laptop-guide.jpg
+
+Uploading to 89.116.53.41:2338 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2204|)
+
+> STOR back-to-school-laptop-unique.jpg
+< 150 Opening BINARY mode data connection for back-to-school-laptop-unique.jpg
+
+Uploading to 89.116.53.41:2204 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2277|)
+
+> STOR best-gaming-accessories-2025-main.jpg
+< 150 Opening BINARY mode data connection for best-gaming-accessories-2025-main.jpg
+
+Uploading to 89.116.53.41:2277 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2384|)
+
+> STOR best-gaming-accessories-2025-main.webp
+< 150 Opening BINARY mode data connection for best-gaming-accessories-2025-main.webp
+
+Uploading to 89.116.53.41:2384 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2268|)
+
+> STOR best-laptops-2025.jpg
+< 150 Opening BINARY mode data connection for best-laptops-2025.jpg
+
+Uploading to 89.116.53.41:2268 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2274|)
+
+> STOR best-laptops-2025.webp
+< 150 Opening BINARY mode data connection for best-laptops-2025.webp
+
+Uploading to 89.116.53.41:2274 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2252|)
+
+> STOR black-friday-2026-main.jpg
+< 150 Opening BINARY mode data connection for black-friday-2026-main.jpg
+
+Uploading to 89.116.53.41:2252 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2277|)
+
+> STOR bose-quietcomfort-earbuds-ii.jpg
+< 150 Opening BINARY mode data connection for bose-quietcomfort-earbuds-ii.jpg
+
+Uploading to 89.116.53.41:2277 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2334|)
+
+> STOR bose-quietcomfort-earbuds-ii.webp
+< 150 Opening BINARY mode data connection for bose-quietcomfort-earbuds-ii.webp
+
+Uploading to 89.116.53.41:2334 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2261|)
+
+> STOR canon-eos-r7c.jpg
+< 150 Opening BINARY mode data connection for canon-eos-r7c.jpg
+
+Uploading to 89.116.53.41:2261 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2298|)
+
+> STOR canon-eos-r7c.webp
+< 150 Opening BINARY mode data connection for canon-eos-r7c.webp
+
+Uploading to 89.116.53.41:2298 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2376|)
+
+> STOR canon-r7c.jpg
+< 150 Opening BINARY mode data connection for canon-r7c.jpg
+
+Uploading to 89.116.53.41:2376 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR canon-r7c.webp
+< 150 Opening BINARY mode data connection for canon-r7c.webp
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2230|)
+
+> STOR content_article4_0_1771410901958.jpg
+< 150 Opening BINARY mode data connection for content_article4_0_1771410901958.jpg
+
+Uploading to 89.116.53.41:2230 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR content_article4_0_1771410901958.webp
+< 150 Opening BINARY mode data connection for content_article4_0_1771410901958.webp
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2305|)
+
+> STOR content_article4_1_1771410905245.jpg
+< 150 Opening BINARY mode data connection for content_article4_1_1771410905245.jpg
+
+Uploading to 89.116.53.41:2305 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR content_article4_1_1771410905245.webp
+< 150 Opening BINARY mode data connection for content_article4_1_1771410905245.webp
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2185|)
+
+> STOR content_article4_2_1771410907842.jpg
+< 150 Opening BINARY mode data connection for content_article4_2_1771410907842.jpg
+
+Uploading to 89.116.53.41:2185 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2350|)
+
+> STOR content_article4_2_1771410907842.webp
+< 150 Opening BINARY mode data connection for content_article4_2_1771410907842.webp
+
+Uploading to 89.116.53.41:2350 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2307|)
+
+> STOR content_best-gaming-accessories-2025_0_1772533775379.jpg
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_0_1772533775379.jpg
+
+Uploading to 89.116.53.41:2307 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2344|)
+
+> STOR content_best-gaming-accessories-2025_0_1772533775379.webp
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_0_1772533775379.webp
+
+Uploading to 89.116.53.41:2344 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2154|)
+
+> STOR content_best-gaming-accessories-2025_0_1772533929586.jpg
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_0_1772533929586.jpg
+
+Uploading to 89.116.53.41:2154 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2219|)
+
+> STOR content_best-gaming-accessories-2025_0_1772533929586.webp
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_0_1772533929586.webp
+
+Uploading to 89.116.53.41:2219 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2225|)
+
+> STOR content_best-gaming-accessories-2025_2_1772533778451.jpg
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_2_1772533778451.jpg
+
+Uploading to 89.116.53.41:2225 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2271|)
+
+> STOR content_best-gaming-accessories-2025_2_1772533778451.webp
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_2_1772533778451.webp
+
+Uploading to 89.116.53.41:2271 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2153|)
+
+> STOR content_best-gaming-accessories-2025_2_1772533931718.jpg
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_2_1772533931718.jpg
+
+Uploading to 89.116.53.41:2153 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2157|)
+
+> STOR content_best-gaming-accessories-2025_2_1772533931718.webp
+< 150 Opening BINARY mode data connection for content_best-gaming-accessories-2025_2_1772533931718.webp
+
+Uploading to 89.116.53.41:2157 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2328|)
+
+> STOR content_sony-wh-1000xm5-review_0_1772533839095.jpg
+< 150 Opening BINARY mode data connection for content_sony-wh-1000xm5-review_0_1772533839095.jpg
+
+Uploading to 89.116.53.41:2328 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2258|)
+
+> STOR content_sony-wh-1000xm5-review_0_1772533839095.webp
+< 150 Opening BINARY mode data connection for content_sony-wh-1000xm5-review_0_1772533839095.webp
+
+Uploading to 89.116.53.41:2258 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2107|)
+
+> STOR content_sony-wh-1000xm5-review_0_1772533982605.jpg
+< 150 Opening BINARY mode data connection for content_sony-wh-1000xm5-review_0_1772533982605.jpg
+
+Uploading to 89.116.53.41:2107 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2218|)
+
+> STOR content_sony-wh-1000xm5-review_0_1772533982605.webp
+< 150 Opening BINARY mode data connection for content_sony-wh-1000xm5-review_0_1772533982605.webp
+
+Uploading to 89.116.53.41:2218 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2196|)
+
+> STOR cover_ai-assistants-comparison-2025_1771429942479.jpg
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1771429942479.jpg
+
+Uploading to 89.116.53.41:2196 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2212|)
+
+> STOR cover_ai-assistants-comparison-2025_1771429942479.webp
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1771429942479.webp
+
+Uploading to 89.116.53.41:2212 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2396|)
+
+> STOR cover_ai-assistants-comparison-2025_1771429979469.jpg
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1771429979469.jpg
+
+Uploading to 89.116.53.41:2396 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2180|)
+
+> STOR cover_ai-assistants-comparison-2025_1771429979469.webp
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1771429979469.webp
+
+Uploading to 89.116.53.41:2180 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2380|)
+
+> STOR cover_ai-assistants-comparison-2025_1772533716868.jpg
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1772533716868.jpg
+
+Uploading to 89.116.53.41:2380 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2270|)
+
+> STOR cover_ai-assistants-comparison-2025_1772533716868.webp
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1772533716868.webp
+
+Uploading to 89.116.53.41:2270 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2332|)
+
+> STOR cover_ai-assistants-comparison-2025_1772533876324.jpg
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1772533876324.jpg
+
+Uploading to 89.116.53.41:2332 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2257|)
+
+> STOR cover_ai-assistants-comparison-2025_1772533876324.webp
+< 150 Opening BINARY mode data connection for cover_ai-assistants-comparison-2025_1772533876324.webp
+
+Uploading to 89.116.53.41:2257 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2204|)
+
+> STOR cover_apple-watch-ultra-2-review_1772533721800.jpg
+< 150 Opening BINARY mode data connection for cover_apple-watch-ultra-2-review_1772533721800.jpg
+
+Uploading to 89.116.53.41:2204 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2193|)
+
+> STOR cover_apple-watch-ultra-2-review_1772533721800.webp
+< 150 Opening BINARY mode data connection for cover_apple-watch-ultra-2-review_1772533721800.webp
+
+Uploading to 89.116.53.41:2193 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2156|)
+
+> STOR cover_apple-watch-ultra-2-review_1772533881079.jpg
+< 150 Opening BINARY mode data connection for cover_apple-watch-ultra-2-review_1772533881079.jpg
+
+Uploading to 89.116.53.41:2156 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2180|)
+
+> STOR cover_apple-watch-ultra-2-review_1772533881079.webp
+< 150 Opening BINARY mode data connection for cover_apple-watch-ultra-2-review_1772533881079.webp
+
+Uploading to 89.116.53.41:2180 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2257|)
+
+> STOR cover_article1_1772533728355.jpg
+< 150 Opening BINARY mode data connection for cover_article1_1772533728355.jpg
+
+Uploading to 89.116.53.41:2257 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2287|)
+
+> STOR cover_article1_1772533728355.webp
+< 150 Opening BINARY mode data connection for cover_article1_1772533728355.webp
+
+Uploading to 89.116.53.41:2287 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2370|)
+
+> STOR cover_article1_1772533886184.jpg
+< 150 Opening BINARY mode data connection for cover_article1_1772533886184.jpg
+
+Uploading to 89.116.53.41:2370 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR cover_article1_1772533886184.webp
+< 150 Opening BINARY mode data connection for cover_article1_1772533886184.webp
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2350|)
+
+> STOR cover_article3_1772533733891.jpg
+< 150 Opening BINARY mode data connection for cover_article3_1772533733891.jpg
+
+Uploading to 89.116.53.41:2350 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2156|)
+
+> STOR cover_article3_1772533733891.webp
+< 150 Opening BINARY mode data connection for cover_article3_1772533733891.webp
+
+Uploading to 89.116.53.41:2156 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2113|)
+
+> STOR cover_article3_1772533892733.jpg
+< 150 Opening BINARY mode data connection for cover_article3_1772533892733.jpg
+
+Uploading to 89.116.53.41:2113 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2258|)
+
+> STOR cover_article3_1772533892733.webp
+< 150 Opening BINARY mode data connection for cover_article3_1772533892733.webp
+
+Uploading to 89.116.53.41:2258 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2100|)
+
+> STOR cover_article4_1771410899117.jpg
+< 150 Opening BINARY mode data connection for cover_article4_1771410899117.jpg
+
+Uploading to 89.116.53.41:2100 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2167|)
+
+> STOR cover_article4_1771410899117.webp
+< 150 Opening BINARY mode data connection for cover_article4_1771410899117.webp
+
+Uploading to 89.116.53.41:2167 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2378|)
+
+> STOR cover_article4_1772533740781.jpg
+< 150 Opening BINARY mode data connection for cover_article4_1772533740781.jpg
+
+Uploading to 89.116.53.41:2378 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2225|)
+
+> STOR cover_article4_1772533740781.webp
+< 150 Opening BINARY mode data connection for cover_article4_1772533740781.webp
+
+Uploading to 89.116.53.41:2225 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2339|)
+
+> STOR cover_article4_1772533898296.jpg
+< 150 Opening BINARY mode data connection for cover_article4_1772533898296.jpg
+
+Uploading to 89.116.53.41:2339 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2132|)
+
+> STOR cover_article4_1772533898296.webp
+< 150 Opening BINARY mode data connection for cover_article4_1772533898296.webp
+
+Uploading to 89.116.53.41:2132 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2283|)
+
+> STOR cover_article9_1772533746565.jpg
+< 150 Opening BINARY mode data connection for cover_article9_1772533746565.jpg
+
+Uploading to 89.116.53.41:2283 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2268|)
+
+> STOR cover_article9_1772533746565.webp
+< 150 Opening BINARY mode data connection for cover_article9_1772533746565.webp
+
+Uploading to 89.116.53.41:2268 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR cover_article9_1772533903730.jpg
+< 150 Opening BINARY mode data connection for cover_article9_1772533903730.jpg
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2291|)
+
+> STOR cover_article9_1772533903730.webp
+< 150 Opening BINARY mode data connection for cover_article9_1772533903730.webp
+
+Uploading to 89.116.53.41:2291 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2387|)
+
+> STOR cover_best-4k-monitors-2025_1771430329856.jpg
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1771430329856.jpg
+
+Uploading to 89.116.53.41:2387 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2387|)
+
+> STOR cover_best-4k-monitors-2025_1771430329856.webp
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1771430329856.webp
+
+Uploading to 89.116.53.41:2387 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2103|)
+
+> STOR cover_best-4k-monitors-2025_1772533752582.jpg
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1772533752582.jpg
+
+Uploading to 89.116.53.41:2103 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2383|)
+
+> STOR cover_best-4k-monitors-2025_1772533752582.webp
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1772533752582.webp
+
+Uploading to 89.116.53.41:2383 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2167|)
+
+> STOR cover_best-4k-monitors-2025_1772533908698.jpg
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1772533908698.jpg
+
+Uploading to 89.116.53.41:2167 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2384|)
+
+> STOR cover_best-4k-monitors-2025_1772533908698.webp
+< 150 Opening BINARY mode data connection for cover_best-4k-monitors-2025_1772533908698.webp
+
+Uploading to 89.116.53.41:2384 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2253|)
+
+> STOR cover_best-amazon-gadgets-march-2025_1772533758253.jpg
+< 150 Opening BINARY mode data connection for cover_best-amazon-gadgets-march-2025_1772533758253.jpg
+
+Uploading to 89.116.53.41:2253 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2100|)
+
+> STOR cover_best-amazon-gadgets-march-2025_1772533758253.webp
+< 150 Opening BINARY mode data connection for cover_best-amazon-gadgets-march-2025_1772533758253.webp
+
+Uploading to 89.116.53.41:2100 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2242|)
+
+> STOR cover_best-amazon-gadgets-march-2025_1772533913623.jpg
+< 150 Opening BINARY mode data connection for cover_best-amazon-gadgets-march-2025_1772533913623.jpg
+
+Uploading to 89.116.53.41:2242 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2358|)
+
+> STOR cover_best-amazon-gadgets-march-2025_1772533913623.webp
+< 150 Opening BINARY mode data connection for cover_best-amazon-gadgets-march-2025_1772533913623.webp
+
+Uploading to 89.116.53.41:2358 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2194|)
+
+> STOR cover_best-budget-tech-gadgets-2024_1772533764568.jpg
+< 150 Opening BINARY mode data connection for cover_best-budget-tech-gadgets-2024_1772533764568.jpg
+
+Uploading to 89.116.53.41:2194 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2298|)
+
+> STOR cover_best-budget-tech-gadgets-2024_1772533764568.webp
+< 150 Opening BINARY mode data connection for cover_best-budget-tech-gadgets-2024_1772533764568.webp
+
+Uploading to 89.116.53.41:2298 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2139|)
+
+> STOR cover_best-budget-tech-gadgets-2024_1772533918447.jpg
+< 150 Opening BINARY mode data connection for cover_best-budget-tech-gadgets-2024_1772533918447.jpg
+
+Uploading to 89.116.53.41:2139 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2351|)
+
+> STOR cover_best-budget-tech-gadgets-2024_1772533918447.webp
+< 150 Opening BINARY mode data connection for cover_best-budget-tech-gadgets-2024_1772533918447.webp
+
+Uploading to 89.116.53.41:2351 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2185|)
+
+> STOR cover_best-eco-friendly-products-amazon-2025_1772533770169.jpg
+< 150 Opening BINARY mode data connection for cover_best-eco-friendly-products-amazon-2025_1772533770169.jpg
+
+Uploading to 89.116.53.41:2185 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2109|)
+
+> STOR cover_best-eco-friendly-products-amazon-2025_1772533770169.webp
+< 150 Opening BINARY mode data connection for cover_best-eco-friendly-products-amazon-2025_1772533770169.webp
+
+Uploading to 89.116.53.41:2109 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2114|)
+
+> STOR cover_best-eco-friendly-products-amazon-2025_1772533925055.jpg
+< 150 Opening BINARY mode data connection for cover_best-eco-friendly-products-amazon-2025_1772533925055.jpg
+
+Uploading to 89.116.53.41:2114 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2136|)
+
+> STOR cover_best-eco-friendly-products-amazon-2025_1772533925055.webp
+< 150 Opening BINARY mode data connection for cover_best-eco-friendly-products-amazon-2025_1772533925055.webp
+
+Uploading to 89.116.53.41:2136 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2166|)
+
+> STOR cover_best-gaming-headsets-2025_1771430150768.jpg
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1771430150768.jpg
+
+Uploading to 89.116.53.41:2166 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2128|)
+
+> STOR cover_best-gaming-headsets-2025_1771430150768.webp
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1771430150768.webp
+
+Uploading to 89.116.53.41:2128 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2295|)
+
+> STOR cover_best-gaming-headsets-2025_1772533784942.jpg
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1772533784942.jpg
+
+Uploading to 89.116.53.41:2295 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2167|)
+
+> STOR cover_best-gaming-headsets-2025_1772533784942.webp
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1772533784942.webp
+
+Uploading to 89.116.53.41:2167 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2196|)
+
+> STOR cover_best-gaming-headsets-2025_1772533935657.jpg
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1772533935657.jpg
+
+Uploading to 89.116.53.41:2196 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2274|)
+
+> STOR cover_best-gaming-headsets-2025_1772533935657.webp
+< 150 Opening BINARY mode data connection for cover_best-gaming-headsets-2025_1772533935657.webp
+
+Uploading to 89.116.53.41:2274 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2293|)
+
+> STOR cover_best-mechanical-keyboards-2025_1771430379013.jpg
+< 150 Opening BINARY mode data connection for cover_best-mechanical-keyboards-2025_1771430379013.jpg
+
+Uploading to 89.116.53.41:2293 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2135|)
+
+> STOR cover_best-mechanical-keyboards-2025_1771430379013.webp
+< 150 Opening BINARY mode data connection for cover_best-mechanical-keyboards-2025_1771430379013.webp
+
+Uploading to 89.116.53.41:2135 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2306|)
+
+> STOR cover_best-portable-monitors-2025_1771430297469.jpg
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1771430297469.jpg
+
+Uploading to 89.116.53.41:2306 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2176|)
+
+> STOR cover_best-portable-monitors-2025_1771430297469.webp
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1771430297469.webp
+
+Uploading to 89.116.53.41:2176 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2304|)
+
+> STOR cover_best-portable-monitors-2025_1771430339272.jpg
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1771430339272.jpg
+
+Uploading to 89.116.53.41:2304 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2197|)
+
+> STOR cover_best-portable-monitors-2025_1771430339272.webp
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1771430339272.webp
+
+Uploading to 89.116.53.41:2197 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2368|)
+
+> STOR cover_best-portable-monitors-2025_1772533790063.jpg
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1772533790063.jpg
+
+Uploading to 89.116.53.41:2368 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2291|)
+
+> STOR cover_best-portable-monitors-2025_1772533790063.webp
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1772533790063.webp
+
+Uploading to 89.116.53.41:2291 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2184|)
+
+> STOR cover_best-portable-monitors-2025_1772533939848.jpg
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1772533939848.jpg
+
+Uploading to 89.116.53.41:2184 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2371|)
+
+> STOR cover_best-portable-monitors-2025_1772533939848.webp
+< 150 Opening BINARY mode data connection for cover_best-portable-monitors-2025_1772533939848.webp
+
+Uploading to 89.116.53.41:2371 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2274|)
+
+> STOR cover_best-smart-home-devices-2025_1771430240012.jpg
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1771430240012.jpg
+
+Uploading to 89.116.53.41:2274 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2251|)
+
+> STOR cover_best-smart-home-devices-2025_1771430240012.webp
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1771430240012.webp
+
+Uploading to 89.116.53.41:2251 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2356|)
+
+> STOR cover_best-smart-home-devices-2025_1772533795419.jpg
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1772533795419.jpg
+
+Uploading to 89.116.53.41:2356 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2128|)
+
+> STOR cover_best-smart-home-devices-2025_1772533795419.webp
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1772533795419.webp
+
+Uploading to 89.116.53.41:2128 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2198|)
+
+> STOR cover_best-smart-home-devices-2025_1772533944345.jpg
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1772533944345.jpg
+
+Uploading to 89.116.53.41:2198 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2386|)
+
+> STOR cover_best-smart-home-devices-2025_1772533944345.webp
+< 150 Opening BINARY mode data connection for cover_best-smart-home-devices-2025_1772533944345.webp
+
+Uploading to 89.116.53.41:2386 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2346|)
+
+> STOR cover_best-tech-gadgets-comparison-2025_1772533800756.jpg
+< 150 Opening BINARY mode data connection for cover_best-tech-gadgets-comparison-2025_1772533800756.jpg
+
+Uploading to 89.116.53.41:2346 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2397|)
+
+> STOR cover_best-tech-gadgets-comparison-2025_1772533800756.webp
+< 150 Opening BINARY mode data connection for cover_best-tech-gadgets-comparison-2025_1772533800756.webp
+
+Uploading to 89.116.53.41:2397 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2126|)
+
+> STOR cover_best-tech-gadgets-comparison-2025_1772533948164.jpg
+< 150 Opening BINARY mode data connection for cover_best-tech-gadgets-comparison-2025_1772533948164.jpg
+
+Uploading to 89.116.53.41:2126 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2298|)
+
+> STOR cover_best-tech-gadgets-comparison-2025_1772533948164.webp
+< 150 Opening BINARY mode data connection for cover_best-tech-gadgets-comparison-2025_1772533948164.webp
+
+Uploading to 89.116.53.41:2298 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2183|)
+
+> STOR cover_best-wireless-earbuds-2025_1771429901077.jpg
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1771429901077.jpg
+
+Uploading to 89.116.53.41:2183 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2135|)
+
+> STOR cover_best-wireless-earbuds-2025_1771429901077.webp
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1771429901077.webp
+
+Uploading to 89.116.53.41:2135 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2313|)
+
+> STOR cover_best-wireless-earbuds-2025_1772533806435.jpg
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1772533806435.jpg
+
+Uploading to 89.116.53.41:2313 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2219|)
+
+> STOR cover_best-wireless-earbuds-2025_1772533806435.webp
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1772533806435.webp
+
+Uploading to 89.116.53.41:2219 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2202|)
+
+> STOR cover_best-wireless-earbuds-2025_1772533952980.jpg
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1772533952980.jpg
+
+Uploading to 89.116.53.41:2202 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2341|)
+
+> STOR cover_best-wireless-earbuds-2025_1772533952980.webp
+< 150 Opening BINARY mode data connection for cover_best-wireless-earbuds-2025_1772533952980.webp
+
+Uploading to 89.116.53.41:2341 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2115|)
+
+> STOR cover_dji-mini-4-pro-review_1772533811159.jpg
+< 150 Opening BINARY mode data connection for cover_dji-mini-4-pro-review_1772533811159.jpg
+
+Uploading to 89.116.53.41:2115 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2269|)
+
+> STOR cover_dji-mini-4-pro-review_1772533811159.webp
+< 150 Opening BINARY mode data connection for cover_dji-mini-4-pro-review_1772533811159.webp
+
+Uploading to 89.116.53.41:2269 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2137|)
+
+> STOR cover_dji-mini-4-pro-review_1772533957827.jpg
+< 150 Opening BINARY mode data connection for cover_dji-mini-4-pro-review_1772533957827.jpg
+
+Uploading to 89.116.53.41:2137 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2289|)
+
+> STOR cover_dji-mini-4-pro-review_1772533957827.webp
+< 150 Opening BINARY mode data connection for cover_dji-mini-4-pro-review_1772533957827.webp
+
+Uploading to 89.116.53.41:2289 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2163|)
+
+> STOR cover_iphone-16-pro-max-review_1772533819702.jpg
+< 150 Opening BINARY mode data connection for cover_iphone-16-pro-max-review_1772533819702.jpg
+
+Uploading to 89.116.53.41:2163 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2173|)
+
+> STOR cover_iphone-16-pro-max-review_1772533819702.webp
+< 150 Opening BINARY mode data connection for cover_iphone-16-pro-max-review_1772533819702.webp
+
+Uploading to 89.116.53.41:2173 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2196|)
+
+> STOR cover_iphone-16-pro-max-review_1772533964793.jpg
+< 150 Opening BINARY mode data connection for cover_iphone-16-pro-max-review_1772533964793.jpg
+
+Uploading to 89.116.53.41:2196 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2240|)
+
+> STOR cover_iphone-16-pro-max-review_1772533964793.webp
+< 150 Opening BINARY mode data connection for cover_iphone-16-pro-max-review_1772533964793.webp
+
+Uploading to 89.116.53.41:2240 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2377|)
+
+> STOR cover_iphone-17-vs-samsung-s25_1772533824485.jpg
+< 150 Opening BINARY mode data connection for cover_iphone-17-vs-samsung-s25_1772533824485.jpg
+
+Uploading to 89.116.53.41:2377 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2293|)
+
+> STOR cover_iphone-17-vs-samsung-s25_1772533824485.webp
+< 150 Opening BINARY mode data connection for cover_iphone-17-vs-samsung-s25_1772533824485.webp
+
+Uploading to 89.116.53.41:2293 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2208|)
+
+> STOR cover_iphone-17-vs-samsung-s25_1772533970022.jpg
+< 150 Opening BINARY mode data connection for cover_iphone-17-vs-samsung-s25_1772533970022.jpg
+
+Uploading to 89.116.53.41:2208 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2269|)
+
+> STOR cover_iphone-17-vs-samsung-s25_1772533970022.webp
+< 150 Opening BINARY mode data connection for cover_iphone-17-vs-samsung-s25_1772533970022.webp
+
+Uploading to 89.116.53.41:2269 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2378|)
+
+> STOR cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.jpg
+< 150 Opening BINARY mode data connection for cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.jpg
+
+Uploading to 89.116.53.41:2378 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2180|)
+
+> STOR cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.webp
+< 150 Opening BINARY mode data connection for cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.webp
+
+Uploading to 89.116.53.41:2180 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2143|)
+
+> STOR cover_revolutionary-ai-tech-products-amazon-2025_1772533975512.jpg
+< 150 Opening BINARY mode data connection for cover_revolutionary-ai-tech-products-amazon-2025_1772533975512.jpg
+
+Uploading to 89.116.53.41:2143 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2230|)
+
+> STOR cover_revolutionary-ai-tech-products-amazon-2025_1772533975512.webp
+< 150 Opening BINARY mode data connection for cover_revolutionary-ai-tech-products-amazon-2025_1772533975512.webp
+
+Uploading to 89.116.53.41:2230 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2136|)
+
+> STOR cover_sony-wh-1000xm5-review_1772533836261.jpg
+< 150 Opening BINARY mode data connection for cover_sony-wh-1000xm5-review_1772533836261.jpg
+
+Uploading to 89.116.53.41:2136 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2172|)
+
+> STOR cover_sony-wh-1000xm5-review_1772533836261.webp
+< 150 Opening BINARY mode data connection for cover_sony-wh-1000xm5-review_1772533836261.webp
+
+Uploading to 89.116.53.41:2172 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2382|)
+
+> STOR cover_sony-wh-1000xm5-review_1772533979862.jpg
+< 150 Opening BINARY mode data connection for cover_sony-wh-1000xm5-review_1772533979862.jpg
+
+Uploading to 89.116.53.41:2382 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2235|)
+
+> STOR cover_sony-wh-1000xm5-review_1772533979862.webp
+< 150 Opening BINARY mode data connection for cover_sony-wh-1000xm5-review_1772533979862.webp
+
+Uploading to 89.116.53.41:2235 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2159|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1771429759483.jpg
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1771429759483.jpg
+
+Uploading to 89.116.53.41:2159 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2329|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1771429759483.webp
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1771429759483.webp
+
+Uploading to 89.116.53.41:2329 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2232|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1772533844234.jpg
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1772533844234.jpg
+
+Uploading to 89.116.53.41:2232 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2185|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1772533844234.webp
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1772533844234.webp
+
+Uploading to 89.116.53.41:2185 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2227|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1772533987658.jpg
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1772533987658.jpg
+
+Uploading to 89.116.53.41:2227 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2315|)
+
+> STOR cover_summer-2025-laptop-buying-guide_1772533987658.webp
+< 150 Opening BINARY mode data connection for cover_summer-2025-laptop-buying-guide_1772533987658.webp
+
+Uploading to 89.116.53.41:2315 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2221|)
+
+> STOR cover_top-10-smart-home-gadgets-amazon-2025_1772533849473.jpg
+< 150 Opening BINARY mode data connection for cover_top-10-smart-home-gadgets-amazon-2025_1772533849473.jpg
+
+Uploading to 89.116.53.41:2221 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2141|)
+
+> STOR cover_top-10-smart-home-gadgets-amazon-2025_1772533849473.webp
+< 150 Opening BINARY mode data connection for cover_top-10-smart-home-gadgets-amazon-2025_1772533849473.webp
+
+Uploading to 89.116.53.41:2141 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2135|)
+
+> STOR cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.jpg
+< 150 Opening BINARY mode data connection for cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.jpg
+
+Uploading to 89.116.53.41:2135 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2323|)
+
+> STOR cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.webp
+< 150 Opening BINARY mode data connection for cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.webp
+
+Uploading to 89.116.53.41:2323 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2382|)
+
+> STOR cover_top-5-flagship-gadgets-2025_1772533854396.jpg
+< 150 Opening BINARY mode data connection for cover_top-5-flagship-gadgets-2025_1772533854396.jpg
+
+Uploading to 89.116.53.41:2382 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2150|)
+
+> STOR cover_top-5-flagship-gadgets-2025_1772533854396.webp
+< 150 Opening BINARY mode data connection for cover_top-5-flagship-gadgets-2025_1772533854396.webp
+
+Uploading to 89.116.53.41:2150 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2193|)
+
+> STOR cover_top-5-flagship-gadgets-2025_1772533997120.jpg
+< 150 Opening BINARY mode data connection for cover_top-5-flagship-gadgets-2025_1772533997120.jpg
+
+Uploading to 89.116.53.41:2193 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2120|)
+
+> STOR cover_top-5-flagship-gadgets-2025_1772533997120.webp
+< 150 Opening BINARY mode data connection for cover_top-5-flagship-gadgets-2025_1772533997120.webp
+
+Uploading to 89.116.53.41:2120 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2340|)
+
+> STOR cover_top-ai-gadgets-amazon-2025_1772533859330.jpg
+< 150 Opening BINARY mode data connection for cover_top-ai-gadgets-amazon-2025_1772533859330.jpg
+
+Uploading to 89.116.53.41:2340 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2257|)
+
+> STOR cover_top-ai-gadgets-amazon-2025_1772533859330.webp
+< 150 Opening BINARY mode data connection for cover_top-ai-gadgets-amazon-2025_1772533859330.webp
+
+Uploading to 89.116.53.41:2257 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2193|)
+
+> STOR cover_top-ai-gadgets-amazon-2025_1772534001676.jpg
+< 150 Opening BINARY mode data connection for cover_top-ai-gadgets-amazon-2025_1772534001676.jpg
+
+Uploading to 89.116.53.41:2193 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2137|)
+
+> STOR cover_top-ai-gadgets-amazon-2025_1772534001676.webp
+< 150 Opening BINARY mode data connection for cover_top-ai-gadgets-amazon-2025_1772534001676.webp
+
+Uploading to 89.116.53.41:2137 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2397|)
+
+> STOR cover_top-wireless-earbuds-2025-comparison_1772533866430.jpg
+< 150 Opening BINARY mode data connection for cover_top-wireless-earbuds-2025-comparison_1772533866430.jpg
+
+Uploading to 89.116.53.41:2397 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2171|)
+
+> STOR cover_top-wireless-earbuds-2025-comparison_1772533866430.webp
+< 150 Opening BINARY mode data connection for cover_top-wireless-earbuds-2025-comparison_1772533866430.webp
+
+Uploading to 89.116.53.41:2171 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2330|)
+
+> STOR cover_top-wireless-earbuds-2025-comparison_1772534006512.jpg
+< 150 Opening BINARY mode data connection for cover_top-wireless-earbuds-2025-comparison_1772534006512.jpg
+
+Uploading to 89.116.53.41:2330 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2206|)
+
+> STOR cover_top-wireless-earbuds-2025-comparison_1772534006512.webp
+< 150 Opening BINARY mode data connection for cover_top-wireless-earbuds-2025-comparison_1772534006512.webp
+
+Uploading to 89.116.53.41:2206 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2340|)
+
+> STOR dji-mini-3-pro-alt.jpg
+< 150 Opening BINARY mode data connection for dji-mini-3-pro-alt.jpg
+
+Uploading to 89.116.53.41:2340 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2308|)
+
+> STOR dji-mini-3-pro-alt.webp
+< 150 Opening BINARY mode data connection for dji-mini-3-pro-alt.webp
+
+Uploading to 89.116.53.41:2308 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2286|)
+
+> STOR dji-mini-3-pro-main.jpg
+< 150 Opening BINARY mode data connection for dji-mini-3-pro-main.jpg
+
+Uploading to 89.116.53.41:2286 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2384|)
+
+> STOR dji-mini-3-pro-main.webp
+< 150 Opening BINARY mode data connection for dji-mini-3-pro-main.webp
+
+Uploading to 89.116.53.41:2384 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2138|)
+
+> STOR dji-mini-3-pro.jpg
+< 150 Opening BINARY mode data connection for dji-mini-3-pro.jpg
+
+Uploading to 89.116.53.41:2138 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2323|)
+
+> STOR dji-mini-3-pro.webp
+< 150 Opening BINARY mode data connection for dji-mini-3-pro.webp
+
+Uploading to 89.116.53.41:2323 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2157|)
+
+> STOR dji-mini-4-flight.jpg
+< 150 Opening BINARY mode data connection for dji-mini-4-flight.jpg
+
+Uploading to 89.116.53.41:2157 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2121|)
+
+> STOR dji-mini-4-flight.webp
+< 150 Opening BINARY mode data connection for dji-mini-4-flight.webp
+
+Uploading to 89.116.53.41:2121 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2158|)
+
+> STOR dji-mini-4-pro.jpg
+< 150 Opening BINARY mode data connection for dji-mini-4-pro.jpg
+
+Uploading to 89.116.53.41:2158 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2216|)
+
+> STOR dji-mini-4-pro.webp
+< 150 Opening BINARY mode data connection for dji-mini-4-pro.webp
+
+Uploading to 89.116.53.41:2216 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2350|)
+
+> STOR dji-pocket-3.jpg
+< 150 Opening BINARY mode data connection for dji-pocket-3.jpg
+
+Uploading to 89.116.53.41:2350 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR dji-pocket-3.webp
+< 150 Opening BINARY mode data connection for dji-pocket-3.webp
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> MKD downloads
+< 550 downloads: File exists
+
+> CWD downloads
+< 250 CWD command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2301|)
+
+> STOR article9-0-d90b934b.jpg
+< 150 Opening BINARY mode data connection for article9-0-d90b934b.jpg
+
+Uploading to 89.116.53.41:2301 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2178|)
+
+> STOR article9-1-21ed3ecd.jpg
+< 150 Opening BINARY mode data connection for article9-1-21ed3ecd.jpg
+
+Uploading to 89.116.53.41:2178 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2206|)
+
+> STOR best-smartphones-mobile-photography-2025-0-98e6b046.jpg
+< 150 Opening BINARY mode data connection for best-smartphones-mobile-photography-2025-0-98e6b046.jpg
+
+Uploading to 89.116.53.41:2206 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2123|)
+
+> STOR best-smartphones-mobile-photography-2025-1-14c7f6c6.jpg
+< 150 Opening BINARY mode data connection for best-smartphones-mobile-photography-2025-1-14c7f6c6.jpg
+
+Uploading to 89.116.53.41:2123 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2219|)
+
+> STOR test-topic-2025-0-8222eb70.jpg
+< 150 Opening BINARY mode data connection for test-topic-2025-0-8222eb70.jpg
+
+Uploading to 89.116.53.41:2219 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2241|)
+
+> STOR test-topic-2025-1-9b9af3e8.jpg
+< 150 Opening BINARY mode data connection for test-topic-2025-1-9b9af3e8.jpg
+
+Uploading to 89.116.53.41:2241 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2347|)
+
+> STOR test-topic-2025-2-1c4effd1.jpg
+< 150 Opening BINARY mode data connection for test-topic-2025-2-1c4effd1.jpg
+
+Uploading to 89.116.53.41:2347 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2202|)
+
+> STOR top-5-powerbanks-2025-2-13f5a6b1.jpg
+< 150 Opening BINARY mode data connection for top-5-powerbanks-2025-2-13f5a6b1.jpg
+
+Uploading to 89.116.53.41:2202 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2292|)
+
+> STOR top-time-management-apps-for-freelancers-2025-1-bf4567a2.jpg
+< 150 Opening BINARY mode data connection for top-time-management-apps-for-freelancers-2025-1-bf4567a2.jpg
+
+Uploading to 89.116.53.41:2292 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2141|)
+
+> STOR top-time-management-apps-for-freelancers-2025-2-027c3249.jpg
+< 150 Opening BINARY mode data connection for top-time-management-apps-for-freelancers-2025-2-027c3249.jpg
+
+Uploading to 89.116.53.41:2141 (No encryption)
+< 226 Transfer complete
+
+> CDUP
+< 250 CDUP command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2222|)
+
+> STOR echo-show-15-main.jpg
+< 150 Opening BINARY mode data connection for echo-show-15-main.jpg
+
+Uploading to 89.116.53.41:2222 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2232|)
+
+> STOR eco-friendly-2025.jpg
+< 150 Opening BINARY mode data connection for eco-friendly-2025.jpg
+
+Uploading to 89.116.53.41:2232 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2298|)
+
+> STOR eco-friendly-2025.webp
+< 150 Opening BINARY mode data connection for eco-friendly-2025.webp
+
+Uploading to 89.116.53.41:2298 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2316|)
+
+> STOR fathers-day-2026-tech-gift-guide-wwdc-predictions-main.jpg
+< 150 Opening BINARY mode data connection for fathers-day-2026-tech-gift-guide-wwdc-predictions-main.jpg
+
+Uploading to 89.116.53.41:2316 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2269|)
+
+> STOR framework-laptop.jpg
+< 150 Opening BINARY mode data connection for framework-laptop.jpg
+
+Uploading to 89.116.53.41:2269 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2295|)
+
+> STOR framework-laptop.webp
+< 150 Opening BINARY mode data connection for framework-laptop.webp
+
+Uploading to 89.116.53.41:2295 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2388|)
+
+> STOR galaxy-watch-6.jpg
+< 150 Opening BINARY mode data connection for galaxy-watch-6.jpg
+
+Uploading to 89.116.53.41:2388 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2200|)
+
+> STOR galaxy-watch-6.webp
+< 150 Opening BINARY mode data connection for galaxy-watch-6.webp
+
+Uploading to 89.116.53.41:2200 (No encryption)
+< 226 Transfer complete
+
+> MKD generated
+< 550 generated: File exists
+
+> CWD generated
+< 250 CWD command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2101|)
+
+> STOR 2-gen-1.svg
+< 150 Opening BINARY mode data connection for 2-gen-1.svg
+
+Uploading to 89.116.53.41:2101 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2329|)
+
+> STOR 2-gen-2.svg
+< 150 Opening BINARY mode data connection for 2-gen-2.svg
+
+Uploading to 89.116.53.41:2329 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2109|)
+
+> STOR 3-fallback-2.svg
+< 150 Opening BINARY mode data connection for 3-fallback-2.svg
+
+Uploading to 89.116.53.41:2109 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2288|)
+
+> STOR 5-gen-1.svg
+< 150 Opening BINARY mode data connection for 5-gen-1.svg
+
+Uploading to 89.116.53.41:2288 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2314|)
+
+> STOR 5-gen-2.svg
+< 150 Opening BINARY mode data connection for 5-gen-2.svg
+
+Uploading to 89.116.53.41:2314 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2148|)
+
+> STOR 7-gen-1.svg
+< 150 Opening BINARY mode data connection for 7-gen-1.svg
+
+Uploading to 89.116.53.41:2148 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2211|)
+
+> STOR 7-gen-2.svg
+< 150 Opening BINARY mode data connection for 7-gen-2.svg
+
+Uploading to 89.116.53.41:2211 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2371|)
+
+> STOR article8-fallback-1.svg
+< 150 Opening BINARY mode data connection for article8-fallback-1.svg
+
+Uploading to 89.116.53.41:2371 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2169|)
+
+> STOR article8-fallback-2.svg
+< 150 Opening BINARY mode data connection for article8-fallback-2.svg
+
+Uploading to 89.116.53.41:2169 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2270|)
+
+> STOR article9-fallback-2.svg
+< 150 Opening BINARY mode data connection for article9-fallback-2.svg
+
+Uploading to 89.116.53.41:2270 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2188|)
+
+> STOR best-smartphones-mobile-photography-2025-fallback-2.svg
+< 150 Opening BINARY mode data connection for best-smartphones-mobile-photography-2025-fallback-2.svg
+
+Uploading to 89.116.53.41:2188 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2120|)
+
+> STOR best-sports-smartwatches-2025-fallback-0.svg
+< 150 Opening BINARY mode data connection for best-sports-smartwatches-2025-fallback-0.svg
+
+Uploading to 89.116.53.41:2120 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2161|)
+
+> STOR best-sports-smartwatches-2025-fallback-1.svg
+< 150 Opening BINARY mode data connection for best-sports-smartwatches-2025-fallback-1.svg
+
+Uploading to 89.116.53.41:2161 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2390|)
+
+> STOR best-sports-smartwatches-2025-fallback-2.svg
+< 150 Opening BINARY mode data connection for best-sports-smartwatches-2025-fallback-2.svg
+
+Uploading to 89.116.53.41:2390 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2198|)
+
+> STOR holiday-tech-gift-guide-2025-fallback-0.svg
+< 150 Opening BINARY mode data connection for holiday-tech-gift-guide-2025-fallback-0.svg
+
+Uploading to 89.116.53.41:2198 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2267|)
+
+> STOR holiday-tech-gift-guide-2025-gen-1.svg
+< 150 Opening BINARY mode data connection for holiday-tech-gift-guide-2025-gen-1.svg
+
+Uploading to 89.116.53.41:2267 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2113|)
+
+> STOR holiday-tech-gift-guide-2025-gen-2.svg
+< 150 Opening BINARY mode data connection for holiday-tech-gift-guide-2025-gen-2.svg
+
+Uploading to 89.116.53.41:2113 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2318|)
+
+> STOR smart-home-innovative-gadgets-2025-fallback-0.svg
+< 150 Opening BINARY mode data connection for smart-home-innovative-gadgets-2025-fallback-0.svg
+
+Uploading to 89.116.53.41:2318 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2108|)
+
+> STOR smart-home-innovative-gadgets-2025-fallback-1.svg
+< 150 Opening BINARY mode data connection for smart-home-innovative-gadgets-2025-fallback-1.svg
+
+Uploading to 89.116.53.41:2108 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2360|)
+
+> STOR smart-home-innovative-gadgets-2025-fallback-2.svg
+< 150 Opening BINARY mode data connection for smart-home-innovative-gadgets-2025-fallback-2.svg
+
+Uploading to 89.116.53.41:2360 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2120|)
+
+> STOR top-5-powerbanks-2025-fallback-0.svg
+< 150 Opening BINARY mode data connection for top-5-powerbanks-2025-fallback-0.svg
+
+Uploading to 89.116.53.41:2120 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2301|)
+
+> STOR top-5-powerbanks-2025-fallback-1.svg
+< 150 Opening BINARY mode data connection for top-5-powerbanks-2025-fallback-1.svg
+
+Uploading to 89.116.53.41:2301 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2101|)
+
+> STOR top-time-management-apps-for-freelancers-2025-fallback-0.svg
+< 150 Opening BINARY mode data connection for top-time-management-apps-for-freelancers-2025-fallback-0.svg
+
+Uploading to 89.116.53.41:2101 (No encryption)
+< 226 Transfer complete
+
+> CDUP
+< 250 CDUP command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2243|)
+
+> STOR google-io-2026-agentic-ui.jpg
+< 150 Opening BINARY mode data connection for google-io-2026-agentic-ui.jpg
+
+Uploading to 89.116.53.41:2243 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2133|)
+
+> STOR google-io-2026-main.jpg
+< 150 Opening BINARY mode data connection for google-io-2026-main.jpg
+
+Uploading to 89.116.53.41:2133 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2299|)
+
+> STOR gopro-hero13.jpg
+< 150 Opening BINARY mode data connection for gopro-hero13.jpg
+
+Uploading to 89.116.53.41:2299 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2160|)
+
+> STOR gopro-hero13.webp
+< 150 Opening BINARY mode data connection for gopro-hero13.webp
+
+Uploading to 89.116.53.41:2160 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2303|)
+
+> STOR high-performance-laptop.jpg
+< 150 Opening BINARY mode data connection for high-performance-laptop.jpg
+
+Uploading to 89.116.53.41:2303 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2195|)
+
+> STOR holiday-tech-2025.jpg
+< 150 Opening BINARY mode data connection for holiday-tech-2025.jpg
+
+Uploading to 89.116.53.41:2195 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2148|)
+
+> STOR holiday-tech-2025.webp
+< 150 Opening BINARY mode data connection for holiday-tech-2025.webp
+
+Uploading to 89.116.53.41:2148 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2103|)
+
+> STOR ifa-2026-iphone-18-pro-preview.jpg
+< 150 Opening BINARY mode data connection for ifa-2026-iphone-18-pro-preview.jpg
+
+Uploading to 89.116.53.41:2103 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2197|)
+
+> STOR ipad-pro-m4-productivity.jpg
+< 150 Opening BINARY mode data connection for ipad-pro-m4-productivity.jpg
+
+Uploading to 89.116.53.41:2197 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2377|)
+
+> STOR iphone-15-pro-max-camera.jpg
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-camera.jpg
+
+Uploading to 89.116.53.41:2377 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2113|)
+
+> STOR iphone-15-pro-max-camera.webp
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-camera.webp
+
+Uploading to 89.116.53.41:2113 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2385|)
+
+> STOR iphone-15-pro-max-colors.jpg
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-colors.jpg
+
+Uploading to 89.116.53.41:2385 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2291|)
+
+> STOR iphone-15-pro-max-colors.webp
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-colors.webp
+
+Uploading to 89.116.53.41:2291 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2161|)
+
+> STOR iphone-15-pro-max-performance.jpg
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-performance.jpg
+
+Uploading to 89.116.53.41:2161 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2197|)
+
+> STOR iphone-15-pro-max-performance.webp
+< 150 Opening BINARY mode data connection for iphone-15-pro-max-performance.webp
+
+Uploading to 89.116.53.41:2197 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2263|)
+
+> STOR iphone-15-pro-max.jpg
+< 150 Opening BINARY mode data connection for iphone-15-pro-max.jpg
+
+Uploading to 89.116.53.41:2263 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2231|)
+
+> STOR iphone-15-pro-max.webp
+< 150 Opening BINARY mode data connection for iphone-15-pro-max.webp
+
+Uploading to 89.116.53.41:2231 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2367|)
+
+> STOR iphone-16-pro-max-camera.jpg
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-camera.jpg
+
+Uploading to 89.116.53.41:2367 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2351|)
+
+> STOR iphone-16-pro-max-camera.webp
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-camera.webp
+
+Uploading to 89.116.53.41:2351 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2252|)
+
+> STOR iphone-16-pro-max-colors.jpg
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-colors.jpg
+
+Uploading to 89.116.53.41:2252 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2128|)
+
+> STOR iphone-16-pro-max-colors.webp
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-colors.webp
+
+Uploading to 89.116.53.41:2128 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2341|)
+
+> STOR iphone-16-pro-max-performance.jpg
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-performance.jpg
+
+Uploading to 89.116.53.41:2341 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2351|)
+
+> STOR iphone-16-pro-max-performance.webp
+< 150 Opening BINARY mode data connection for iphone-16-pro-max-performance.webp
+
+Uploading to 89.116.53.41:2351 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2296|)
+
+> STOR iphone-16-pro-max.jpg
+< 150 Opening BINARY mode data connection for iphone-16-pro-max.jpg
+
+Uploading to 89.116.53.41:2296 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2354|)
+
+> STOR iphone-16-pro-max.webp
+< 150 Opening BINARY mode data connection for iphone-16-pro-max.webp
+
+Uploading to 89.116.53.41:2354 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2269|)
+
+> STOR iphone-17-pro-max-camera.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-camera.jpg
+
+Uploading to 89.116.53.41:2269 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2305|)
+
+> STOR iphone-17-pro-max-camera.webp
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-camera.webp
+
+Uploading to 89.116.53.41:2305 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2315|)
+
+> STOR iphone-17-pro-max-colors.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-colors.jpg
+
+Uploading to 89.116.53.41:2315 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR iphone-17-pro-max-colors.webp
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-colors.webp
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2206|)
+
+> STOR iphone-17-pro-max-performance.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-performance.jpg
+
+Uploading to 89.116.53.41:2206 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2316|)
+
+> STOR iphone-17-pro-max-performance.webp
+< 150 Opening BINARY mode data connection for iphone-17-pro-max-performance.webp
+
+Uploading to 89.116.53.41:2316 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2134|)
+
+> STOR iphone-17-pro-max.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-max.jpg
+
+Uploading to 89.116.53.41:2134 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2240|)
+
+> STOR iphone-17-pro-max.webp
+< 150 Opening BINARY mode data connection for iphone-17-pro-max.webp
+
+Uploading to 89.116.53.41:2240 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2216|)
+
+> STOR iphone-17-pro-official.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-official.jpg
+
+Uploading to 89.116.53.41:2216 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2194|)
+
+> STOR iphone-17-pro-vlogging.jpg
+< 150 Opening BINARY mode data connection for iphone-17-pro-vlogging.jpg
+
+Uploading to 89.116.53.41:2194 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2143|)
+
+> STOR iphone-17-pro-vlogging.webp
+< 150 Opening BINARY mode data connection for iphone-17-pro-vlogging.webp
+
+Uploading to 89.116.53.41:2143 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2311|)
+
+> STOR iphone-18-pro-leak.jpg
+< 150 Opening BINARY mode data connection for iphone-18-pro-leak.jpg
+
+Uploading to 89.116.53.41:2311 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2242|)
+
+> STOR iphone-se-4-design.jpg
+< 150 Opening BINARY mode data connection for iphone-se-4-design.jpg
+
+Uploading to 89.116.53.41:2242 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2147|)
+
+> STOR iphone-se-4-vs-pixel-10a-main.jpg
+< 150 Opening BINARY mode data connection for iphone-se-4-vs-pixel-10a-main.jpg
+
+Uploading to 89.116.53.41:2147 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2109|)
+
+> STOR iphone17-camera.jpg
+< 150 Opening BINARY mode data connection for iphone17-camera.jpg
+
+Uploading to 89.116.53.41:2109 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2220|)
+
+> STOR iphone17-camera.webp
+< 150 Opening BINARY mode data connection for iphone17-camera.webp
+
+Uploading to 89.116.53.41:2220 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2160|)
+
+> STOR iphone17-vs-s25.jpg
+< 150 Opening BINARY mode data connection for iphone17-vs-s25.jpg
+
+Uploading to 89.116.53.41:2160 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2394|)
+
+> STOR iphone17-vs-s25.webp
+< 150 Opening BINARY mode data connection for iphone17-vs-s25.webp
+
+Uploading to 89.116.53.41:2394 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2112|)
+
+> STOR july-2026-tech-guide-deals.jpg
+< 150 Opening BINARY mode data connection for july-2026-tech-guide-deals.jpg
+
+Uploading to 89.116.53.41:2112 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2222|)
+
+> STOR july-2026-tech-guide-main.jpg
+< 150 Opening BINARY mode data connection for july-2026-tech-guide-main.jpg
+
+Uploading to 89.116.53.41:2222 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2192|)
+
+> STOR june-2026-tech-guide-main.jpg
+< 150 Opening BINARY mode data connection for june-2026-tech-guide-main.jpg
+
+Uploading to 89.116.53.41:2192 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2275|)
+
+> STOR macbook-m5.jpg
+< 150 Opening BINARY mode data connection for macbook-m5.jpg
+
+Uploading to 89.116.53.41:2275 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2354|)
+
+> STOR macbook-m5.webp
+< 150 Opening BINARY mode data connection for macbook-m5.webp
+
+Uploading to 89.116.53.41:2354 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2160|)
+
+> STOR macbook-neo-design.jpg
+< 150 Opening BINARY mode data connection for macbook-neo-design.jpg
+
+Uploading to 89.116.53.41:2160 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2226|)
+
+> STOR macbook-neo-main.jpg
+< 150 Opening BINARY mode data connection for macbook-neo-main.jpg
+
+Uploading to 89.116.53.41:2226 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2206|)
+
+> STOR macbook-neo-student.jpg
+< 150 Opening BINARY mode data connection for macbook-neo-student.jpg
+
+Uploading to 89.116.53.41:2206 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2189|)
+
+> STOR macbook-pro-m3.jpg
+< 150 Opening BINARY mode data connection for macbook-pro-m3.jpg
+
+Uploading to 89.116.53.41:2189 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2168|)
+
+> STOR macbook-pro-m3.webp
+< 150 Opening BINARY mode data connection for macbook-pro-m3.webp
+
+Uploading to 89.116.53.41:2168 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2157|)
+
+> STOR may-2026-tech-lifestyle-main.jpg
+< 150 Opening BINARY mode data connection for may-2026-tech-lifestyle-main.jpg
+
+Uploading to 89.116.53.41:2157 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2385|)
+
+> STOR microled.jpg
+< 150 Opening BINARY mode data connection for microled.jpg
+
+Uploading to 89.116.53.41:2385 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2123|)
+
+> STOR microled.webp
+< 150 Opening BINARY mode data connection for microled.webp
+
+Uploading to 89.116.53.41:2123 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2326|)
+
+> STOR modern-smartphone-display.jpg
+< 150 Opening BINARY mode data connection for modern-smartphone-display.jpg
+
+Uploading to 89.116.53.41:2326 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR mwc-2026-highlights.jpg
+< 150 Opening BINARY mode data connection for mwc-2026-highlights.jpg
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2338|)
+
+> STOR nintendo-switch-2-main.jpg
+< 150 Opening BINARY mode data connection for nintendo-switch-2-main.jpg
+
+Uploading to 89.116.53.41:2338 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2217|)
+
+> STOR oura-ring-4.jpg
+< 150 Opening BINARY mode data connection for oura-ring-4.jpg
+
+Uploading to 89.116.53.41:2217 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2397|)
+
+> STOR oura-ring-4.webp
+< 150 Opening BINARY mode data connection for oura-ring-4.webp
+
+Uploading to 89.116.53.41:2397 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2254|)
+
+> STOR oura-ring-gen4-lifestyle.jpg
+< 150 Opening BINARY mode data connection for oura-ring-gen4-lifestyle.jpg
+
+Uploading to 89.116.53.41:2254 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2251|)
+
+> STOR pixel-10a-reveal.jpg
+< 150 Opening BINARY mode data connection for pixel-10a-reveal.jpg
+
+Uploading to 89.116.53.41:2251 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2237|)
+
+> STOR pixel-10a-vs-iphone-se-4-main.jpg
+< 150 Opening BINARY mode data connection for pixel-10a-vs-iphone-se-4-main.jpg
+
+Uploading to 89.116.53.41:2237 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2371|)
+
+> STOR polaroid-now.jpg
+< 150 Opening BINARY mode data connection for polaroid-now.jpg
+
+Uploading to 89.116.53.41:2371 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2345|)
+
+> STOR polaroid-now.webp
+< 150 Opening BINARY mode data connection for polaroid-now.webp
+
+Uploading to 89.116.53.41:2345 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2280|)
+
+> STOR razer-blade-14.jpg
+< 150 Opening BINARY mode data connection for razer-blade-14.jpg
+
+Uploading to 89.116.53.41:2280 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2283|)
+
+> STOR razer-blade-14.webp
+< 150 Opening BINARY mode data connection for razer-blade-14.webp
+
+Uploading to 89.116.53.41:2283 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2188|)
+
+> STOR razer-v4-pro-vs-logitech-g915x-comparison-main.jpg
+< 150 Opening BINARY mode data connection for razer-v4-pro-vs-logitech-g915x-comparison-main.jpg
+
+Uploading to 89.116.53.41:2188 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2328|)
+
+> STOR razer-v4-pro-vs-logitech-g915x-comparison-main.webp
+< 150 Opening BINARY mode data connection for razer-v4-pro-vs-logitech-g915x-comparison-main.webp
+
+Uploading to 89.116.53.41:2328 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2292|)
+
+> STOR s24-ultra-display.jpg
+< 150 Opening BINARY mode data connection for s24-ultra-display.jpg
+
+Uploading to 89.116.53.41:2292 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2308|)
+
+> STOR s24-ultra-display.webp
+< 150 Opening BINARY mode data connection for s24-ultra-display.webp
+
+Uploading to 89.116.53.41:2308 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2389|)
+
+> STOR s25-ultra-display.jpg
+< 150 Opening BINARY mode data connection for s25-ultra-display.jpg
+
+Uploading to 89.116.53.41:2389 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2287|)
+
+> STOR s25-ultra-display.webp
+< 150 Opening BINARY mode data connection for s25-ultra-display.webp
+
+Uploading to 89.116.53.41:2287 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2321|)
+
+> STOR samsung-galaxy-s23-ultra-camera.jpg
+< 150 Opening BINARY mode data connection for samsung-galaxy-s23-ultra-camera.jpg
+
+Uploading to 89.116.53.41:2321 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2211|)
+
+> STOR samsung-galaxy-s23-ultra-camera.webp
+< 150 Opening BINARY mode data connection for samsung-galaxy-s23-ultra-camera.webp
+
+Uploading to 89.116.53.41:2211 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2379|)
+
+> STOR samsung-galaxy-s23-ultra.jpg
+< 150 Opening BINARY mode data connection for samsung-galaxy-s23-ultra.jpg
+
+Uploading to 89.116.53.41:2379 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2196|)
+
+> STOR samsung-galaxy-s23-ultra.webp
+< 150 Opening BINARY mode data connection for samsung-galaxy-s23-ultra.webp
+
+Uploading to 89.116.53.41:2196 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2166|)
+
+> STOR samsung-galaxy-s25-ultra-main.jpg
+< 150 Opening BINARY mode data connection for samsung-galaxy-s25-ultra-main.jpg
+
+Uploading to 89.116.53.41:2166 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2139|)
+
+> STOR samsung-galaxy-s26-ultra-official.jpg
+< 150 Opening BINARY mode data connection for samsung-galaxy-s26-ultra-official.jpg
+
+Uploading to 89.116.53.41:2139 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2323|)
+
+> STOR samsung-galaxy-watch-6.jpg
+< 150 Opening BINARY mode data connection for samsung-galaxy-watch-6.jpg
+
+Uploading to 89.116.53.41:2323 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2272|)
+
+> STOR samsung-galaxy-watch-6.webp
+< 150 Opening BINARY mode data connection for samsung-galaxy-watch-6.webp
+
+Uploading to 89.116.53.41:2272 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2228|)
+
+> STOR samsung-quantum-dot-oled-tv.jpg
+< 150 Opening BINARY mode data connection for samsung-quantum-dot-oled-tv.jpg
+
+Uploading to 89.116.53.41:2228 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2392|)
+
+> STOR samsung-quantum-dot-oled-tv.webp
+< 150 Opening BINARY mode data connection for samsung-quantum-dot-oled-tv.webp
+
+Uploading to 89.116.53.41:2392 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2329|)
+
+> STOR smart-home-gadgets-2025.jpg
+< 150 Opening BINARY mode data connection for smart-home-gadgets-2025.jpg
+
+Uploading to 89.116.53.41:2329 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2214|)
+
+> STOR smart-home-gadgets-2025.webp
+< 150 Opening BINARY mode data connection for smart-home-gadgets-2025.webp
+
+Uploading to 89.116.53.41:2214 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2115|)
+
+> STOR smart-rings-comparison-2026.jpg
+< 150 Opening BINARY mode data connection for smart-rings-comparison-2026.jpg
+
+Uploading to 89.116.53.41:2115 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2256|)
+
+> STOR smartphone-ai-features.jpg
+< 150 Opening BINARY mode data connection for smartphone-ai-features.jpg
+
+Uploading to 89.116.53.41:2256 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2105|)
+
+> STOR sony-wf-1000xm5.jpg
+< 150 Opening BINARY mode data connection for sony-wf-1000xm5.jpg
+
+Uploading to 89.116.53.41:2105 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2353|)
+
+> STOR sony-wf-1000xm5.webp
+< 150 Opening BINARY mode data connection for sony-wf-1000xm5.webp
+
+Uploading to 89.116.53.41:2353 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2374|)
+
+> STOR sony-wh-1000xm5-anc.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-anc.jpg
+
+Uploading to 89.116.53.41:2374 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2102|)
+
+> STOR sony-wh-1000xm5-anc.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-anc.webp
+
+Uploading to 89.116.53.41:2102 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2208|)
+
+> STOR sony-wh-1000xm5-app.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-app.jpg
+
+Uploading to 89.116.53.41:2208 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2225|)
+
+> STOR sony-wh-1000xm5-app.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-app.webp
+
+Uploading to 89.116.53.41:2225 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2240|)
+
+> STOR sony-wh-1000xm5-case.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-case.jpg
+
+Uploading to 89.116.53.41:2240 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2179|)
+
+> STOR sony-wh-1000xm5-case.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-case.webp
+
+Uploading to 89.116.53.41:2179 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2171|)
+
+> STOR sony-wh-1000xm5-design.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-design.jpg
+
+Uploading to 89.116.53.41:2171 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2120|)
+
+> STOR sony-wh-1000xm5-design.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-design.webp
+
+Uploading to 89.116.53.41:2120 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2362|)
+
+> STOR sony-wh-1000xm5-main.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-main.jpg
+
+Uploading to 89.116.53.41:2362 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2259|)
+
+> STOR sony-wh-1000xm5-main.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-main.webp
+
+Uploading to 89.116.53.41:2259 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2349|)
+
+> STOR sony-wh-1000xm5-noise-cancellation.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-noise-cancellation.jpg
+
+Uploading to 89.116.53.41:2349 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2255|)
+
+> STOR sony-wh-1000xm5-noise-cancellation.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5-noise-cancellation.webp
+
+Uploading to 89.116.53.41:2255 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2168|)
+
+> STOR sony-wh-1000xm5.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5.jpg
+
+Uploading to 89.116.53.41:2168 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2338|)
+
+> STOR sony-wh-1000xm5.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm5.webp
+
+Uploading to 89.116.53.41:2338 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2142|)
+
+> STOR sony-wh-1000xm6-design.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-design.jpg
+
+Uploading to 89.116.53.41:2142 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2389|)
+
+> STOR sony-wh-1000xm6-design.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-design.webp
+
+Uploading to 89.116.53.41:2389 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2149|)
+
+> STOR sony-wh-1000xm6-main.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-main.jpg
+
+Uploading to 89.116.53.41:2149 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2121|)
+
+> STOR sony-wh-1000xm6-main.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-main.webp
+
+Uploading to 89.116.53.41:2121 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2186|)
+
+> STOR sony-wh-1000xm6-noise-cancellation.jpg
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-noise-cancellation.jpg
+
+Uploading to 89.116.53.41:2186 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2215|)
+
+> STOR sony-wh-1000xm6-noise-cancellation.webp
+< 150 Opening BINARY mode data connection for sony-wh-1000xm6-noise-cancellation.webp
+
+Uploading to 89.116.53.41:2215 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2161|)
+
+> STOR sony-xm5-black.jpg
+< 150 Opening BINARY mode data connection for sony-xm5-black.jpg
+
+Uploading to 89.116.53.41:2161 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2110|)
+
+> STOR sony-xm5-black.webp
+< 150 Opening BINARY mode data connection for sony-xm5-black.webp
+
+Uploading to 89.116.53.41:2110 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2388|)
+
+> STOR sony-xm5.jpg
+< 150 Opening BINARY mode data connection for sony-xm5.jpg
+
+Uploading to 89.116.53.41:2388 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2290|)
+
+> STOR sony-xm5.webp
+< 150 Opening BINARY mode data connection for sony-xm5.webp
+
+Uploading to 89.116.53.41:2290 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2102|)
+
+> STOR sony-zv-5.jpg
+< 150 Opening BINARY mode data connection for sony-zv-5.jpg
+
+Uploading to 89.116.53.41:2102 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2318|)
+
+> STOR sony-zv-5.webp
+< 150 Opening BINARY mode data connection for sony-zv-5.webp
+
+Uploading to 89.116.53.41:2318 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2104|)
+
+> STOR sony-zv5.jpg
+< 150 Opening BINARY mode data connection for sony-zv5.jpg
+
+Uploading to 89.116.53.41:2104 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2117|)
+
+> STOR sony-zv5.webp
+< 150 Opening BINARY mode data connection for sony-zv5.webp
+
+Uploading to 89.116.53.41:2117 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2174|)
+
+> STOR soundcore-space.jpg
+< 150 Opening BINARY mode data connection for soundcore-space.jpg
+
+Uploading to 89.116.53.41:2174 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2110|)
+
+> STOR soundcore-space.webp
+< 150 Opening BINARY mode data connection for soundcore-space.webp
+
+Uploading to 89.116.53.41:2110 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2370|)
+
+> STOR spring-health-unique.jpg
+< 150 Opening BINARY mode data connection for spring-health-unique.jpg
+
+Uploading to 89.116.53.41:2370 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2148|)
+
+> STOR tech-gadgets-2025-main.jpg
+< 150 Opening BINARY mode data connection for tech-gadgets-2025-main.jpg
+
+Uploading to 89.116.53.41:2148 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2112|)
+
+> STOR tech-gadgets-2025-main.webp
+< 150 Opening BINARY mode data connection for tech-gadgets-2025-main.webp
+
+Uploading to 89.116.53.41:2112 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2179|)
+
+> STOR wearable-guide-unique.jpg
+< 150 Opening BINARY mode data connection for wearable-guide-unique.jpg
+
+Uploading to 89.116.53.41:2179 (No encryption)
+< 226 Transfer complete
+
+> CWD /public_html/kimsondreams/images/articles
+< 250 CWD command successful
+
+✅ Uploaded images/articles
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD js
+< 550 js: File exists
+
+> CWD js
+< 250 CWD command successful
+
+> PWD
+< 257 "/public_html/kimsondreams/js" is the current directory
+
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD js
+< 550 js: File exists
+
+> CWD js
+< 250 CWD command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2274|)
+
+> STOR analytics.js
+< 150 Opening BINARY mode data connection for analytics.js
+
+Uploading to 89.116.53.41:2274 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2252|)
+
+> STOR articles-data.js
+< 150 Opening BINARY mode data connection for articles-data.js
+
+Uploading to 89.116.53.41:2252 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2259|)
+
+> STOR main.js
+< 150 Opening BINARY mode data connection for main.js
+
+Uploading to 89.116.53.41:2259 (No encryption)
+< 226 Transfer complete
+
+> CWD /public_html/kimsondreams/js
+< 250 CWD command successful
+
+✅ Uploaded js
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD css
+< 550 css: File exists
+
+> CWD css
+< 250 CWD command successful
+
+> PWD
+< 257 "/public_html/kimsondreams/css" is the current directory
+
+> CWD /
+< 250 CWD command successful
+
+> MKD public_html
+< 550 public_html: File exists
+
+> CWD public_html
+< 250 CWD command successful
+
+> MKD kimsondreams
+< 550 kimsondreams: File exists
+
+> CWD kimsondreams
+< 250 CWD command successful
+
+> MKD css
+< 550 css: File exists
+
+> CWD css
+< 250 CWD command successful
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2345|)
+
+> STOR amazon-cta.css
+< 150 Opening BINARY mode data connection for amazon-cta.css
+
+Uploading to 89.116.53.41:2345 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2273|)
+
+> STOR article.css
+< 150 Opening BINARY mode data connection for article.css
+
+Uploading to 89.116.53.41:2273 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2222|)
+
+> STOR styles.css
+< 150 Opening BINARY mode data connection for styles.css
+
+Uploading to 89.116.53.41:2222 (No encryption)
+< 226 Transfer complete
+
+> EPSV
+< 229 Entering Extended Passive Mode (|||2205|)
+
+> STOR tailwind.min.css
+< 150 Opening BINARY mode data connection for tailwind.min.css
+
+Uploading to 89.116.53.41:2205 (No encryption)
+< 226 Transfer complete
+
+> CWD /public_html/kimsondreams/css
+< 250 CWD command successful
+
+✅ Uploaded css
+> EPSV
+< 229 Entering Extended Passive Mode (|||2222|)
+
+> STOR /public_html/kimsondreams/index.html
+< 150 Opening BINARY mode data connection for /public_html/kimsondreams/index.html
+
+Uploading to 89.116.53.41:2222 (No encryption)
+< 226 Transfer complete
+
+✅ Uploaded index.html
+> EPSV
+< 229 Entering Extended Passive Mode (|||2377|)
+
+> STOR /public_html/kimsondreams/article.html
+< 150 Opening BINARY mode data connection for /public_html/kimsondreams/article.html
+
+Uploading to 89.116.53.41:2377 (No encryption)
+< 226 Transfer complete
+
+✅ Uploaded article.html
+> EPSV
+< 229 Entering Extended Passive Mode (|||2273|)
+
+> STOR /public_html/kimsondreams/articles.json
+< 150 Opening BINARY mode data connection for /public_html/kimsondreams/articles.json
+
+Uploading to 89.116.53.41:2273 (No encryption)
+< 226 Transfer complete
+
+✅ Uploaded articles.json to root
+🚀 Deployment Complete!
+> QUIT

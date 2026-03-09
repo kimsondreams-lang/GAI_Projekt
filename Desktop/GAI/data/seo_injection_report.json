@@ -1,0 +1,312 @@
+{
+  "processed": 60,
+  "skipped": 0,
+  "errors": 1,
+  "details": [
+    {
+      "file": "2025-flagship-smartphone-guide.json",
+      "status": "processed",
+      "title": "2025 Flagship Smartphone Guide: iPhone 16 Pro, Gal..."
+    },
+    {
+      "file": "2025-smart-home-essentials-guide.json",
+      "status": "processed",
+      "title": "2025 Smart Home Essentials Guide: Best Gadgets for..."
+    },
+    {
+      "file": "2026-flagship-smartphone-guide.json",
+      "status": "processed",
+      "title": "2026 Flagship Smartphone Guide: iPhone 18 Pro, Gal..."
+    },
+    {
+      "file": "2026-high-performance-laptop-guide.json",
+      "status": "processed",
+      "title": "Best High-Performance Laptops 2026: Top AI PCs (40..."
+    },
+    {
+      "file": "2026-march-wearable-health-guide.json",
+      "status": "processed",
+      "title": "Wearable AI Guide March 2026: Oura Ring 4 vs Galax..."
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "status": "processed",
+      "title": "2026 Wearable Tech & Health Gadgets Guide: The Fut..."
+    },
+    {
+      "file": "affiliate-links.json",
+      "status": "processed",
+      "title": "Affiliate_Links"
+    },
+    {
+      "file": "ai-assistants-comparison-2025.json",
+      "status": "processed",
+      "title": "AI Assistants Comparison 2025"
+    },
+    {
+      "file": "amazon-prime-big-deal-days-2026-tech-guide.json",
+      "status": "processed",
+      "title": "Prime Big Deal Days 2026: The Ultimate Tech Buyer'..."
+    },
+    {
+      "file": "apple-watch-ultra-2-review.json",
+      "status": "processed",
+      "title": "Apple Watch Ultra 2 Review: The Ultimate Rugged Sm..."
+    },
+    {
+      "file": "article1.json",
+      "status": "processed",
+      "title": "iPhone 16 Pro Max Review: Apple's Most Powerful Sm..."
+    },
+    {
+      "file": "article3.json",
+      "status": "processed",
+      "title": "Amazon Prime Day 2025: Best Tech Deals Recap"
+    },
+    {
+      "file": "article4.json",
+      "status": "processed",
+      "title": "Back to School Tech Essentials: Must-Have Gadgets ..."
+    },
+    {
+      "file": "article9.json",
+      "status": "processed",
+      "title": "Polaroid Flip: The Instant Camera Reinvented for t..."
+    },
+    {
+      "file": "articles.json",
+      "status": "error",
+      "error": "'list' object has no attribute 'get'"
+    },
+    {
+      "file": "back-to-school-2026-ai-laptop-guide.json",
+      "status": "processed",
+      "title": "Back-to-School 2026: The Ultimate AI Laptop & Tabl..."
+    },
+    {
+      "file": "best-4k-monitors-2025.json",
+      "status": "processed",
+      "title": "Best 4K Monitors 2025"
+    },
+    {
+      "file": "best-amazon-gadgets-march-2025.json",
+      "status": "processed",
+      "title": "Best Amazon Gadgets March 2025: Top Tech Picks Rev..."
+    },
+    {
+      "file": "best-budget-tech-gadgets-2024.json",
+      "status": "processed",
+      "title": "Best Budget Tech Gadgets 2024"
+    },
+    {
+      "file": "best-eco-friendly-products-amazon-2025.json",
+      "status": "processed",
+      "title": "Best Eco Friendly Products Amazon 2025"
+    },
+    {
+      "file": "best-gaming-accessories-2025.json",
+      "status": "processed",
+      "title": "Best Gaming Accessories 2025: Top Headsets, Keyboa..."
+    },
+    {
+      "file": "best-gaming-headsets-2025.json",
+      "status": "processed",
+      "title": "Best Gaming Headsets 2025"
+    },
+    {
+      "file": "best-laptops-2025.json",
+      "status": "processed",
+      "title": "Top 5 Laptops of 2025: From Framework to MacBook"
+    },
+    {
+      "file": "best-mechanical-keyboards-2025.json",
+      "status": "processed",
+      "title": "Best Mechanical Keyboards 2025: Premium Typing & G..."
+    },
+    {
+      "file": "best-portable-monitors-2025.json",
+      "status": "processed",
+      "title": "Best Portable Monitors 2025"
+    },
+    {
+      "file": "best-smart-home-devices-2025.json",
+      "status": "processed",
+      "title": "Best Smart Home Devices 2025"
+    },
+    {
+      "file": "best-tech-gadgets-amazon-2025.json",
+      "status": "processed",
+      "title": "Best Tech Gadgets on Amazon 2025: Ultimate Buyer G..."
+    },
+    {
+      "file": "best-tech-gadgets-comparison-2025.json",
+      "status": "processed",
+      "title": "Best Tech Gadgets Comparison 2025: Top Picks Acros..."
+    },
+    {
+      "file": "best-wireless-earbuds-2025.json",
+      "status": "processed",
+      "title": "Best Wireless Earbuds 2025"
+    },
+    {
+      "file": "black-friday-2026-ai-gaming-laptop-rtx-50-deal-guide.json",
+      "status": "processed",
+      "title": "Black Friday 2026: Best RTX 50-Series & AI Gaming ..."
+    },
+    {
+      "file": "dji-mini-4-pro-review.json",
+      "status": "processed",
+      "title": "Dji Mini 4 Pro Review"
+    },
+    {
+      "file": "fathers-day-2026-tech-gift-guide-wwdc-predictions.json",
+      "status": "processed",
+      "title": "The Ultimate Father's Day 2026 Tech Gift Guide: AI..."
+    },
+    {
+      "file": "google-io-2026-agentic-android-preview.json",
+      "status": "processed",
+      "title": "Google I/O 2026: Android 17 & Gemini 3.0 Agentic A..."
+    },
+    {
+      "file": "ifa-2026-iphone-18-pro-preview.json",
+      "status": "processed",
+      "title": "IFA 2026 & iPhone 18 Pro: The Ultimate AI Producti..."
+    },
+    {
+      "file": "internal_linking_map.json",
+      "status": "processed",
+      "title": "Internal_Linking_Map"
+    },
+    {
+      "file": "iphone-16-pro-max-review.json",
+      "status": "processed",
+      "title": "iPhone 16 Pro Max Review: Apple's Most Powerful Sm..."
+    },
+    {
+      "file": "iphone-16-pro-max-vs-samsung-s24-ultra.json",
+      "status": "processed",
+      "title": "iPhone 16 Pro Max vs. Samsung Galaxy S24 Ultra: 20..."
+    },
+    {
+      "file": "iphone-17-vs-samsung-s25.json",
+      "status": "processed",
+      "title": "iPhone 17 vs Samsung Galaxy S25: The Ultimate Flag..."
+    },
+    {
+      "file": "iphone-se-4-vs-pixel-10a-comparison.json",
+      "status": "processed",
+      "title": "The Best Budget Flagships of 2026: iPhone SE 4 vs...."
+    },
+    {
+      "file": "july-2026-tech-buying-guide.json",
+      "status": "processed",
+      "title": "Prime Day 2026 & Back-to-School: The Ultimate AI T..."
+    },
+    {
+      "file": "june-2026-tech-guide-wwdc-rumors.json",
+      "status": "processed",
+      "title": "The Ultimate June 2026 Tech Guide: Father's Day AI..."
+    },
+    {
+      "file": "macbook-neo-review-2026.json",
+      "status": "processed",
+      "title": "MacBook Neo Review: Apple's $599 Disruptor Tested"
+    },
+    {
+      "file": "may-2025-tech-gift-guide.json",
+      "status": "processed",
+      "title": "The Ultimate May 2025 Tech Gift Guide: Mother's Da..."
+    },
+    {
+      "file": "may-2026-tech-gift-guide.json",
+      "status": "processed",
+      "title": "The Ultimate May 2026 Tech Gift Guide: Mother's Da..."
+    },
+    {
+      "file": "meta-quest-3s-review.json",
+      "status": "processed",
+      "title": "Meta Quest 3S Review: The New King of Budget VR?"
+    },
+    {
+      "file": "pixel-10a-vs-iphone-se-4-comparison.json",
+      "status": "processed",
+      "title": "The Best Budget Flagships of 2026: iPhone SE 4 vs...."
+    },
+    {
+      "file": "prime-day-2026-back-to-school-ai-tech-guide.json",
+      "status": "processed",
+      "title": "Prime Day 2026 & Back-to-School: The Ultimate AI T..."
+    },
+    {
+      "file": "razer-v4-pro-vs-logitech-g915x-comparison.json",
+      "status": "processed",
+      "title": "Razer BlackWidow V4 Pro vs. Logitech G915 X: The U..."
+    },
+    {
+      "file": "revolutionary-ai-tech-products-amazon-2025.json",
+      "status": "processed",
+      "title": "Revolutionary AI Tech Products Amazon 2025"
+    },
+    {
+      "file": "samsung-galaxy-s25-ultra-review.json",
+      "status": "processed",
+      "title": "Samsung Galaxy S25 Ultra Review: The New AI Powerh..."
+    },
+    {
+      "file": "samsung-galaxy-s26-ultra-review.json",
+      "status": "processed",
+      "title": "Samsung Galaxy S26 Ultra Review: The Ultimate AI P..."
+    },
+    {
+      "file": "schema-index.json",
+      "status": "processed",
+      "title": "Schema Index"
+    },
+    {
+      "file": "sony-wh-1000xm5-review.json",
+      "status": "processed",
+      "title": "Sony WH-1000XM5 Review: The Best Noise-Canceling H..."
+    },
+    {
+      "file": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison.json",
+      "status": "processed",
+      "title": "Sony WH-1000XM5 vs Bose QuietComfort Ultra: The Ul..."
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "status": "processed",
+      "title": "Spring Into Health: The Ultimate March 2026 Wearab..."
+    },
+    {
+      "file": "summer-2025-laptop-buying-guide.json",
+      "status": "processed",
+      "title": "Summer 2025 Laptop Buying Guide"
+    },
+    {
+      "file": "top-10-smart-home-gadgets-amazon-2025.json",
+      "status": "processed",
+      "title": "Top 10 Smart Home Gadgets Amazon 2025"
+    },
+    {
+      "file": "top-5-flagship-gadgets-2025.json",
+      "status": "processed",
+      "title": "Top 5 Flagship Tech Gadgets of 2025: The Ultimate ..."
+    },
+    {
+      "file": "top-ai-gadgets-amazon-2025.json",
+      "status": "processed",
+      "title": "Top AI Gadgets Available on Amazon 2025: Smart Hom..."
+    },
+    {
+      "file": "top-wireless-earbuds-2025-comparison.json",
+      "status": "processed",
+      "title": "Best Wireless Earbuds of 2025: Sony WF-1000XM5 vs...."
+    },
+    {
+      "file": "ultimate-december-2026-ai-gift-guide.json",
+      "status": "processed",
+      "title": "The Ultimate December 2026 AI Gift Guide: From RTX..."
+    }
+  ]
+}

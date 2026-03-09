@@ -1,0 +1,250 @@
+{
+  "links": {
+    "total": 94,
+    "broken": [],
+    "missingTag": [],
+    "wrongTag": []
+  },
+  "images": {
+    "total": 47,
+    "duplicates": [],
+    "mismatches": [
+      {
+        "id": "mwc-2026-highlights",
+        "title": "MWC 2026 Highlights: AI Robot Phones and the Leica Revolution",
+        "image": "images/articles/mwc-2026-highlights.jpg"
+      },
+      {
+        "id": "macbook-neo-review-2026",
+        "title": "MacBook Neo Review: Apple's $599 Budget Laptop That Changes Everything",
+        "image": "https://technova.buzz/data/articles/macbook-neo-main.jpg"
+      },
+      {
+        "id": "spring-into-health-wearable-ai-guide-march-2026",
+        "title": "Spring Into Health: The Ultimate March 2026 Wearable & AI Guide",
+        "image": "images/articles/spring-health-unique.jpg"
+      },
+      {
+        "id": "iphone-se-4-vs-pixel-10a-comparison",
+        "title": "The Best Budget Flagships of 2026: iPhone SE 4 vs. Google Pixel 10a",
+        "image": "https://technova.buzz/data/articles/iphone-se-4-vs-pixel-10a-main.jpg"
+      },
+      {
+        "id": "google-io-2026-agentic-android-preview",
+        "title": "Google I/O 2026: Android 17 & Gemini 3.0 Agentic AI Guide",
+        "image": "https://technova.buzz/data/articles/google-io-2026-main.jpg"
+      },
+      {
+        "id": "pixel-10a-vs-iphone-se-4-comparison",
+        "title": "The Best Budget Flagships of 2026: iPhone SE 4 vs. Google Pixel 10a",
+        "image": "https://technova.buzz/data/articles/pixel-10a-vs-iphone-se-4-main.jpg"
+      },
+      {
+        "id": "2026-march-wearable-health-guide",
+        "title": "Wearable AI Guide March 2026: Oura Ring 4 vs Galaxy Ring & Apple Watch 10",
+        "image": "images/articles/wearable-guide-unique.jpg"
+      },
+      {
+        "id": "spring-2026-wearable-ai-guide",
+        "title": "Spring Into Health: The Ultimate March 2026 Wearable & AI Guide",
+        "image": "https://technova.buzz/data/articles/spring-2026-wearable-ai-guide-main.jpg"
+      },
+      {
+        "id": "july-2026-tech-buying-guide",
+        "title": "Prime Day 2026 & Back-to-School: The Ultimate AI Tech Buying Guide",
+        "image": "https://technova.buzz/data/articles/july-2026-tech-guide-main.jpg"
+      },
+      {
+        "id": "2026-high-performance-laptop-guide",
+        "title": "Best High-Performance Laptops 2026: Top AI PCs (40+ TOPS)",
+        "image": "images/articles/high-performance-laptop.jpg"
+      },
+      {
+        "id": "prime-day-2026-back-to-school-ai-tech-guide",
+        "title": "Prime Day 2026 & Back-to-School: The Ultimate AI Tech Buying Guide",
+        "image": "images/articles/july-2026-tech-guide-main.jpg"
+      },
+      {
+        "id": "ces-2026-highlights-ai-robots-smart-home",
+        "title": "CES 2026 Highlights: AI Hardware, Humanoid Robots, and Next-Gen Smart Home Tech",
+        "image": "https://technova.buzz/data/articles/ces-2026-highlights.jpg"
+      },
+      {
+        "id": "2025-smart-home-essentials-guide",
+        "title": "2025 Smart Home Essentials Guide: Best Gadgets for a Connected Life",
+        "image": "https://technova.buzz/data/articles/cover_top-10-smart-home-gadgets-amazon-2025_1772533992513.jpg"
+      },
+      {
+        "id": "meta-quest-3s-review",
+        "title": "Meta Quest 3S Review: The New King of Budget VR?",
+        "image": "https://technova.buzz/data/articles/meta-quest-3s-review-main.jpg"
+      },
+      {
+        "id": "2026-flagship-smartphone-guide",
+        "title": "2026 Flagship Smartphone Guide: iPhone 18 Pro, Galaxy S26 Ultra, and Pixel 11",
+        "image": "https://technova.buzz/data/articles/2026-flagship-guide-main.jpg"
+      },
+      {
+        "id": "may-2025-tech-gift-guide",
+        "title": "The Ultimate May 2025 Tech Gift Guide: Mother's Day & Graduation Essentials",
+        "image": "https://technova.buzz/data/articles/cover_best-tech-gadgets-comparison-2025_1772533948164.jpg"
+      },
+      {
+        "id": "sony-wh-1000xm5-vs-bose-qc-ultra-comparison",
+        "title": "Sony WH-1000XM5 vs Bose QuietComfort Ultra: The Ultimate ANC Showdown (2025)",
+        "image": "https://technova.buzz/data/articles/sony-wh-1000xm5-anc.jpg"
+      },
+      {
+        "id": "razer-v4-pro-vs-logitech-g915x-comparison",
+        "title": "Razer BlackWidow V4 Pro vs. Logitech G915 X: The Ultimate Mechanical Keyboard Showdown",
+        "image": "https://technova.buzz/data/articles/razer-v4-pro-vs-logitech-g915x-comparison-main.jpg"
+      },
+      {
+        "id": "top-ai-gadgets-amazon-2025",
+        "title": "Top AI Gadgets Available on Amazon 2025: Smart Home Revolution",
+        "image": "https://technova.buzz/data/articles/cover_top-ai-gadgets-amazon-2025_1772534001676.jpg"
+      },
+      {
+        "id": "best-amazon-gadgets-march-2025",
+        "title": "Best Amazon Gadgets March 2025: Top Tech Picks Reviewed",
+        "image": "https://technova.buzz/data/articles/cover_best-amazon-gadgets-march-2025_1772533913623.jpg"
+      },
+      {
+        "id": "top-5-flagship-gadgets-2025",
+        "title": "Top 5 Flagship Tech Gadgets of 2025: The Ultimate Comparison",
+        "image": "https://technova.buzz/data/articles/cover_top-5-flagship-gadgets-2025_1772533854396.jpg"
+      },
+      {
+        "id": "best-tech-gadgets-comparison-2025",
+        "title": "Best Tech Gadgets Comparison 2025: Top Picks Across Categories",
+        "image": "https://technova.buzz/data/articles/cover_best-tech-gadgets-comparison-2025_1772533800756.jpg"
+      },
+      {
+        "id": "best-laptops-2025",
+        "title": "Top 5 Laptops of 2025: From Framework to MacBook",
+        "image": "https://technova.buzz/data/articles/framework-laptop.jpg"
+      },
+      {
+        "id": "best-gaming-accessories-2025",
+        "title": "Best Gaming Accessories 2025: Top Headsets, Keyboards, Mice & Controllers",
+        "image": "https://technova.buzz/data/articles/content_best-gaming-accessories-2025_2_1772533778451.jpg"
+      },
+      {
+        "id": "2025-flagship-smartphone-guide",
+        "title": "2025 Flagship Smartphone Guide: iPhone 16 Pro, Galaxy S25 Ultra, and Pixel 9 Pro",
+        "image": "https://technova.buzz/data/articles/cover_iphone-17-vs-samsung-s25_1772533824485.jpg"
+      },
+      {
+        "id": "best-mechanical-keyboards-2025",
+        "title": "Best Mechanical Keyboards 2025: Premium Typing & Gaming Experience",
+        "image": "https://technova.buzz/data/articles/cover_best-mechanical-keyboards-2025_1771430379013.jpg"
+      },
+      {
+        "id": "best-tech-gadgets-amazon-2025",
+        "title": "Best Tech Gadgets on Amazon 2025: Ultimate Buyer Guide",
+        "image": "https://technova.buzz/data/articles/cover_best-amazon-gadgets-march-2025_1772533758253.jpg"
+      },
+      {
+        "id": "top-wireless-earbuds-2025-comparison",
+        "title": "Best Wireless Earbuds of 2025: Sony WF-1000XM5 vs. AirPods Pro 2 vs. Bose QC Ultra",
+        "image": "https://technova.buzz/data/articles/cover_top-wireless-earbuds-2025-comparison_1772533866430.jpg"
+      },
+      {
+        "id": "apple-watch-ultra-2-review",
+        "title": "Apple Watch Ultra 2 Review: The Ultimate Rugged Smartwatch",
+        "image": "https://technova.buzz/data/articles/apple-watch-ultra-2.jpg"
+      },
+      {
+        "id": "sony-wh-1000xm5-review",
+        "title": "Sony WH-1000XM5 Review: The Best Noise-Canceling Headphones of 2025",
+        "image": "https://technova.buzz/data/articles/cover_sony-wh-1000xm5-review_1772533836261.jpg"
+      },
+      {
+        "id": "iphone-17-vs-samsung-s25",
+        "title": "iPhone 17 vs Samsung Galaxy S25: The Ultimate Flagship Battle",
+        "image": "images/articles/iphone-17-pro-official.jpg"
+      },
+      {
+        "id": "best-4k-monitors-2025",
+        "title": "Best 4K Monitors 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-4k-monitors-2025_1772533752582.jpg"
+      },
+      {
+        "id": "best-smart-home-devices-2025",
+        "title": "Best Smart Home Devices 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-smart-home-devices-2025_1771430240012.jpg"
+      },
+      {
+        "id": "best-portable-monitors-2025",
+        "title": "Best Portable Monitors 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-portable-monitors-2025_1772533939848.jpg"
+      },
+      {
+        "id": "best-eco-friendly-products-amazon-2025",
+        "title": "Best Eco Friendly Products Amazon 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-eco-friendly-products-amazon-2025_1772533925055.jpg"
+      },
+      {
+        "id": "best-gaming-headsets-2025",
+        "title": "Best Gaming Headsets 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-gaming-headsets-2025_1772533935657.jpg"
+      },
+      {
+        "id": "summer-2025-laptop-buying-guide",
+        "title": "Summer 2025 Laptop Buying Guide",
+        "image": "https://technova.buzz/data/articles/cover_summer-2025-laptop-buying-guide_1771429759483.jpg"
+      },
+      {
+        "id": "best-budget-tech-gadgets-2024",
+        "title": "Best Budget Tech Gadgets 2024",
+        "image": "https://technova.buzz/data/articles/cover_best-budget-tech-gadgets-2024_1772533918447.jpg"
+      },
+      {
+        "id": "dji-mini-4-pro-review",
+        "title": "Dji Mini 4 Pro Review",
+        "image": "https://technova.buzz/data/articles/cover_dji-mini-4-pro-review_1772533811159.jpg"
+      },
+      {
+        "id": "iphone-16-pro-max-vs-samsung-s24-ultra",
+        "title": "iPhone 16 Pro Max vs. Samsung Galaxy S24 Ultra: 2025 Flagship Battle",
+        "image": "https://technova.buzz/data/articles/iphone-17-pro-max-camera.jpg"
+      },
+      {
+        "id": "top-10-smart-home-gadgets-amazon-2025",
+        "title": "Top 10 Smart Home Gadgets Amazon 2025",
+        "image": "https://technova.buzz/data/articles/cover_top-10-smart-home-gadgets-amazon-2025_1772533849473.jpg"
+      },
+      {
+        "id": "revolutionary-ai-tech-products-amazon-2025",
+        "title": "Revolutionary AI Tech Products Amazon 2025",
+        "image": "https://technova.buzz/data/articles/cover_revolutionary-ai-tech-products-amazon-2025_1772533830555.jpg"
+      },
+      {
+        "id": "ai-assistants-comparison-2025",
+        "title": "AI Assistants Comparison 2025",
+        "image": "https://technova.buzz/data/articles/cover_ai-assistants-comparison-2025_1772533716868.jpg"
+      },
+      {
+        "id": "best-wireless-earbuds-2025",
+        "title": "Best Wireless Earbuds 2025",
+        "image": "https://technova.buzz/data/articles/cover_best-wireless-earbuds-2025_1771429901077.jpg"
+      },
+      {
+        "id": "iphone-16-pro-max-review",
+        "title": "iPhone 16 Pro Max Review: Apple's Most Powerful Smartphone Yet",
+        "image": "https://technova.buzz/data/articles/cover_iphone-16-pro-max-review_1772533819702.jpg"
+      },
+      {
+        "id": "iphone-16-pro-max-review-legacy",
+        "title": "iPhone 16 Pro Max Review: Apple's Most Powerful Smartphone Yet",
+        "image": "https://technova.buzz/data/articles/iphone-16-pro-max.jpg"
+      },
+      {
+        "id": "affiliate_links",
+        "title": "Affiliate_Links",
+        "image": "https://technova.buzz/data/articles/ai-tech-products-2025.jpg"
+      }
+    ]
+  },
+  "checkedAt": "2026-03-08T16:15:31.539Z"
+}

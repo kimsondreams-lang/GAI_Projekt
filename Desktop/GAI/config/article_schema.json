@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Article",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "author",
+    "date",
+    "category",
+    "tags",
+    "image",
+    "content"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "NEWS",
+        "REVIEWS",
+        "COMPARISONS",
+        "PROMOTIONS",
+        "ANNOUNCEMENTS",
+        "PRODUCT RUMORS"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^images/articles/.*\\.(jpg|jpeg|png|webp)$"
+    },
+    "content": {
+      "type": "string",
+      "minLength": 100
+    },
+    "gallery": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "src",
+          "alt"
+        ],
+        "properties": {
+          "src": {
+            "type": "string"
+          },
+          "alt": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "affiliateLinks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "url"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://www\\.amazon\\.com/.*tag=kimsondreams-21.*$"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

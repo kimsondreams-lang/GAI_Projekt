@@ -1,0 +1,607 @@
+{
+    "description": "DO NOT DELETE THIS FILE. This file is used to keep track of which files have been synced in the most recent deployment. If you delete this file a resync will need to be done (which can take a while) - read more: https://github.com/SamKirkland/FTP-Deploy-Action",
+    "version": "1.0.0",
+    "generatedTime": 1758038530459,
+    "data": [
+        {
+            "type": "file",
+            "name": ".htaccess",
+            "size": 1905,
+            "hash": "dff8bde47a5f0c72f559f9e1efe2dd771facdac87bfc98ba1b48c10c9e4d7ccb"
+        },
+        {
+            "type": "folder",
+            "name": "audio"
+        },
+        {
+            "type": "folder",
+            "name": "css"
+        },
+        {
+            "type": "folder",
+            "name": "data"
+        },
+        {
+            "type": "file",
+            "name": "favicon.ico",
+            "size": 128,
+            "hash": "9ad86be989dc5ff710d94e1573b91373a17408fa98570c32b55c635ec5fffa37"
+        },
+        {
+            "type": "folder",
+            "name": "images"
+        },
+        {
+            "type": "file",
+            "name": "index.html",
+            "size": 6921,
+            "hash": "d52446e27f4a848549b417abe453190f8668b26fc50f4fbfdf7dfb9e72f90f39"
+        },
+        {
+            "type": "file",
+            "name": "index.service.worker.js",
+            "size": 796,
+            "hash": "6b9be5af5bd158020ba320e4a3c2fd836016ef9580501794501478e6215bb3d3"
+        },
+        {
+            "type": "folder",
+            "name": "js"
+        },
+        {
+            "type": "folder",
+            "name": "letmein"
+        },
+        {
+            "type": "file",
+            "name": "package-lock.json",
+            "size": 47448,
+            "hash": "d315c399fe79cda091da47f522001b4e15c4df9f10c2309a9d6927aa6aa8bd39"
+        },
+        {
+            "type": "file",
+            "name": "package.json",
+            "size": 400,
+            "hash": "e4d2704d877e4e2d6338be130b8f310f86bbdd4a93f83842c3b35ac199f2c073"
+        },
+        {
+            "type": "folder",
+            "name": "public"
+        },
+        {
+            "type": "file",
+            "name": "sitemap.txt",
+            "size": 25,
+            "hash": "07411cd34a43aaec894153b3a2c79ab3ead297952cc2d3208885de33a4e99ac6"
+        },
+        {
+            "type": "file",
+            "name": "template.html",
+            "size": 456,
+            "hash": "6a7ce6a989fcb3824d86f6465c155ef8c09a175990706b382b9b47085743d2a7"
+        },
+        {
+            "type": "file",
+            "name": "css/amazon-cta.css",
+            "size": 4253,
+            "hash": "acf1751cad6c0bccf4b1d62a260786d4b509e41bda9ce77027c7428d99c7c8c3"
+        },
+        {
+            "type": "file",
+            "name": "css/article.css",
+            "size": 24393,
+            "hash": "3367b46e01b658890ac93683b8950d4a2b7ec935bef247f2f228021fb6e32bb8"
+        },
+        {
+            "type": "file",
+            "name": "css/styles.css",
+            "size": 57451,
+            "hash": "5fd3efbef6d7609971ec58d3c47ba42020a7ae11bb86f1769fb58487fca0d74a"
+        },
+        {
+            "type": "file",
+            "name": "css/tailwind.min.css",
+            "size": 411553,
+            "hash": "b709560188e05f84e063478c97d63c1bcc5929091b4633a369211cbe04a270a4"
+        },
+        {
+            "type": "folder",
+            "name": "data/articles"
+        },
+        {
+            "type": "folder",
+            "name": "images/articles"
+        },
+        {
+            "type": "folder",
+            "name": "images/dalle"
+        },
+        {
+            "type": "file",
+            "name": "images/logo.png",
+            "size": 6339,
+            "hash": "3ea8f356423d3ec1284c85acf637cb360a8e4989c5536f2a929f5a2196f5dda3"
+        },
+        {
+            "type": "file",
+            "name": "js/articles-data.js",
+            "size": 8143,
+            "hash": "79267b6613e5baab30ae21df1a237305093a94b01b563c17e401440435753eda"
+        },
+        {
+            "type": "file",
+            "name": "js/main.js",
+            "size": 41134,
+            "hash": "94d3dce32b41a8546760c4d31644bf848d289eab0e16b976a7c4d3571fe96fce"
+        },
+        {
+            "type": "file",
+            "name": "letmein/.htaccess",
+            "size": 755,
+            "hash": "02e3b08c1f46602aa4cd2d1db465221d441b8bbb7c3307f7f5649b539d3d8c76"
+        },
+        {
+            "type": "file",
+            "name": "letmein/index.php",
+            "size": 141,
+            "hash": "484cb0db7a63ea4fc6eac62da2bdf06c9732172713681cd2d4a14fef59705272"
+        },
+        {
+            "type": "folder",
+            "name": "public/images"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/ai-automation-test.json",
+            "size": 265,
+            "hash": "ea5fa472aec12ce885f97d4e6ec631564cdd857d277eda61c9da43a6d707dab7"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/article1.json",
+            "size": 10631,
+            "hash": "fd627a1be01edfbe351a6d61804cb375b48f431214fae7227e06ffa62bb6d571"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/article10.json",
+            "size": 3229,
+            "hash": "361837afc8f13f9c460870b57634fedbc6ed5426e02d8b27a986f3fe5340b507"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/article11.json",
+            "size": 3276,
+            "hash": "0dd67948822c4acf50bbdf78bea44fa19647245e2b8f1ebc18615e5df3b1748f"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/article12.json",
+            "size": 2740,
+            "hash": "3e631770a69a7224a11ec5278904eb328a20c4c52fbcd8f84edff36c3112c775"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/article13.json",
+            "size": 1,
+            "hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758029569.json",
+            "size": 331,
+            "hash": "63a529b8f28e958545b39c7c4bf6b0187aae44e21e18f34bd9cf3bf9df2ed474"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758029626.json",
+            "size": 344,
+            "hash": "f39ddd44b660292ea221ad953916c61ec5fa650d4660d8bd48467ba3542df9e7"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758031211.json",
+            "size": 331,
+            "hash": "8990d5702e05e38cb64f55b04cd15a7e1bb7be5463c93cd080aa3cdafd865eb6"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758031269.json",
+            "size": 344,
+            "hash": "e3c8e5b14de43e3bd91ebbd8e7a176bc60969076a80af3d828a10d53b4202aea"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758033005.json",
+            "size": 331,
+            "hash": "4d5b7b976aea04f3e69ecedf2d2040c171f7a54af6881b3166d40c528a959779"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758033063.json",
+            "size": 344,
+            "hash": "526dc7fd920891f15db9daafb67bcbea5f2eadc3fd6461b35bd6ef7a23d54d25"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758034804.json",
+            "size": 4200,
+            "hash": "0a544ab275206880c5add574c28dfc1983be711dc88b2a6c8b138a6a1737d83d"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758034875.json",
+            "size": 4272,
+            "hash": "e6359db9642b5b3acf49ed4242b197f86169ee95c5eed394ef68fddb17de0f2c"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/auto-1758034878.json",
+            "size": 3718,
+            "hash": "440451611cb4c6f5a427792fb36b5ee6642100666de55c409046f36370d2c649"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/index.json",
+            "size": 411,
+            "hash": "5c41dab723d027a65d9ed2f4928cadf8e8a307fa7887f74a4213071633abc3d6"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/alienware-x14.jpg",
+            "size": 134096,
+            "hash": "2c8655a648b80ebc172ed17052115e10c6f98d68b31528c0dc95a82fb46b58a6"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-airpods-pro-2.jpg",
+            "size": 59902,
+            "hash": "3ccf771b8e20cbf0383d2db7dd0fd2889147bd08b22682a4fcba90921c00f207"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-watch-series-10-alt.jpg",
+            "size": 89419,
+            "hash": "d0b9f4ed7646154a7862a1bcbd6c3ba679ca65b8dfdfae8f0a89e6503bbcc62a"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-watch-series-10-main.jpg",
+            "size": 96912,
+            "hash": "645d5461e504694eedeaae24e4686e1a10b14f216d10cc29597925fa97caef7b"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-watch-series-9-alt.jpg",
+            "size": 89419,
+            "hash": "d0b9f4ed7646154a7862a1bcbd6c3ba679ca65b8dfdfae8f0a89e6503bbcc62a"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-watch-series-9-main.jpg",
+            "size": 96912,
+            "hash": "645d5461e504694eedeaae24e4686e1a10b14f216d10cc29597925fa97caef7b"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/apple-watch-series-9.jpg",
+            "size": 73588,
+            "hash": "6654a487261842d46ed008dfbfa43eee4acfd55bda286175a4505074914f26a4"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/asus-rog-zephyrus-g14-alt.jpg",
+            "size": 71090,
+            "hash": "bb7bbe816cf062749b14aa20bef2c36203ab8b259433279cac0495a97efb46e6"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/asus-rog-zephyrus-g14-main.jpg",
+            "size": 70044,
+            "hash": "b26892d06fcad11365a10621b00ea5c213ce344059b88e823f2511d390176420"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/asus-rog-zephyrus-g14.jpg",
+            "size": 86692,
+            "hash": "7a02882aed30ae843ea5d0027cb1b00237f82be2cc1ea78f03a955ff3bbd6f2d"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/bose-quietcomfort-earbuds-ii.jpg",
+            "size": 113543,
+            "hash": "cf18f3e6e2ce563e83ace81400e0ab7793653e0bfdc20980832fb9495572880c"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/canon-eos-r7c.jpg",
+            "size": 30537,
+            "hash": "e243205a2a0004718ccb1118259c83643c6825a6c4a956d5e0ad0dd8828d6135"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/canon-r7c.jpg",
+            "size": 51041,
+            "hash": "85ae65ba623fbc50b745a20d9fc034cfc6bc59029b4e3023a5c8c671d6b42d02"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/dji-mini-3-pro-alt.jpg",
+            "size": 31410,
+            "hash": "59cfa9530cc465dba22464f80ab86c4e394c9aaa4a8c063ab98f664bf4892665"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/dji-mini-3-pro-main.jpg",
+            "size": 54588,
+            "hash": "d5e731ef5897a29a71e3f6c6435eb141cfb487529c8e503a9aa5e6e015d2d613"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/dji-mini-3-pro.jpg",
+            "size": 59486,
+            "hash": "6ffb5e0913fa986334acfb441dddfca7f71019895c63d246ed713c86f422b0f0"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/dji-pocket-3.jpg",
+            "size": 43621,
+            "hash": "c3d91dcfd75d334c876817b958c7eb8b29155066ceb7750da93689a6481ad575"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/galaxy-watch-6.jpg",
+            "size": 73078,
+            "hash": "21ab25b075867950697a11d937450c34eda50a7e6ed5f04fd5fcc832a158deb5"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/gopro-hero13.jpg",
+            "size": 52087,
+            "hash": "33450b9705a6c13ea0777bf95149945d24809185e31d5ecf354a88b2be4b94f1"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-15-pro-max-camera.jpg",
+            "size": 1838996,
+            "hash": "d92f5fa187deb8540e3c0f8daa493b66f95ccfe3fd98e073510f88e3e90b7807"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-15-pro-max-colors.jpg",
+            "size": 455579,
+            "hash": "f99ce1742b73859af8bbe46c538e6f8ea03f355b148f3e67e2dd4032c0b6005d"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-15-pro-max-performance.jpg",
+            "size": 2482863,
+            "hash": "8a958f5fb66bd576bd41d268fa7ca6d253e58087dc864c1f23798f7cb81f1698"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-15-pro-max.jpg",
+            "size": 7594,
+            "hash": "ae33ea1d2adbe37cf8ac241f1bb391409da75942000156b5782d653d9c96d6f6"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-16-pro-max-camera.jpg",
+            "size": 1095362,
+            "hash": "f755995f2cd0c8ba9066c4501616d6991ad598babfb8eda0c5d2712000b2424c"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-16-pro-max-colors.jpg",
+            "size": 2913709,
+            "hash": "213879b84115f41fdd96b4fec15c7d94e35cec7f3078002bdfca20efee7a025f"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-16-pro-max-performance.jpg",
+            "size": 2239323,
+            "hash": "d7e06bb327348d0c57367482b12e9f5ae51cb044736825d002a1cf66e42deb31"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-16-pro-max.jpg",
+            "size": 3554514,
+            "hash": "a32d3e1879457c563d3db6b0b25281d810912402683c6258dc4afe628348a1aa"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-17-pro-max-camera.jpg",
+            "size": 1095362,
+            "hash": "f755995f2cd0c8ba9066c4501616d6991ad598babfb8eda0c5d2712000b2424c"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-17-pro-max-colors.jpg",
+            "size": 2913709,
+            "hash": "213879b84115f41fdd96b4fec15c7d94e35cec7f3078002bdfca20efee7a025f"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-17-pro-max-performance.jpg",
+            "size": 2239323,
+            "hash": "d7e06bb327348d0c57367482b12e9f5ae51cb044736825d002a1cf66e42deb31"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-17-pro-max.jpg",
+            "size": 3554514,
+            "hash": "a32d3e1879457c563d3db6b0b25281d810912402683c6258dc4afe628348a1aa"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/iphone-17-pro-vlogging.jpg",
+            "size": 30101,
+            "hash": "0f3f8f69c3b9756700cd37d8e9bcb1e8317764287fd6a5563bf64c6e7b3eefd2"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/macbook-pro-m3.jpg",
+            "size": 2534,
+            "hash": "1b387e127ad180e38353f5dc93bd2d2c91adac3ee566ad9336d74354d29ee427"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/razer-blade-14.jpg",
+            "size": 104882,
+            "hash": "b4419de7c26487a414012940ddf946565ac5508ba5a6fc37f9edaebacbf8ee56"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/samsung-galaxy-s23-ultra-camera.jpg",
+            "size": 138896,
+            "hash": "f200d57f06c355698634a366c3ab14d97afdd233aeba94c4d9979a5ab39eb72f"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/samsung-galaxy-s23-ultra.jpg",
+            "size": 49303,
+            "hash": "c50c517e04cf3e67aa3c60884423f104d3923897ddd633a570a31fa063d345df"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/samsung-galaxy-watch-6.jpg",
+            "size": 67335,
+            "hash": "b0afdedc538cf50e1ba2b0156ea6872b2a12c3ac3baaa000695cb62d9517a1cc"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/samsung-quantum-dot-oled-tv.jpg",
+            "size": 65271,
+            "hash": "db89b8d9dd1838ec22f7db8e6d5e2742f6f659cc98d69c85a3d724e26e2fc5b2"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wf-1000xm5.jpg",
+            "size": 43773,
+            "hash": "c08de9b939bfc2dd19fd011d497a4070fd7121716ceb4518a49845f08b02782d"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wh-1000xm5-anc.jpg",
+            "size": 1677773,
+            "hash": "43448e570f9f7308d395a4d2bd166dd6ea64943ecc1c767fed173baed2872f97"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wh-1000xm5-app.jpg",
+            "size": 454678,
+            "hash": "fbcc005344d7d5b709dbc68f232ff04b5dc283dc6ae04ef95783eab093b1d19e"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wh-1000xm5-case.jpg",
+            "size": 519123,
+            "hash": "1ba399e4b6fd0a88b169611cfc5b8b9525cb553227cb722ba158200575570ace"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wh-1000xm5-design.jpg",
+            "size": 546049,
+            "hash": "58f246057089f6a5f346648f50244c283f498dcb7f2f5753fe184505f9ee48fb"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-wh-1000xm5.jpg",
+            "size": 43773,
+            "hash": "c08de9b939bfc2dd19fd011d497a4070fd7121716ceb4518a49845f08b02782d"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-zv-5.jpg",
+            "size": 78708,
+            "hash": "5532d4a87852328cc814e4b99ce2c805541f8b4e74cf2a08d9349ec48968bcc4"
+        },
+        {
+            "type": "file",
+            "name": "images/articles/sony-zv5.jpg",
+            "size": 17667,
+            "hash": "33e4ed835466741a3f82ea7ef4445fbe98d203ffe42fd02f104758d4fa8e9102"
+        },
+        {
+            "type": "folder",
+            "name": "public/images/articles"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/alienware-x14.jpg",
+            "size": 134096,
+            "hash": "2c8655a648b80ebc172ed17052115e10c6f98d68b31528c0dc95a82fb46b58a6"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/apple-airpods-pro-2.jpg",
+            "size": 59902,
+            "hash": "3ccf771b8e20cbf0383d2db7dd0fd2889147bd08b22682a4fcba90921c00f207"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/apple-watch-series-9.jpg",
+            "size": 73588,
+            "hash": "6654a487261842d46ed008dfbfa43eee4acfd55bda286175a4505074914f26a4"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/asus-rog-zephyrus-g14.jpg",
+            "size": 86692,
+            "hash": "7a02882aed30ae843ea5d0027cb1b00237f82be2cc1ea78f03a955ff3bbd6f2d"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/bose-quietcomfort-earbuds-ii.jpg",
+            "size": 113543,
+            "hash": "cf18f3e6e2ce563e83ace81400e0ab7793653e0bfdc20980832fb9495572880c"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/canon-eos-r7c.jpg",
+            "size": 30537,
+            "hash": "e243205a2a0004718ccb1118259c83643c6825a6c4a956d5e0ad0dd8828d6135"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/dji-mini-3-pro.jpg",
+            "size": 59486,
+            "hash": "6ffb5e0913fa986334acfb441dddfca7f71019895c63d246ed713c86f422b0f0"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/gopro-hero13.jpg",
+            "size": 52087,
+            "hash": "33450b9705a6c13ea0777bf95149945d24809185e31d5ecf354a88b2be4b94f1"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/razer-blade-14.jpg",
+            "size": 101228,
+            "hash": "283f2a8f5524dc2f957db82d668f5fa30c7bba6863901b5f17157814be8bb1a4"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/samsung-galaxy-watch-6.jpg",
+            "size": 67335,
+            "hash": "b0afdedc538cf50e1ba2b0156ea6872b2a12c3ac3baaa000695cb62d9517a1cc"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/samsung-quantum-dot-oled-tv.jpg",
+            "size": 65271,
+            "hash": "db89b8d9dd1838ec22f7db8e6d5e2742f6f659cc98d69c85a3d724e26e2fc5b2"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/sony-wh-1000xm5.jpg",
+            "size": 43773,
+            "hash": "c08de9b939bfc2dd19fd011d497a4070fd7121716ceb4518a49845f08b02782d"
+        },
+        {
+            "type": "file",
+            "name": "public/images/articles/sony-zv-5.jpg",
+            "size": 78708,
+            "hash": "5532d4a87852328cc814e4b99ce2c805541f8b4e74cf2a08d9349ec48968bcc4"
+        }
+    ]
+}

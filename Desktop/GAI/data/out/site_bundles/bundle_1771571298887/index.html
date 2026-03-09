@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechNova - The Future is Now!</title>
+    <meta name="description" content="TechNova brings you the latest tech reviews, gadget comparisons, and cutting-edge technology news. Discover the best products on Amazon with expert insights.">
+    <meta name="keywords" content="tech reviews, gadgets, smartphones, smart home, technology news, Amazon products">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="TechNova - The Future is Now!">
+    <meta property="og:description" content="Your ultimate source for tech reviews and gadget recommendations">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://technova.buzz/">
+    <meta property="og:image" content="https://technova.buzz/images/og-cover.png">
+    <link rel="canonical" href="https://technova.buzz/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TechNova - The Future is Now!">
+    <meta name="twitter:description" content="TechNova brings you the latest tech reviews, gadget comparisons, and cutting-edge technology news.">
+    <meta name="twitter:image" content="https://technova.buzz/images/og-cover.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/article.css">
+    <link rel="stylesheet" href="css/amazon-cta.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <div class="logo-section">
+                <h1 class="logo">
+                    <a href="index.html" class="logo-link">
+                        <img src="images/logo.png" alt="TechNova Logo" class="logo-image">
+                    </a>
+                </h1>
+            </div>
+            
+            <div class="header-actions">
+                <button class="btn-subscribe">Subscribe</button>
+                <span class="and-text">and</span>
+                <button class="btn-tip">Send us a Tip!</button>
+                <button class="mobile-menu-toggle" id="mobile-menu-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <div class="nav-container">
+                <div class="search-box">
+                    <input type="search" placeholder="Search..." class="search-input">
+                    <div class="search-results-dropdown" id="search-results-dropdown" style="display: none;">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+                <div class="tag-list" id="tag-list"></div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="content-container">
+            <section class="featured-section" id="featured-section" aria-label="Featured">
+                <div class="featured-grid">
+                    <div class="featured-hero" id="featured-hero"></div>
+                    <div class="featured-side" id="featured-side"></div>
+                </div>
+            </section>
+
+            <!-- Latest Articles Section (Main Content) -->
+            <section class="latest-section">
+                <div class="main-articles" id="main-articles">
+                    <!-- Articles will be loaded here dynamically with lazy loading -->
+                    <div id="main-load-more-trigger" class="load-more-trigger"></div>
+                </div>
+            </section>
+
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-card newsletter-card">
+                    <h2 class="sidebar-title">NEWSLETTER</h2>
+                    <p class="sidebar-text">Get weekly tech picks, comparisons, and hands-on reviews.</p>
+                    <button class="btn-subscribe sidebar-btn">Subscribe</button>
+                    <p class="sidebar-hint">No spam. Unsubscribe anytime.</p>
+                </div>
+
+                <h2 class="sidebar-title">TOP STORIES</h2>
+                <div class="top-stories" id="top-stories">
+                    <!-- Random articles will be loaded here (max 7) -->
+                </div>
+
+                <div class="sidebar-card tip-card">
+                    <h2 class="sidebar-title">SUPPORT</h2>
+                    <p class="sidebar-text">Like the content? Help keep the site running.</p>
+                    <button class="btn-tip sidebar-btn">Send us a Tip!</button>
+                    <p class="sidebar-hint">Tip options coming soon.</p>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-logo">
+                <img src="images/logo.png" alt="TechNova Logo" class="footer-logo-image">
+            </div>
+            <div class="footer-links">
+                <a href="https://technova.buzz/docs">Documentation</a>
+                <a href="mailto:support@technova.buzz">Support</a>
+                <a href="https://github.com/kimsondreams">GitHub</a>
+            </div>
+            <div class="footer-copyright">
+                <p>Copyright © The Future Is Now - Technology News & Insights</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- JavaScript Files -->
+    <script>
+        window.__ANALYTICS_SITE_ID__ = 'technova';
+        window.__ANALYTICS_COLLECT_URL__ = '/api/analytics/collect';
+    </script>
+    <script src="js/analytics.js?v=1.0"></script>
+    <script src="js/main.js?v=1.3"></script>
+
+    <div class="modal-overlay" id="site-modal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="site-modal-title">
+            <button class="modal-close" id="site-modal-close" aria-label="Close">×</button>
+            <h3 class="modal-title" id="site-modal-title"></h3>
+            <div class="modal-body" id="site-modal-body"></div>
+            <div class="modal-actions" id="site-modal-actions"></div>
+        </div>
+    </div>
+    
+</body>

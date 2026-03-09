@@ -1,0 +1,16 @@
+{
+  "generated": "2025-02-25",
+  "products": [
+    {"name": "MacBook Pro 14 M4", "asin": "B0DLHY2BJ6", "link": "https://www.amazon.com/dp/B0DLHY2BJ6?tag=kimsondreams-21"},
+    {"name": "MacBook Pro 16 M4", "asin": "B0DP3KYZDV", "link": "https://www.amazon.com/dp/B0DP3KYZDV?tag=kimsondreams-21"},
+    {"name": "MacBook Air 15 M3", "asin": "B0DNR8RZXZ", "link": "https://www.amazon.com/dp/B0DNR8RZXZ?tag=kimsondreams-21"},
+    {"name": "Sony WH-1000XM5", "asin": "B09JQWSQK7", "link": "https://www.amazon.com/dp/B09JQWSQK7?tag=kimsondreams-21"},
+    {"name": "Apple AirPods Pro 2", "asin": "B0DLHJZRF6", "link": "https://www.amazon.com/dp/B0DLHJZRF6?tag=kimsondreams-21"},
+    {"name": "Samsung Galaxy S25 Ultra", "asin": "B0FZXV7GS5", "link": "https://www.amazon.com/dp/B0FZXV7GS5?tag=kimsondreams-21"},
+    {"name": "iPhone 16 Pro Max", "asin": "B0FCG8BXZL", "link": "https://www.amazon.com/dp/B0FCG8BXZL?tag=kimsondreams-21"},
+    {"name": "ASUS ROG Zephyrus G14", "asin": "B0DNRCC4M6", "link": "https://www.amazon.com/dp/B0DNRCC4M6?tag=kimsondreams-21"},
+    {"name": "Bose QuietComfort Ultra", "asin": "B0CNTHHJW7", "link": "https://www.amazon.com/dp/B0CNTHHJW7?tag=kimsondreams-21"},
+    {"name": "Apple Watch Series 10", "asin": "B0FF8ZCFCL", "link": "https://www.amazon.com/dp/B0FF8ZCFCL?tag=kimsondreams-21"}
+  ],
+  "note": "Links generated from Amazon search results. Verify product availability before use."
+}

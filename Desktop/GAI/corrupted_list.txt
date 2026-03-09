@@ -1,0 +1,12 @@
+data/articles/ai-assistants-comparison-2025.json
+data/articles/best-4k-monitors-2025.json
+data/articles/best-budget-tech-gadgets-2024.json
+data/articles/best-eco-friendly-products-amazon-2025.json
+data/articles/best-gaming-headsets-2025.json
+data/articles/best-portable-monitors-2025.json
+data/articles/best-smart-home-devices-2025.json
+data/articles/best-wireless-earbuds-2025.json
+data/articles/dji-mini-4-pro-review.json
+data/articles/revolutionary-ai-tech-products-amazon-2025.json
+data/articles/summer-2025-laptop-buying-guide.json
+data/articles/top-10-smart-home-gadgets-amazon-2025.json

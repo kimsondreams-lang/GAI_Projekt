@@ -1,0 +1,266 @@
+{
+  "total_articles_scanned": 7,
+  "articles_with_errors": [],
+  "asin_map": {
+    "B0CX226G8S": [
+      "macbook-neo-review-2026.json"
+    ],
+    "B0D9WV1TPJ": [
+      "2026-wearable-tech-health-gadgets-guide.json",
+      "2026-wearable-tech-health-gadgets-guide.json"
+    ],
+    "B0D3JFH94Z": [
+      "2026-wearable-tech-health-gadgets-guide.json",
+      "2026-wearable-tech-health-gadgets-guide.json"
+    ],
+    "B0DGHQ2QH6": [
+      "2026-wearable-tech-health-gadgets-guide.json",
+      "2026-wearable-tech-health-gadgets-guide.json"
+    ],
+    "B0DLHJZRF6": [
+      "2026-high-performance-laptop-guide.json"
+    ]
+  },
+  "all_links": [
+    {
+      "file": "spring-into-health-wearable-ai-guide-march-2026.json",
+      "link": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-into-health-wearable-ai-guide-march-2026.json",
+      "link": "https://www.amazon.com/s?k=samsung+galaxy+ring&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-into-health-wearable-ai-guide-march-2026.json",
+      "link": "https://www.amazon.com/s?k=apple+watch+series+10&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "macbook-neo-review-2026.json",
+      "link": "https://www.amazon.com/dp/B0CX226G8S?tag=kimsondreams-21\\",
+      "asin": "B0CX226G8S",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "macbook-neo-review-2026.json",
+      "link": "https://www.amazon.com/s?k=macbook+neo&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "iphone-se-4-vs-pixel-10a-comparison.json",
+      "link": "https://www.amazon.com/s?k=iphone+se+4&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "iphone-se-4-vs-pixel-10a-comparison.json",
+      "link": "https://www.amazon.com/s?k=pixel+10a&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "pixel-10a-vs-iphone-se-4-comparison.json",
+      "link": "https://www.amazon.com/s?k=iphone+se+4&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "pixel-10a-vs-iphone-se-4-comparison.json",
+      "link": "https://www.amazon.com/s?k=pixel+10a&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "pixel-10a-vs-iphone-se-4-comparison.json",
+      "link": "https://www.amazon.com/s?k=iphone+se+4&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "pixel-10a-vs-iphone-se-4-comparison.json",
+      "link": "https://www.amazon.com/s?k=pixel+10a&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0D9WV1TPJ?tag=kimsondreams-21\\",
+      "asin": "B0D9WV1TPJ",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0D3JFH94Z?tag=kimsondreams-21\\",
+      "asin": "B0D3JFH94Z",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0DGHQ2QH6?tag=kimsondreams-21\\",
+      "asin": "B0DGHQ2QH6",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0D9WV1TPJ?tag=kimsondreams-21\\",
+      "asin": "B0D9WV1TPJ",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0D3JFH94Z?tag=kimsondreams-21\\",
+      "asin": "B0D3JFH94Z",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/dp/B0DGHQ2QH6?tag=kimsondreams-21\\",
+      "asin": "B0DGHQ2QH6",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/s?k=samsung+galaxy+ring&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-wearable-tech-health-gadgets-guide.json",
+      "link": "https://www.amazon.com/s?k=apple+watch+series+10&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-high-performance-laptop-guide.json",
+      "link": "https://www.amazon.com/dp/B0DLHJZRF6?tag=kimsondreams-21\\",
+      "asin": "B0DLHJZRF6",
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-high-performance-laptop-guide.json",
+      "link": "https://www.amazon.com/s?k=ASUS+Zenbook+S+16+UM5606&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-high-performance-laptop-guide.json",
+      "link": "https://www.amazon.com/s?k=Dell+XPS+13+9345+Snapdragon+X+Elite&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "2026-high-performance-laptop-guide.json",
+      "link": "https://www.amazon.com/s?k=HP+OmniBook+Ultra+14+Ryzen+AI&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=samsung+galaxy+ring&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=apple+watch+series+10&tag=kimsondreams-21\\",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=oura+ring+4&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=samsung+galaxy+ring&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    },
+    {
+      "file": "spring-2026-wearable-ai-guide.json",
+      "link": "https://www.amazon.com/s?k=apple+watch+series+10&tag=kimsondreams-21",
+      "asin": null,
+      "has_correct_tag": true,
+      "has_encoded_tag": false,
+      "is_placeholder": false
+    }
+  ]
+}

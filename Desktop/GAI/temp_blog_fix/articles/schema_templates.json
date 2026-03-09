@@ -1,0 +1,48 @@
+{
+  \"productReview\": {
+    \"@context\": \"https://schema.org\",
+    \"@type\": \"Product\",
+    \"name\": \"Product Name\",
+    \"image\": \"https://example.com/product-image.jpg\",
+    \"description\": \"Product description\",
+    \"brand\": {
+      \"@type\": \"Brand\",
+      \"name\": \"Brand Name\"
+    },
+    \"review\": {
+      \"@type\": \"Review\",
+      \"reviewRating\": {
+        \"@type\": \"Rating\",
+        \"ratingValue\": \"4.5\",
+        \"bestRating\": \"5\"
+      },
+      \"author\": {
+        \"@type\": \"Person\",
+        \"name\": \"Author Name\"
+      },
+      \"datePublished\": \"2025-01-15\",
+      \"reviewBody\": \"Review summary text\"
+    }
+  },
+  \"comparison\": {
+    \"@context\": \"https://schema.org\",
+    \"@type\": \"ItemList\",
+    \"name\": \"Comparison Title\",
+    \"description\": \"Comparison description\",
+    \"numberOfItems\": 5,
+    \"itemListElement\": [
+      {
+        \"@type\": \"ListItem\",
+        \"position\": 1,
+        \"item\": {
+          \"@type\": \"Product\",
+          \"name\": \"Product 1\",
+          \"brand\": {
+            \"@type\": \"Brand\",
+            \"name\": \"Brand 1\"
+          }
+        }
+      }
+    ]
+  }
+}

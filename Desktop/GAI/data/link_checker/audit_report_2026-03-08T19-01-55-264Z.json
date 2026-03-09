@@ -1,0 +1,14 @@
+{
+  "links": {
+    "total": 94,
+    "broken": [],
+    "missingTag": [],
+    "wrongTag": []
+  },
+  "images": {
+    "total": 49,
+    "duplicates": [],
+    "mismatches": []
+  },
+  "checkedAt": "2026-03-08T19:01:55.263Z"
+}

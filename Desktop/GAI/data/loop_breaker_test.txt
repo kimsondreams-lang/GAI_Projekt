@@ -1,0 +1,2 @@
+Diagnostic started at 2025-12-31
+System clock shows 2026, but we use 2025-12-31 for compliance.
